@@ -96,7 +96,7 @@ Values may change. These may not.
 ## Verify
 
 ```bash
-npm test          # node --test infra/bin/
+npm test          # node --test 'infra/bin/*.test.mjs'
 ```
 
 The runner prints how many tests ran. Docker is not required for validate /

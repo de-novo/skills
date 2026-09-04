@@ -146,6 +146,13 @@ environments absent from the registry are reported as drift and require an
 explicit `destroy`; Grove does not invent their age. Full contract:
 [`overlay-contract.md`](../skills/grove/references/overlay-contract.md).
 
+Applied mutations are journaled as pending before project dispatch. A valid
+project receipt is followed by `status <env>` polling; Grove changes or removes
+the lease only after the runtime postcondition is observed. An interruption or
+timeout leaves the pending record visible in `overlay status`. Recover it by
+rerunning the same `--apply` command. `GROVE_OVERLAY_VERIFY_TIMEOUT_MS` can
+override the 120000ms postcondition deadline.
+
 This cleanup targets project overlay workloads only. It never stops or removes
 the machine-shared engines.
 

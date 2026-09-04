@@ -12,9 +12,9 @@ receipt contract.
 ## Lifecycle
 
 ```text
-absent --create--> live --attach/detach/touch--> live --destroy--> absent
-                                   |
-                                   +--stale lease--prune --apply--> absent
+registry --write pending--> project mutation --status postcondition--> finalize registry
+                                  |                 |
+                                  +--interruption---+--retry same --apply command
 ```
 
 Use only the Grove front door:
@@ -39,8 +39,28 @@ The service must be listed in `overlay.attachable`.
 
 Project `create`, `attach`, `detach`, and `destroy` implementations must be
 idempotent for the same arguments so a command can be retried after a process
-interruption. Grove updates its registry only after the project returns a valid
-success receipt.
+interruption. A valid success receipt says that the command was accepted; it
+does not by itself prove the runtime result.
+
+For every applied mutation, Grove writes a `pending` operation to the registry
+before dispatch. It then polls project `status <env>` and finalizes the registry
+only after observing the postcondition:
+
+| Mutation | Required status postcondition |
+| --- | --- |
+| `create` | environment present |
+| `attach` | environment and service present |
+| `detach` | environment present and service absent |
+| `destroy` | environment absent |
+
+If dispatch is interrupted, its receipt is invalid, status cannot measure the
+postcondition, or the postcondition times out, the pending operation remains.
+`status` reports it and returns non-zero but never completes it. Rerun the same
+mutation with `--apply`; Grove redispatches the idempotent project command,
+checks status again, and finalizes only after observation. A different mutation
+or different project-specific passthrough arguments and `touch` are blocked
+until recovery. Internal `status <env>` receives the same passthrough arguments
+so it measures the same project context.
 
 ## Leases and stale environments
 
@@ -69,8 +89,10 @@ is a backstop for abandoned work, not the normal end path.
 - Without `--apply`, it prints exactly which stale environments would be
   destroyed and does not invoke the project command.
 - With `--apply`, it dispatches `destroy` once per stale environment. A failed
-  destroy stays in the registry and is counted as retained. Successful entries
-  are removed atomically, including after a partial failure.
+  or unverified destroy stays in the registry with its pending operation and is
+  counted as retained. Destructions verified before that failure are finalized;
+  later candidates are not attempted until the same prune command recovers the
+  pending operation.
 - An environment touched after the plan is recalculated under the registry
   lock and is not removed.
 
@@ -85,8 +107,8 @@ automatically. Inspect it, then clean it explicitly with
 
 | Profile value | Grove command without `--apply` | Grove command with `--apply` |
 | --- | --- | --- |
-| omitted or `true` | Dispatch without `--apply`; require `plan: true`; registry unchanged | Dispatch with `--apply`; reject a plan-only receipt; update registry after success |
-| `false` | Refuse without dispatch | Dispatch without forwarding `--apply`; reject a plan-only receipt; update registry after success |
+| omitted or `true` | Dispatch without `--apply`; require `plan: true`; registry unchanged | Write pending, dispatch with `--apply`, reject a plan-only receipt, verify status, then finalize registry |
+| `false` | Refuse without dispatch | Write pending, dispatch without forwarding `--apply`, reject a plan-only receipt, verify status, then finalize registry |
 
 Project-specific arguments may follow `--`. Grove never retries by guessing
 from stderr.
@@ -103,6 +125,9 @@ argv    = configured command + verb + lifecycle arguments
 ```
 
 `GROVE_OVERLAY_TIMEOUT_MS` may set a positive timeout in milliseconds.
+Postcondition polling also defaults to 120000ms;
+`GROVE_OVERLAY_VERIFY_TIMEOUT_MS` may set that deadline. Each internal status
+call is bounded by the remaining verification time.
 
 The last non-empty stdout line must be one JSON object. Exit code zero without
 `ok: true` is a failure. Identity fields must match the request; otherwise the
@@ -133,7 +158,9 @@ An applied `attach` with `addressing.proxy: machine` also requires `upstream`.
 Grove still does not start a hostname listener; that proxy value is declared
 intent.
 
-For drift measurement, `status` may add a complete runtime inventory:
+`status` should add runtime inventory. With no environment argument it is the
+complete inventory; with `status <env>` it contains that environment or an
+empty list when absent:
 
 ```json
 {
@@ -145,9 +172,15 @@ For drift measurement, `status` may add a complete runtime inventory:
 }
 ```
 
-If `environments` is omitted, the counted report says `drift notMeasured`.
-`project-status 1/1` means only that the command returned a valid receipt; it
-is not presented as a clean runtime.
+Build this inventory from the selected runtime backend on every call, not from
+Grove's registry or an optimistic mutation result. Keep an environment present
+until all project-owned workload and routing resources represented by that
+environment are actually absent.
+
+If `environments` is omitted, an operator-requested status report says
+`drift notMeasured`. Applied mutations cannot finalize without this inventory;
+their pending operation remains. `project-status 1/1` means only that the
+command returned a valid receipt; it is not presented as a clean runtime.
 
 ## Registry and concurrency
 
@@ -158,7 +191,11 @@ hold a per-project exclusive lock; a dead same-machine process lock is
 recovered, while a live or unknown owner is not stolen.
 
 The registry contains lifecycle metadata, image references, optional upstreams,
-and the creating agent/worktree. It contains no credentials. It is not a second
-workload controller: runtime drift is reported, not silently repaired.
+the creating agent/worktree, and at most one pending mutation. The pending
+record is the crash-recovery journal and is written before project dispatch. It
+contains no credentials or raw project-specific passthrough arguments; only a
+SHA-256 digest is retained to reject recovery in a different context. The
+registry is not a second workload controller: runtime drift is reported, not
+silently repaired.
 
 Overlay cleanup never stops Grove's shared engines. There is no `down` command.

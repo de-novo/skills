@@ -56,6 +56,7 @@ function projectFixture(t, { planFirst = true, staleAfter = '1h' } = {}) {
   const root = mkdtempSync(path.join(tmpdir(), 'grove-overlay-'));
   const stateDir = path.join(root, 'state');
   const log = path.join(root, 'overlay-calls.jsonl');
+  const runtimeState = path.join(root, 'overlay-runtime.json');
   mkdirSync(path.join(root, '.agents'), { recursive: true });
   const staleLine = staleAfter == null ? '' : `  stale_after: ${staleAfter}\n`;
   writeFileSync(
@@ -91,6 +92,7 @@ ${staleLine}data:
     root,
     stateDir,
     log,
+    runtimeState,
     planFirst,
     stateFile: path.join(stateDir, 'lifecycle-test.yml'),
   };
@@ -115,6 +117,7 @@ function run(fixture, args, extraEnv = {}) {
         ...process.env,
         GROVE_STATE_DIR: fixture.stateDir,
         GROVE_OVERLAY_STUB_LOG: fixture.log,
+        GROVE_OVERLAY_STUB_RUNTIME_STATE: fixture.runtimeState,
         GROVE_OVERLAY_STUB_PLAN_FIRST: String(fixture.planFirst),
         ...extraEnv,
       },
@@ -130,6 +133,179 @@ function calls(fixture) {
   if (!existsSync(fixture.log)) return [];
   return readFileSync(fixture.log, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
 }
+
+function runtimeState(fixture) {
+  if (!existsSync(fixture.runtimeState)) return { environments: {} };
+  return JSON.parse(readFileSync(fixture.runtimeState, 'utf8'));
+}
+
+test('an apply intent exists on disk before the project mutation starts', (t) => {
+  const fixture = projectFixture(t);
+  const result = run(fixture, ['create', 'w1', '--apply'], {
+    GROVE_OVERLAY_STUB_REQUIRE_PENDING: 'true',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(readState(fixture).pending, null);
+});
+
+test('a successful receipt cannot finalize state before the runtime postcondition exists', (t) => {
+  const fixture = projectFixture(t);
+  const result = run(fixture, ['create', 'w1', '--apply'], {
+    GROVE_OVERLAY_STUB_SKIP_RUNTIME_MUTATION: 'true',
+    GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '20',
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /postcondition.*pending.*retained/i);
+  const state = readState(fixture);
+  assert.equal(state.envs.w1, undefined);
+  assert.equal(state.pending.verb, 'create');
+  assert.equal(state.pending.env, 'w1');
+});
+
+test('postcondition verification retries asynchronous status before finalizing', (t) => {
+  const fixture = projectFixture(t);
+  const result = run(fixture, ['create', 'w1', '--apply'], {
+    GROVE_OVERLAY_STUB_STATUS_LAG: '2',
+    GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '2000',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /postcondition 1\/1.*attempts 3/);
+  assert.equal(readState(fixture).pending, null);
+  assert.ok(calls(fixture).filter((call) => call.verb === 'status').length >= 3);
+});
+
+test('destroy finalizes only after status observes actual absence', (t) => {
+  const fixture = projectFixture(t);
+  assert.equal(run(fixture, ['create', 'w1', '--apply']).status, 0);
+
+  const result = run(fixture, ['destroy', 'w1', '--apply'], {
+    GROVE_OVERLAY_STUB_DESTROY_STATUS_LAG: '2',
+    GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '2000',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /postcondition 1\/1: destroy w1 observed \(attempts 3\)/);
+  assert.equal(existsSync(fixture.stateFile), false);
+  assert.deepEqual(runtimeState(fixture).environments, {});
+});
+
+test('destroy keeps its lease and pending intent when successful receipt leaves runtime present', (t) => {
+  const fixture = projectFixture(t);
+  assert.equal(run(fixture, ['create', 'w1', '--apply']).status, 0);
+
+  const unverified = run(fixture, ['destroy', 'w1', '--apply'], {
+    GROVE_OVERLAY_STUB_SKIP_RUNTIME_MUTATION: 'destroy',
+    GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '20',
+  });
+  assert.notEqual(unverified.status, 0);
+  assert.match(unverified.stderr, /postcondition.*pending operation retained/i);
+  assert.ok(readState(fixture).envs.w1);
+  assert.equal(readState(fixture).pending.verb, 'destroy');
+  assert.deepEqual(runtimeState(fixture).environments, { w1: [] });
+
+  const recovered = run(fixture, ['destroy', 'w1', '--apply']);
+  assert.equal(recovered.status, 0, recovered.stderr);
+  assert.match(recovered.stdout, /recovered pending destroy w1/);
+  assert.equal(existsSync(fixture.stateFile), false);
+  assert.deepEqual(runtimeState(fixture).environments, {});
+});
+
+test('missing status inventory cannot finalize an applied mutation', (t) => {
+  const fixture = projectFixture(t);
+  const result = run(fixture, ['create', 'w1', '--apply'], {
+    GROVE_OVERLAY_STUB_OMIT_INVENTORY: 'true',
+    GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '500',
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /omitted environments/);
+  assert.equal(readState(fixture).pending.verb, 'create');
+  assert.equal(readState(fixture).envs.w1, undefined);
+});
+
+test('an invalid verification deadline fails before journaling or project dispatch', (t) => {
+  const fixture = projectFixture(t);
+  const result = run(fixture, ['create', 'w1', '--apply'], {
+    GROVE_OVERLAY_VERIFY_TIMEOUT_MS: 'never',
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /VERIFY_TIMEOUT_MS must be a positive integer/);
+  assert.equal(calls(fixture).length, 0);
+  assert.equal(existsSync(fixture.stateFile), false);
+  assert.deepEqual(runtimeState(fixture).environments, {});
+});
+
+test('rerunning the same apply recovers an interruption after the runtime side effect', (t) => {
+  const fixture = projectFixture(t);
+  const interrupted = run(fixture, ['create', 'w1', '--apply'], {
+    GROVE_OVERLAY_STUB_FAIL_AFTER_MUTATION: 'true',
+  });
+  assert.notEqual(interrupted.status, 0);
+  assert.deepEqual(runtimeState(fixture).environments, { w1: [] });
+  assert.equal(readState(fixture).pending.verb, 'create');
+
+  const recovered = run(fixture, ['create', 'w1', '--apply']);
+  assert.equal(recovered.status, 0, recovered.stderr);
+  assert.match(recovered.stdout, /recovered pending create/);
+  assert.equal(readState(fixture).pending, null);
+  assert.deepEqual(Object.keys(readState(fixture).envs), ['w1']);
+});
+
+test('status exposes a pending operation without completing it', (t) => {
+  const fixture = projectFixture(t);
+  const interrupted = run(fixture, ['create', 'w1', '--apply'], {
+    GROVE_OVERLAY_STUB_FAIL_AFTER_MUTATION: 'true',
+  });
+  assert.notEqual(interrupted.status, 0);
+
+  const status = run(fixture, ['status']);
+  assert.notEqual(status.status, 0);
+  assert.match(status.stdout, /pending {7}1/);
+  assert.match(status.stdout, /pending-item {2}create w1/);
+  assert.equal(readState(fixture).pending.verb, 'create');
+});
+
+test('a pending operation blocks conflicting mutations and lease renewal', (t) => {
+  const fixture = projectFixture(t);
+  const interrupted = run(fixture, ['create', 'w1', '--apply'], {
+    GROVE_OVERLAY_STUB_FAIL_AFTER_MUTATION: 'true',
+  });
+  assert.notEqual(interrupted.status, 0);
+  const before = calls(fixture).length;
+
+  const conflicting = run(fixture, ['create', 'w2', '--apply']);
+  assert.notEqual(conflicting.status, 0);
+  assert.match(conflicting.stderr, /pending operation create w1 must be recovered first/);
+  assert.equal(calls(fixture).length, before);
+
+  const touched = run(fixture, ['touch', 'w1']);
+  assert.notEqual(touched.status, 0);
+  assert.match(touched.stderr, /pending operation create w1.*before touch/);
+  assert.equal(readState(fixture).pending.env, 'w1');
+});
+
+test('recovery requires matching passthrough context and reuses it for status', (t) => {
+  const fixture = projectFixture(t);
+  const interrupted = run(
+    fixture,
+    ['create', 'w1', '--apply', '--', '--context=a'],
+    { GROVE_OVERLAY_STUB_FAIL_AFTER_MUTATION: 'true' }
+  );
+  assert.notEqual(interrupted.status, 0);
+  const journal = readFileSync(fixture.stateFile, 'utf8');
+  assert.doesNotMatch(journal, /--context=a/);
+  assert.match(readState(fixture).pending.passthrough_sha256, /^[0-9a-f]{64}$/);
+  const before = calls(fixture).length;
+
+  const wrongContext = run(fixture, ['create', 'w1', '--apply', '--', '--context=b']);
+  assert.notEqual(wrongContext.status, 0);
+  assert.match(wrongContext.stderr, /pending operation create w1 must be recovered first/);
+  assert.equal(calls(fixture).length, before);
+
+  const recovered = run(fixture, ['create', 'w1', '--apply', '--', '--context=a']);
+  assert.equal(recovered.status, 0, recovered.stderr);
+  const statusCall = calls(fixture).filter((call) => call.verb === 'status').at(-1);
+  assert.ok(statusCall.args.includes('--context=a'));
+  assert.equal(readState(fixture).pending, null);
+});
 
 test('overlay lifecycle creates, attaches, touches, detaches, and destroys counted state', (t) => {
   const fixture = projectFixture(t);
@@ -233,8 +409,9 @@ test('status exposes stale leases and prune destroys only stale environments on 
   assert.equal(applied.status, 0, applied.stderr);
   assert.match(applied.stdout, /overlay prune 1\/1/);
   assert.deepEqual(Object.keys(readState(fixture).envs), ['fresh']);
-  assert.equal(calls(fixture).at(-1).verb, 'destroy');
-  assert.equal(calls(fixture).at(-1).args[0], 'old');
+  const destroyed = calls(fixture).filter((call) => call.verb === 'destroy').at(-1);
+  assert.equal(destroyed.verb, 'destroy');
+  assert.equal(destroyed.args[0], 'old');
 });
 
 test('prune requires an explicit stale policy when the profile omits one', (t) => {
@@ -248,17 +425,20 @@ test('prune requires an explicit stale policy when the profile omits one', (t) =
   assert.match(explicit.stdout, /stale 0\/0/);
 });
 
-test('failed or malformed project receipts never mutate the registry', (t) => {
+test('failed or malformed project receipts retain intent without mutating tracked environments', (t) => {
   const fixture = projectFixture(t);
   const failed = run(fixture, ['create', 'bad', '--apply', '--', '--fail']);
   assert.notEqual(failed.status, 0);
   assert.match(failed.stderr, /ok: true/);
-  assert.equal(existsSync(fixture.stateFile), false);
+  assert.equal(readState(fixture).pending.verb, 'create');
+  assert.deepEqual(readState(fixture).envs, {});
 
-  const malformed = run(fixture, ['create', 'bad', '--apply', '--', '--malformed']);
+  const malformedFixture = projectFixture(t);
+  const malformed = run(malformedFixture, ['create', 'bad', '--apply', '--', '--malformed']);
   assert.notEqual(malformed.status, 0);
   assert.match(malformed.stderr, /JSON/);
-  assert.equal(existsSync(fixture.stateFile), false);
+  assert.equal(readState(malformedFixture).pending.verb, 'create');
+  assert.deepEqual(readState(malformedFixture).envs, {});
 });
 
 test('plan_first false refuses implicit execution and strips central --apply on dispatch', (t) => {
@@ -270,8 +450,10 @@ test('plan_first false refuses implicit execution and strips central --apply on 
 
   const applied = run(fixture, ['create', 'w1', '--apply']);
   assert.equal(applied.status, 0, applied.stderr);
-  assert.equal(calls(fixture).length, 1);
+  assert.equal(calls(fixture).length, 2);
+  assert.equal(calls(fixture)[0].verb, 'create');
   assert.equal(calls(fixture)[0].apply, false);
+  assert.equal(calls(fixture)[1].verb, 'status');
 });
 
 test('an apply request rejects a project receipt that is still only a plan', (t) => {
@@ -281,25 +463,37 @@ test('an apply request rejects a project receipt that is still only a plan', (t)
   });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /returned a plan during --apply/);
-  assert.equal(existsSync(fixture.stateFile), false);
+  assert.equal(readState(fixture).pending.verb, 'create');
+  assert.deepEqual(readState(fixture).envs, {});
 });
 
 test('prune keeps failed environments tracked and counts partial cleanup', (t) => {
   const fixture = projectFixture(t);
-  assert.equal(run(fixture, ['create', 'keep', '--apply']).status, 0);
-  assert.equal(run(fixture, ['create', 'remove', '--apply']).status, 0);
+  assert.equal(run(fixture, ['create', 'z-keep', '--apply']).status, 0);
+  assert.equal(run(fixture, ['create', 'a-remove', '--apply']).status, 0);
   const state = readState(fixture);
-  state.envs.keep.last_used_at = '2000-01-01T00:00:00.000Z';
-  state.envs.remove.last_used_at = '2000-01-01T00:00:00.000Z';
+  state.envs['z-keep'].last_used_at = '2000-01-01T00:00:00.000Z';
+  state.envs['a-remove'].last_used_at = '2000-01-01T00:00:00.000Z';
   writeFileSync(fixture.stateFile, stringify(state), 'utf8');
 
   const result = run(fixture, ['prune', '--apply'], {
-    GROVE_OVERLAY_STUB_FAIL_ENV: 'keep',
+    GROVE_OVERLAY_STUB_FAIL_ENV: 'z-keep',
   });
   assert.notEqual(result.status, 0);
   assert.match(result.stdout, /overlay prune 1\/2/);
-  assert.match(result.stderr, /retained keep/);
-  assert.deepEqual(Object.keys(readState(fixture).envs), ['keep']);
+  assert.match(result.stderr, /retained z-keep/);
+  assert.deepEqual(Object.keys(readState(fixture).envs), ['z-keep']);
+  assert.equal(readState(fixture).pending.verb, 'destroy');
+  assert.equal(readState(fixture).pending.source, 'prune');
+
+  const pendingState = readState(fixture);
+  pendingState.envs['z-keep'].last_used_at = '2999-01-01T00:00:00.000Z';
+  writeFileSync(fixture.stateFile, stringify(pendingState), 'utf8');
+
+  const recovered = run(fixture, ['prune', '--apply']);
+  assert.equal(recovered.status, 0, recovered.stderr);
+  assert.match(recovered.stdout, /recovered pending destroy z-keep/);
+  assert.equal(existsSync(fixture.stateFile), false);
 });
 
 test('overlay status reports untracked runtime environments as drift', (t) => {
@@ -340,7 +534,7 @@ test('an untracked runtime environment can be explicitly destroyed but is never 
   const result = run(fixture, ['destroy', 'orphan', '--apply']);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /overlay destroy 1\/1/);
-  assert.equal(calls(fixture).at(-1).verb, 'destroy');
+  assert.equal(calls(fixture).filter((call) => call.verb === 'destroy').at(-1).verb, 'destroy');
   assert.equal(existsSync(fixture.stateFile), false);
 });
 

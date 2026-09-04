@@ -12,7 +12,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { homedir, hostname } from 'node:os';
 import path from 'node:path';
 import { parse, stringify } from 'yaml';
@@ -30,6 +30,8 @@ const TAGGED_FULL_SHA = /^.+:[0-9a-f]{40}$/;
 const DIGESTED_SHA256 = /^.+@sha256:[0-9a-f]{64}$/;
 const STATE_VERSION = 1;
 const DEFAULT_TIMEOUT_MS = 120_000;
+const DEFAULT_VERIFY_TIMEOUT_MS = 120_000;
+const VERIFY_POLL_INTERVAL_MS = 250;
 const POSITIONAL_COUNTS = Object.freeze({
   create: [1, 1],
   attach: [2, 2],
@@ -260,7 +262,7 @@ export function overlayStatePath(slug, environment = process.env) {
 }
 
 function blankState(slug) {
-  return { version: STATE_VERSION, project: slug, envs: {} };
+  return { version: STATE_VERSION, project: slug, envs: {}, pending: null };
 }
 
 function assertTimestamp(value, field, file) {
@@ -279,6 +281,35 @@ function validateState(state, slug, file) {
     fail(`${file}: registry must have version ${STATE_VERSION} and project ${JSON.stringify(slug)}.`);
   }
   if (!isMap(state.envs)) fail(`${file}: envs must be a map.`);
+  if (!Object.hasOwn(state, 'pending')) state.pending = null;
+  if (state.pending != null) {
+    const pending = state.pending;
+    if (!isMap(pending) || !['create', 'attach', 'detach', 'destroy'].includes(pending.verb)) {
+      fail(`${file}: pending must be null or a lifecycle mutation.`);
+    }
+    assertOverlayEnv(pending.env);
+    if (['attach', 'detach'].includes(pending.verb)) {
+      if (typeof pending.service !== 'string' || pending.service.length === 0) {
+        fail(`${file}: pending ${pending.verb} must name a service.`);
+      }
+    } else if (pending.service != null) {
+      fail(`${file}: pending ${pending.verb} must not name a service.`);
+    }
+    if (pending.verb === 'attach') assertOverlayImage(pending.image);
+    else if (pending.image != null) fail(`${file}: pending ${pending.verb} must not name an image.`);
+    assertTimestamp(pending.started_at, 'pending.started_at', file);
+    for (const field of ['worktree', 'agent']) {
+      if (typeof pending[field] !== 'string' || pending[field].length === 0) {
+        fail(`${file}: pending.${field} must be a non-empty string.`);
+      }
+    }
+    if (pending.source != null && !['mutation', 'prune'].includes(pending.source)) {
+      fail(`${file}: pending.source must be mutation or prune when present.`);
+    }
+    if (!/^[0-9a-f]{64}$/.test(pending.passthrough_sha256)) {
+      fail(`${file}: pending.passthrough_sha256 must be a sha256 digest.`);
+    }
+  }
   for (const [env, record] of Object.entries(state.envs)) {
     assertOverlayEnv(env);
     if (!isMap(record) || !isMap(record.services)) {
@@ -308,7 +339,7 @@ export function readOverlayState(slug, environment = process.env) {
 }
 
 function atomicWriteState(file, state) {
-  if (Object.keys(state.envs).length === 0) {
+  if (Object.keys(state.envs).length === 0 && state.pending == null) {
     if (existsSync(file)) unlinkSync(file);
     return;
   }
@@ -411,6 +442,15 @@ function timeoutFromEnvironment(environment) {
   return Number(raw);
 }
 
+function verifyTimeoutFromEnvironment(environment) {
+  const raw = environment.GROVE_OVERLAY_VERIFY_TIMEOUT_MS;
+  if (raw == null) return DEFAULT_VERIFY_TIMEOUT_MS;
+  if (!/^[1-9][0-9]*$/.test(raw) || !Number.isSafeInteger(Number(raw))) {
+    fail('GROVE_OVERLAY_VERIFY_TIMEOUT_MS must be a positive integer in milliseconds.');
+  }
+  return Number(raw);
+}
+
 function parseReceipt(stdout) {
   const last = String(stdout)
     .split(/\r?\n/)
@@ -478,6 +518,8 @@ function dispatchProjectCommand({
   apply,
   expected,
   environment,
+  relay = true,
+  timeoutMs = null,
 }) {
   const [command, ...prefix] = splitOverlayCommand(profile.overlay.command);
   if (
@@ -488,14 +530,14 @@ function dispatchProjectCommand({
   }
   const projectArgs = [...prefix, verb, ...args];
   if (apply && profile.overlay.planFirst) projectArgs.push('--apply');
-  const timeout = timeoutFromEnvironment(environment);
+  const timeout = timeoutMs ?? timeoutFromEnvironment(environment);
   const result = spawnSync(command, projectArgs, {
     cwd: projectRoot,
     env: environment,
     encoding: 'utf8',
     timeout,
   });
-  relayProjectOutput(result);
+  if (relay) relayProjectOutput(result);
   if (result.error) {
     if (result.error.code === 'ETIMEDOUT') {
       fail(`project command timed out after ${timeout}ms.`);
@@ -583,6 +625,179 @@ function applyMutation(state, options, receipt, now, owner) {
   }
 }
 
+function operationTarget(operation) {
+  return `${operation.verb} ${operation.env}${operation.service ? `/${operation.service}` : ''}`;
+}
+
+function pendingMatchesOptions(pending, options) {
+  return pending.verb === options.verb &&
+    pending.env === options.env &&
+    (pending.service ?? null) === (options.service ?? null) &&
+    (pending.image ?? null) === (options.image ?? null) &&
+    pending.passthrough_sha256 === passthroughDigest(options.passthrough);
+}
+
+function assertPendingCompatible(state, options, apply) {
+  if (state.pending == null) return;
+  const instruction = `rerun the pending ${operationTarget(state.pending)} operation with --apply`;
+  if (!apply || !pendingMatchesOptions(state.pending, options)) {
+    fail(`pending operation ${operationTarget(state.pending)} must be recovered first; ${instruction}.`);
+  }
+}
+
+function newPendingOperation(options, owner, source) {
+  return {
+    verb: options.verb,
+    env: options.env,
+    ...(options.service == null ? {} : { service: options.service }),
+    ...(options.image == null ? {} : { image: options.image }),
+    started_at: new Date().toISOString(),
+    worktree: owner.worktree,
+    agent: owner.agent,
+    source,
+    passthrough_sha256: passthroughDigest(options.passthrough),
+  };
+}
+
+function passthroughDigest(passthrough) {
+  return createHash('sha256').update(JSON.stringify(passthrough)).digest('hex');
+}
+
+function sleepSync(milliseconds) {
+  if (milliseconds <= 0) return;
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+}
+
+function postconditionSatisfied(operation, inventory) {
+  const services = inventory.get(operation.env);
+  switch (operation.verb) {
+    case 'create':
+      return services != null;
+    case 'attach':
+      return services?.has(operation.service) === true;
+    case 'detach':
+      return services != null && !services.has(operation.service);
+    case 'destroy':
+      return services == null;
+    default:
+      throw new Error(`not a mutation: ${operation.verb}`);
+  }
+}
+
+function verifyMutationPostcondition({
+  pending,
+  profile,
+  projectRoot,
+  environment,
+  timeout,
+  commandTimeout,
+  passthrough,
+}) {
+  const deadline = Date.now() + timeout;
+  let attempts = 0;
+  let lastObservation = 'runtime state did not match';
+  do {
+    attempts += 1;
+    try {
+      const receipt = dispatchProjectCommand({
+        profile,
+        projectRoot,
+        verb: 'status',
+        args: [pending.env, ...passthrough],
+        apply: false,
+        expected: {},
+        environment,
+        relay: false,
+        timeoutMs: Math.max(
+          1,
+          Math.min(commandTimeout, deadline - Date.now())
+        ),
+      });
+      const inventory = inventoryFromReceipt(receipt);
+      if (inventory == null) {
+        lastObservation = 'status receipt omitted environments';
+      } else if (postconditionSatisfied(pending, inventory)) {
+        console.log(
+          `postcondition 1/1: ${operationTarget(pending)} observed (attempts ${attempts})`
+        );
+        return;
+      } else {
+        lastObservation = 'runtime state did not match';
+      }
+    } catch (error) {
+      lastObservation = error.message;
+    }
+
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    const delay = Math.min(VERIFY_POLL_INTERVAL_MS, remaining);
+    sleepSync(delay);
+    if (delay === remaining) break;
+  } while (Date.now() <= deadline);
+
+  fail(
+    `postcondition for ${operationTarget(pending)} was not observed after ${attempts} attempts within ${timeout}ms; pending operation retained (${lastObservation}).`
+  );
+}
+
+function executeAppliedMutation({
+  state,
+  file,
+  options,
+  profile,
+  projectRoot,
+  environment,
+  owner,
+  source,
+}) {
+  const commandTimeout = timeoutFromEnvironment(environment);
+  const verifyTimeout = verifyTimeoutFromEnvironment(environment);
+  let pending = state.pending;
+  if (pending == null) {
+    pending = newPendingOperation(options, owner, source);
+    state.pending = pending;
+    atomicWriteState(file, state);
+  } else {
+    assertPendingCompatible(state, options, true);
+    console.log(`recovered pending ${operationTarget(pending)}: redispatching idempotently`);
+  }
+
+  try {
+    const receipt = dispatchProjectCommand({
+      profile,
+      projectRoot,
+      verb: options.verb,
+      args: mutationArgs(options),
+      apply: true,
+      expected: {
+        env: options.env,
+        service: options.service,
+        image: options.image,
+      },
+      environment,
+      timeoutMs: commandTimeout,
+    });
+    verifyMutationPostcondition({
+      pending,
+      profile,
+      projectRoot,
+      environment,
+      timeout: verifyTimeout,
+      commandTimeout,
+      passthrough: options.passthrough,
+    });
+    applyMutation(state, options, receipt, new Date().toISOString(), owner);
+    state.pending = null;
+    atomicWriteState(file, state);
+    return receipt;
+  } catch (error) {
+    if (/pending operation retained/i.test(error.message)) throw error;
+    throw new Error(
+      `${error.message} Pending operation retained; rerun the same --apply command to recover.`
+    );
+  }
+}
+
 function safeRealpath(value) {
   try {
     return realpathSync(value);
@@ -597,12 +812,8 @@ function runMutation({ options, profile, projectRoot, environment, cwd }) {
   }
 
   const firstRead = readOverlayState(profile.project.slug, environment);
+  assertPendingCompatible(firstRead.state, options, options.apply);
   assertMutationInputs(options, profile, firstRead.state);
-  const expected = {
-    env: options.env,
-    service: options.service,
-    image: options.image,
-  };
   if (!options.apply) {
     dispatchProjectCommand({
       profile,
@@ -610,7 +821,11 @@ function runMutation({ options, profile, projectRoot, environment, cwd }) {
       verb: options.verb,
       args: mutationArgs(options),
       apply: false,
-      expected,
+      expected: {
+        env: options.env,
+        service: options.service,
+        image: options.image,
+      },
       environment,
     });
     console.log(`overlay ${options.verb} plan 0/1: registry unchanged`);
@@ -619,22 +834,21 @@ function runMutation({ options, profile, projectRoot, environment, cwd }) {
 
   return withStateLock(firstRead.file, () => {
     const { file, state } = readOverlayState(profile.project.slug, environment);
+    assertPendingCompatible(state, options, true);
     assertMutationInputs(options, profile, state);
-    const receipt = dispatchProjectCommand({
+    executeAppliedMutation({
+      state,
+      file,
+      options,
       profile,
       projectRoot,
-      verb: options.verb,
-      args: mutationArgs(options),
-      apply: true,
-      expected,
       environment,
+      source: 'mutation',
+      owner: {
+        worktree: safeRealpath(cwd),
+        agent: environment.DEVINFRA_AGENT ?? environment.USER ?? 'unknown',
+      },
     });
-    const now = new Date().toISOString();
-    applyMutation(state, options, receipt, now, {
-      worktree: safeRealpath(cwd),
-      agent: environment.DEVINFRA_AGENT ?? environment.USER ?? 'unknown',
-    });
-    atomicWriteState(file, state);
     console.log(`overlay ${options.verb} 1/1: ${options.env}${options.service ? `/${options.service}` : ''}`);
     return 0;
   });
@@ -770,6 +984,7 @@ function runStatus({ options, profile, projectRoot, environment }) {
     `■ ${profile.project.slug} — overlay lifecycle`,
     `  environments  ${selectedEntries.length}`,
     `  attachments   ${attachments}`,
+    `  pending       ${state.pending == null ? 0 : 1}`,
     policy
       ? `  stale         ${stale.length} (after ${policy.value})`
       : '  stale         notConfigured',
@@ -782,9 +997,13 @@ function runStatus({ options, profile, projectRoot, environment }) {
       `  ${env}  ${staleLabel}  idle ${formatAge(record.last_used_at, now)}  services ${Object.keys(record.services).length}  owner ${record.agent ?? 'unknown'}`
     );
   }
+  if (state.pending != null) lines.push(`  pending-item  ${operationTarget(state.pending)}`);
   for (const item of drift ?? []) lines.push(`  drift-item  ${item}`);
   console.log(lines.join('\n'));
-  return runtimeError == null && stale.length === 0 && (drift == null || drift.length === 0)
+  return state.pending == null &&
+    runtimeError == null &&
+    stale.length === 0 &&
+    (drift == null || drift.length === 0)
     ? 0
     : 1;
 }
@@ -793,6 +1012,9 @@ function runTouch({ options, profile, environment }) {
   const firstRead = readOverlayState(profile.project.slug, environment);
   return withStateLock(firstRead.file, () => {
     const { file, state } = readOverlayState(profile.project.slug, environment);
+    if (state.pending != null) {
+      fail(`pending operation ${operationTarget(state.pending)} must be recovered before touch.`);
+    }
     const record = state.envs[options.env];
     if (!record) fail(`environment ${JSON.stringify(options.env)} is not tracked.`);
     record.last_used_at = new Date().toISOString();
@@ -802,9 +1024,14 @@ function runTouch({ options, profile, environment }) {
   });
 }
 
-function runPrune({ options, profile, projectRoot, environment }) {
+function runPrune({ options, profile, projectRoot, environment, cwd }) {
   const policy = resolveStalePolicy(options, profile, true);
   const firstRead = readOverlayState(profile.project.slug, environment);
+  if (firstRead.state.pending != null && !options.apply) {
+    fail(
+      `pending operation ${operationTarget(firstRead.state.pending)} must be recovered before a prune plan.`
+    );
+  }
   const plan = staleOverlayEnvironments(firstRead.state, policy.milliseconds);
   const total = Object.keys(firstRead.state.envs).length;
   if (!options.apply) {
@@ -817,32 +1044,51 @@ function runPrune({ options, profile, projectRoot, environment }) {
 
   return withStateLock(firstRead.file, () => {
     const { file, state } = readOverlayState(profile.project.slug, environment);
+    if (state.pending != null && state.pending.source !== 'prune') {
+      fail(
+        `pending operation ${operationTarget(state.pending)} must be recovered with the same --apply command before prune.`
+      );
+    }
     const stale = staleOverlayEnvironments(state, policy.milliseconds);
+    const targets = state.pending == null
+      ? stale.map(({ env }) => env)
+      : [
+          state.pending.env,
+          ...stale.map(({ env }) => env).filter((env) => env !== state.pending.env),
+        ];
     let destroyed = 0;
-    for (const { env } of stale) {
-      const previous = state.envs[env];
+    for (const env of targets) {
+      const mutation = {
+        ...options,
+        verb: 'destroy',
+        env,
+        service: null,
+        image: null,
+      };
       try {
-        dispatchProjectCommand({
+        executeAppliedMutation({
+          state,
+          file,
+          options: mutation,
           profile,
           projectRoot,
-          verb: 'destroy',
-          args: [env, ...options.passthrough],
-          apply: true,
-          expected: { env },
           environment,
+          source: 'prune',
+          owner: {
+            worktree: safeRealpath(cwd),
+            agent: environment.DEVINFRA_AGENT ?? environment.USER ?? 'unknown',
+          },
         });
-        delete state.envs[env];
-        atomicWriteState(file, state);
         destroyed += 1;
       } catch (error) {
-        if (state.envs[env] == null) state.envs[env] = previous;
         console.error(`overlay prune: retained ${env}: ${error.message}`);
+        break;
       }
     }
     console.log(
-      `overlay prune ${destroyed}/${stale.length}: stale environments destroyed (after ${policy.value})`
+      `overlay prune ${destroyed}/${targets.length}: stale environments destroyed (after ${policy.value})`
     );
-    return destroyed === stale.length ? 0 : 1;
+    return destroyed === targets.length ? 0 : 1;
   });
 }
 
@@ -861,7 +1107,7 @@ export function runOverlayLifecycle({
     case 'touch':
       return runTouch({ options, profile, environment });
     case 'prune':
-      return runPrune({ options, profile, projectRoot, environment });
+      return runPrune({ options, profile, projectRoot, environment, cwd });
     case 'create':
     case 'attach':
     case 'detach':
@@ -885,6 +1131,8 @@ usage:
   ${cli} overlay prune [--project ROOT] [--stale-after 12h] [--apply]
 
 Workload mutations are plans unless --apply is present; touch only renews the
-lease. prune never destroys without --apply. Project-specific arguments may
-follow --. There is no infra down.`;
+lease. Applied mutations finalize only after status observes their runtime
+postcondition; rerun the same --apply command to recover a pending operation.
+prune never destroys without --apply. Project-specific arguments may follow
+--. There is no infra down.`;
 }

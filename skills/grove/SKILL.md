@@ -69,6 +69,8 @@ split by address. Grove CLI gates and records the lifecycle, then dispatches
 - Overlay images are tagged with a full git SHA. There is no "latest".
 - Detach as soon as the override is unused, and destroy the env when the unit
   of work ends. Overlay lifetime is the task. A stale lease is only a backstop.
+- Applied mutations are complete only after project `status` reports the
+  matching runtime postcondition. A success receipt alone is not completion.
 - Run overlay verbs only when `runtime.commands.overlay` exists. If the
   command is missing or `overlay: none`, do not apply this pillar.
 
@@ -187,7 +189,10 @@ Workload mutations without `--apply` are plans; `touch` only renews the lease.
 `status` is non-zero for stale leases or measured registry/runtime drift. Long
 work renews its lease with `touch`; normal completion still uses `destroy`.
 `prune` requires an explicit stale policy from the profile or `--stale-after`
-and never guesses one.
+and never guesses one. Grove journals an applied mutation before dispatch and
+clears it only after `status` observes the result. If `status` reports a pending
+operation, rerun that same `--apply` command to recover it before doing other
+mutations.
 
 `urls --env <env>` prints the overlay names. Whether they route is the
 project's listener, not this CLI.

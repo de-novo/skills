@@ -7,7 +7,7 @@
     "de-novo-skills": "./infra/bin/cli.mjs"
   },
   "scripts": {
-    "test": "node --test infra/bin/"
+    "test": "node --test 'infra/bin/*.test.mjs'"
   },
   "dependencies": {
     "yaml": "^2.5.0"
