@@ -31,7 +31,7 @@ addressing:
     # shared requires {service} + {tld}; overlay also requires {env}.
     # Templates and final rendered hostnames must be valid DNS names.
   ports:
-    blocks: { api: 5000, web: 5100, infra: 7000 }
+    blocks: { api: 5000, web: 5100 }
     registry: README.md         # where the port registry lives. if this file disagrees, that file wins
 
 runtime:
@@ -63,6 +63,11 @@ services:
     port: 5101
     health: /
     reflect: source
+  auth-api:
+    kind: api
+    port: 5002
+    health: /health
+    reflect: rebuild
 
 overlay:                        # single-service projects: `overlay: none`
   attachable: [my-web, my-api]
@@ -72,7 +77,7 @@ overlay:                        # single-service projects: `overlay: none`
   # stale_after: 1d             # optional; no default. s|m|h|d|w
 
 data:
-  infra: machine                # machine (omitted default) | project (legacy, pre-migration only)
+  infra: machine                # machine (omitted default) | project (project-chosen backend)
   engines:                      # machine: engines and isolation units on shared infra
     mysql: [myproject]          #   databases created by `de-novo skills setup`
     redis: { prefix: "myproject:" }
@@ -80,6 +85,24 @@ data:
   fixtures: [ui, official-api, fixture-endpoint, seed-script]
   forbid_direct_db_writes: true # invariant
 ```
+
+## Validation boundary
+
+Unknown keys are rejected in project, runtime, commands, services, addressing,
+ports, data, and overlay maps. Runtime profile entries preserve backend-specific
+options; only the documented string fields are checked there. Backend tools
+validate those additional options.
+
+Present commands must be non-empty strings. `runtime.default` must name a
+profile. Service ports and block bases must be integers from 1 to 65535; a
+health path starts with a single slash and contains no whitespace; reflection
+is `source`, `rebuild`, or `restart`. These checks do not execute the command,
+resolve file paths, reserve ports, or measure that a health path responds.
+Omitted optional fields remain valid for a newly initialized profile.
+
+Runtime writer discovery and authorization are the operating procedure in
+[SKILL.md](../SKILL.md#runtime-ownership). The profile's writer count is a
+constraint on declarations, not runtime enforcement.
 
 ## How to pick values
 
@@ -176,9 +199,11 @@ the public surface; ports stay in the registry.
 ### data.infra
 
 Default is `machine`: engines come from the Grove CLI's shared infra; the
-project declares only its databases and prefixes. `project` records a pre-migration
-state where the project still runs its own infra — not a value for new
-projects.
+project declares only its databases and prefixes. Choose `project` when an
+existing or new project uses another backend and its own operating procedure.
+It is a supported ownership choice, not a mandatory migration stage. Catalog
+`setup` applies only to `machine`; `validate`, `urls`, and overlay contracts
+remain available for either choice.
 
 ### project.namespace — shared name for isolation units
 
@@ -193,12 +218,15 @@ database `-`→`_`, bucket/k8s `_`→`-`. To skip rewriting, start with
 
 ### data.engines — the declaration is the setup input
 
-`de-novo skills setup <project-root>` reads this and starts only the engines
-needed, then provisions databases idempotently. Value shapes:
+For `data.infra: machine`, `de-novo skills setup <project-root>` reads these
+declarations. Setup reconciles the declared engines and provisions SQL accounts,
+including existing credentials. Authorization and rerun effects are defined in
+the linked CLI checkout's `infra/README.md`, **Project onboarding** section.
+Declaring engines does not authorize setup. Value shapes:
 
 | Engine                     | Value                                     | What setup does              |
 | -------------------------- | ----------------------------------------- | ---------------------------- |
-| `mysql` / `pg` (postgres)  | `true` (= slug) or `[db-name, …]`         | create database + dedicated account |
+| `mysql` / `pg` (postgres)  | `true` (= namespace) or `[db-name, …]`         | create database + dedicated account |
 | `redis`                    | `true` or `{ prefix: "slug:" }`           | start only — prefix is an app convention |
 | `kafka`                    | `true` or `{ topic_prefix: "slug." }`     | start only — prefix is an app convention |
 | `mongo`                    | `true` or `[db-name, …]`                  | start only — DB created on first connect |
@@ -222,8 +250,9 @@ comment lets the next person doubt staleness.
 
 After writing or editing a profile:
 
-1. `de-novo skills validate` counts invariants. After init there is no
-   `commands.status` — do not invent it.
+1. `de-novo skills validate` counts configuration invariants. It does not
+   acquire runtime ownership, run commands, probe health, or verify routing.
+   After init there is no `commands.status` — do not invent it.
 2. `de-novo skills urls` prints at least one hostname. Routing is the
    project's listener, not Grove.
 3. When `runtime.commands.status` exists, it runs and matches the service

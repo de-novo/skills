@@ -40,7 +40,7 @@ services:
   billing-worker: { kind: worker, port: 5004,                   reflect: rebuild }
   store-web:      { kind: web, port: 5101, health: /,           reflect: source }
   admin-web:      { kind: web, port: 5102, health: /,           reflect: source }
-  kiosk:          { kind: web, port: 5103, health: /,           reflect: restart } # env baked in at bundle time
+  kiosk:          { kind: web, port: 5103, health: /,           reflect: rebuild } # env baked in at bundle time
 
 overlay:
   attachable: [store-web, admin-web, kiosk, catalog-api, order-api]

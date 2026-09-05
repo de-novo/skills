@@ -49,7 +49,7 @@ only after observing the postcondition:
 | Mutation | Required status postcondition |
 | --- | --- |
 | `create` | environment present |
-| `attach` | environment and service present |
+| `attach` | environment and service present, observed image equals the request, and `ready: true` |
 | `detach` | environment present and service absent |
 | `destroy` | environment absent |
 
@@ -80,7 +80,8 @@ project profile, or pass `--stale-after` to `status` and `prune`. `prune`
 refuses to run without one of those explicit policies.
 
 `status` returns non-zero when a tracked environment is stale or when project
-runtime inventory differs from the registry. A long-running task renews its
+runtime inventory differs from the registry, a tracked service is not ready,
+or its runtime identity cannot be measured. A long-running task renews its
 lease with `touch`. A task destroys its environment when work ends; retention
 is a backstop for abandoned work, not the normal end path.
 
@@ -130,8 +131,8 @@ Postcondition polling also defaults to 120000ms;
 call is bounded by the remaining verification time.
 
 The last non-empty stdout line must be one JSON object. Exit code zero without
-`ok: true` is a failure. Identity fields must match the request; otherwise the
-registry remains unchanged.
+`ok: true` is a failure. Identity fields must match the request; otherwise
+tracked environments remain unchanged and an applied operation retains its pending journal.
 
 ```json
 {
@@ -158,8 +159,8 @@ An applied `attach` with `addressing.proxy: machine` also requires `upstream`.
 Grove still does not start a hostname listener; that proxy value is declared
 intent.
 
-`status` should add runtime inventory. With no environment argument it is the
-complete inventory; with `status <env>` it contains that environment or an
+`status` must add runtime inventory to report a clean runtime. With no
+environment argument it is the complete inventory; with `status <env>` it contains that environment or an
 empty list when absent:
 
 ```json
@@ -167,10 +168,34 @@ empty list when absent:
   "ok": true,
   "verb": "status",
   "environments": [
-    { "env": "w1", "services": ["api"] }
+    {
+      "env": "w1",
+      "services": [
+        {
+          "service": "api",
+          "image": "example/api:0123456789abcdef0123456789abcdef01234567",
+          "ready": true
+        }
+      ]
+    }
   ]
 }
 ```
+
+Each service observation carries a unique `service`, an immutable `image`,
+and a boolean `ready`. The image must describe the running workload, not merely
+its desired deployment spec. Report ready only when the project's workload
+readiness checks pass. During replacement, report the old image or `ready:
+false` until the requested revision is running and ready. Use the same canonical
+image reference in attach and status; Grove compares it exactly and does not
+resolve registry tags to digests. Prefer a digest when the backend exposes one.
+Readiness does not prove hostname routing; verify that separately in the project.
+
+Name-only `services` lists and legacy `overrides` keys are accepted for
+inspection and absence checks. They cannot finalize attach. For tracked
+attachments they produce `runtime image and readiness notMeasured` drift and
+non-zero status. Update project adapters to service observations before using
+attach. No registry migration is required; recorded images already exist.
 
 Build this inventory from the selected runtime backend on every call, not from
 Grove's registry or an optimistic mutation result. Keep an environment present
@@ -178,8 +203,8 @@ until all project-owned workload and routing resources represented by that
 environment are actually absent.
 
 If `environments` is omitted, an operator-requested status report says
-`drift notMeasured`. Applied mutations cannot finalize without this inventory;
-their pending operation remains. `project-status 1/1` means only that the
+`drift notMeasured` and returns non-zero. Applied mutations cannot finalize
+without this inventory; their pending operation remains. `project-status 1/1` means only that the
 command returned a valid receipt; it is not presented as a clean runtime.
 
 ## Registry and concurrency

@@ -63,7 +63,7 @@ const writeRuntime = (runtime) => {
   if (runtimeFile) writeFileSync(runtimeFile, JSON.stringify(runtime), 'utf8');
 };
 const runtimeInventory = (runtime) => Object.entries(runtime.environments)
-  .map(([env, services]) => ({ env, services: [...services].sort() }))
+  .map(([env, services]) => ({ env, services: [...services].sort((a, b) => a.service.localeCompare(b.service)) }))
   .sort((left, right) => left.env.localeCompare(right.env));
 
 function assertPendingIntent() {
@@ -89,12 +89,12 @@ function mutateRuntime() {
   if (verb === 'create') runtime.environments[environment] ??= [];
   else if (verb === 'attach') {
     runtime.environments[environment] ??= [];
-    if (!runtime.environments[environment].includes(service)) {
-      runtime.environments[environment].push(service);
-    }
+    runtime.environments[environment] = runtime.environments[environment]
+      .filter((item) => item.service !== service);
+    runtime.environments[environment].push({ service, image: valueAfter('--image'), ready: true });
   } else if (verb === 'detach') {
     runtime.environments[environment] = (runtime.environments[environment] ?? [])
-      .filter((name) => name !== service);
+      .filter((item) => item.service !== service);
   } else if (verb === 'destroy') {
     const lag = Number(process.env.GROVE_OVERLAY_STUB_DESTROY_STATUS_LAG ?? 0);
     if (lag > 0 && runtimeFile) {

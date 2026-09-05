@@ -5,7 +5,8 @@
 #   provision pg    <name>     # role <name> + database <name>
 #
 # GROVE_PROVISION_PASSWORD overrides the local-development default without
-# putting a credential in argv. Safe to re-run. Output never contains it.
+# putting a credential in argv. Re-running sets existing account passwords and
+# grants too; coordinate credential changes with the owner. Output omits secrets.
 set -euo pipefail
 
 usage() {

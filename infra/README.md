@@ -1,7 +1,8 @@
 # Machine-shared infra
 
-Databases, caches, and brokers used by **every project** on this machine.
-Projects do not start their own MySQL, Redis, or Postgres.
+Databases, caches, and brokers shared by projects choosing this machine backend.
+Projects choosing this backend use its existing engines. Other backends follow
+their own ownership procedure.
 
 One rule: **one engine on the machine, isolate inside it.** Because there is
 only one, ports stay standard — default tool config just works. Isolation is
@@ -34,6 +35,10 @@ The engine catalog is this compose file. Engine id is the compose profile.
 list. A project starts only `data.engines`. `up` with no names starts nothing.
 
 ## Start
+
+These mutation commands require machine-owner authorization for the named
+engines and project. Authorization already given for that scope remains valid.
+Read-only status does not authorize setup, provisioning, or an engine restart.
 
 The CLI (`npm install && npm link`, then `de-novo`) is the front;
 compose is the floor:
@@ -109,10 +114,24 @@ non-standard port appears) — other projects still live on the old version.
 ## Project onboarding
 
 Which engines a project uses is its `.agents/runtime-profile.yml`
-(`data.engines`). Setup reads that yaml:
+(`data.engines`). Setup reads that yaml only when `data.infra: machine`.
+
+Before executing, identify the project namespace, declared engines/databases,
+and credential source; obtain machine-owner authorization for those targets.
+Routine app work and a successful `validate` do not grant this authority.
+
+`setup` executes Compose `up -d --wait` for every declared engine, including
+engines already running. Compose may reconcile changed configuration. It then
+provisions each declared SQL database and account, setting existing account
+passwords from `GROVE_PROVISION_PASSWORD` or the local-development default and
+reapplying grants. Repeated execution with different credentials can break
+existing app connections. Coordinate credential changes and app configuration
+with the owner; do not use setup as a status check. It has no dry-run mode.
+
+The owner-approved execution is:
 
 ```bash
-de-novo skills setup <project-root>   # start declared engines + provision DBs, idempotent
+de-novo skills setup <project-root>   # reconcile declared engines + provision DBs and account credentials
 ```
 
 `de-novo skills infra provision (mysql|pg) <name>` is the low-level tool setup
@@ -145,16 +164,6 @@ Failed destroys remain tracked and make the counted cleanup non-zero. Runtime
 environments absent from the registry are reported as drift and require an
 explicit `destroy`; Grove does not invent their age. Full contract:
 [`overlay-contract.md`](../skills/grove/references/overlay-contract.md).
-
-Applied mutations are journaled as pending before project dispatch. A valid
-project receipt is followed by `status <env>` polling; Grove changes or removes
-the lease only after the runtime postcondition is observed. An interruption or
-timeout leaves the pending record visible in `overlay status`. Recover it by
-rerunning the same `--apply` command. `GROVE_OVERLAY_VERIFY_TIMEOUT_MS` can
-override the 120000ms postcondition deadline.
-
-This cleanup targets project overlay workloads only. It never stops or removes
-the machine-shared engines.
 
 ## Rules (not weakenable)
 

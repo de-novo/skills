@@ -155,6 +155,6 @@ export function runInit(args, cwd = process.cwd()) {
   console.log(`  apps     ${serviceCount} (services)`);
   console.log(`  engines  ${engineCount} (data.engines)`);
   console.log(formatValidateReport(profile, addressing));
-  console.log('next: edit services and engines for this project, then de-novo skills setup.');
+  console.log('next: edit the profile, then de-novo skills validate and urls. Machine setup requires owner authorization; see the CLI checkout infra/README.md.');
   return 0;
 }

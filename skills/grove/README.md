@@ -8,8 +8,8 @@ never ports. `urls` prints those names. How you verify (browser, e2e) is out
 of this skill.
 
 Pattern: [SKILL.md](SKILL.md). Schema: [references/runtime-profile.md](references/runtime-profile.md).
-Engines: `de-novo skills infra` — compose sits next to that CLI (Grove catalog
-checkout), not in the consuming project. Project values (domains, ports,
+Optional machine backend: `de-novo skills infra` — compose sits next to that
+CLI (Grove catalog checkout), not in the consuming project. Project values (domains, ports,
 service lists) live in each project's `.agents/runtime-profile.yml`.
 
 ```
@@ -78,7 +78,7 @@ service lists) live in each project's `.agents/runtime-profile.yml`.
   overlay lifecycle + lease state    overlay workloads · image builds
   profile invariants                 runtime.commands.* (project fills these)
   skill source                       verification tools
-                                     no infra/docker-compose.yml here
+                                     chosen backend and runtime ownership
 ```
 
 ## Apply to a project
@@ -93,9 +93,14 @@ once per machine — not in the consuming app. The app gets a profile, not an
 2. `de-novo skills validate <project-root>` — counts invariants, no docker.
 3. `de-novo skills urls <project-root>` — prints hostnames from addressing files.
    Grove does not start a listener.
-4. `de-novo skills infra status` — machine catalog, tld, ready n/n.
-5. `de-novo skills setup <project-root>` — starts declared engines and provisions
-   databases. Idempotent.
+4. Choose `data.infra` according to the project's existing backend. For
+   `machine`, inspect `de-novo skills infra status`. For `project`, use the
+   project's operating procedure; catalog setup does not apply.
+5. Machine preparation is a separate authorized operation, not a routine
+   inspection step. Read the **Project onboarding** section in the linked
+   CLI checkout's `infra/README.md` for setup effects and execution conditions.
+   In the source catalog it is [here](../../infra/README.md#project-onboarding).
+   Resolve this against the CLI checkout, not an installed skill directory.
 6. For an overlay-enabled profile, use `de-novo skills overlay status`, then
    `create` / `attach`; use `touch` for long work and `destroy` at task end.
    `prune` lists stale leases and destroys them only with `--apply`. Contract:
@@ -108,8 +113,5 @@ once per machine — not in the consuming app. The app gets a profile, not an
 Agent procedure (what exists after init, what not to invent): [SKILL.md](SKILL.md).
 
 Examples: [examples/](examples/). They show the shape of values, not a required backend.
-
-Multi-machine (Tailscale / Headscale): not built. Goal:
-[references/later.md](references/later.md).
 
 Contributing to this skill's source: [root AGENTS.md](../../AGENTS.md).

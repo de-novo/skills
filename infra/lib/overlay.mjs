@@ -674,7 +674,8 @@ function postconditionSatisfied(operation, inventory) {
     case 'create':
       return services != null;
     case 'attach':
-      return services?.has(operation.service) === true;
+      return services?.get(operation.service)?.image === operation.image &&
+        services.get(operation.service).ready === true;
     case 'detach':
       return services != null && !services.has(operation.service);
     case 'destroy':
@@ -882,19 +883,36 @@ function inventoryFromReceipt(receipt) {
     let services;
     if (item.services == null && isMap(item.overrides)) services = Object.keys(item.overrides);
     else if (item.services == null) services = [];
-    else if (Array.isArray(item.services) && item.services.every((value) => typeof value === 'string')) {
+    else if (Array.isArray(item.services)) {
       services = item.services;
     } else {
-      fail(`status receipt services for ${env} must be a list of names.`);
+      fail(`status receipt services for ${env} must be a list of service observations.`);
     }
-    inventory.set(env, new Set(services));
+    const observed = new Map();
+    for (const service of services) {
+      // Name-only inventories remain inspectable, but cannot prove an attach.
+      const name = typeof service === 'string' ? service : service?.service;
+      assertOverlayEnv(name);
+      if (observed.has(name)) fail(`status receipt repeats service ${env}/${name}.`);
+      if (typeof service === 'string') {
+        observed.set(name, null);
+      } else {
+        if (!isMap(service)) fail(`status receipt ${env}/${name} must be a service observation.`);
+        assertOverlayImage(service.image);
+        if (typeof service.ready !== 'boolean') {
+          fail(`status receipt ${env}/${name}.ready must be a boolean.`);
+        }
+        observed.set(name, { image: service.image, ready: service.ready });
+      }
+    }
+    inventory.set(env, observed);
   }
   return inventory;
 }
 
 function registryInventory(state) {
   return new Map(
-    Object.entries(state.envs).map(([env, record]) => [env, new Set(Object.keys(record.services))])
+    Object.entries(state.envs).map(([env, record]) => [env, new Map(Object.entries(record.services))])
   );
 }
 
@@ -915,12 +933,21 @@ function compareInventory(state, runtime, onlyEnv = null) {
       drift.push(`${env}: registry entry is missing at runtime`);
       continue;
     }
-    const localNames = [...local].sort();
-    const remoteNames = [...remote].sort();
+    const localNames = [...local.keys()].sort();
+    const remoteNames = [...remote.keys()].sort();
     if (JSON.stringify(localNames) !== JSON.stringify(remoteNames)) {
       drift.push(
         `${env}: services differ (registry ${localNames.join(',') || '-'}; runtime ${remoteNames.join(',') || '-'})`
       );
+    }
+    for (const name of localNames) {
+      if (!remote.has(name)) continue;
+      const observed = remote.get(name);
+      if (observed == null) {
+        drift.push(`${env}/${name}: runtime image and readiness notMeasured`);
+      } else if (observed.image !== local.get(name).image || !observed.ready) {
+        drift.push(`${env}/${name}: runtime image differs or service is not ready`);
+      }
     }
   }
   return drift;
@@ -1003,7 +1030,7 @@ function runStatus({ options, profile, projectRoot, environment }) {
   return state.pending == null &&
     runtimeError == null &&
     stale.length === 0 &&
-    (drift == null || drift.length === 0)
+    drift != null && drift.length === 0
     ? 0
     : 1;
 }

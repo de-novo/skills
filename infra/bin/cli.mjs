@@ -389,7 +389,7 @@ project:
   ${CLI} validate [project-root|profile]
   ${CLI} urls [project-root|profile] [--env NAME]
                                  print hostnames (no listener)
-  ${CLI} setup [project-root|profile]  declared engines + provision DBs
+  ${CLI} setup [project-root|profile]  owner-authorized engines + DB/account provisioning
   ${CLI} overlay <verb> ...            create/attach/detach/destroy/status/touch/prune
 
 up, status, provision are aliases of infra up|status|provision.

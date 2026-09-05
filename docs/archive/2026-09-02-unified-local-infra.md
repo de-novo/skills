@@ -1,3 +1,7 @@
+> Archived on 2026-09-05. Historical design only; commands and assumptions
+> below may be obsolete or unimplemented. Do not use as operating instructions.
+> Current authority: [documentation index](../README.md).
+
 # Grove unified local infra (design notes)
 
 Written in Korean during the original design loop. Current English docs:

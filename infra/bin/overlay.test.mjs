@@ -388,7 +388,7 @@ test('status exposes stale leases and prune destroys only stale environments on 
   state.envs.old.last_used_at = '2000-01-01T00:00:00.000Z';
   writeFileSync(fixture.stateFile, stringify(state), 'utf8');
   const inventory = JSON.stringify([
-    { env: 'old', services: ['api'] },
+    { env: 'old', services: [{ service: 'api', image: FULL_IMAGE, ready: true }] },
     { env: 'fresh', services: [] },
   ]);
 
@@ -559,4 +559,44 @@ test('main help advertises overlay lifecycle commands', () => {
   assert.match(result.stdout, /overlay (create|<verb>)/);
   assert.match(result.stdout, /prune/);
   assert.match(result.stdout, /touch/);
+});
+
+for (const [label, services] of [
+  ['old image', [{ service: 'api', image: `acme/api:${'b'.repeat(40)}`, ready: true }]],
+  ['not ready', [{ service: 'api', image: FULL_IMAGE, ready: false }]],
+  ['name only', ['api']],
+]) {
+  test(`attach cannot finalize from ${label} inventory`, (t) => {
+    const fixture = projectFixture(t);
+    assert.equal(run(fixture, ['create', 'w1', '--apply']).status, 0);
+    const result = run(fixture, ['attach', 'w1', 'api', '--image', FULL_IMAGE, '--apply'], {
+      GROVE_OVERLAY_STUB_INVENTORY: JSON.stringify([{ env: 'w1', services }]),
+      GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '300',
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /postcondition.*pending operation retained/i);
+    assert.equal(readState(fixture).pending.image, FULL_IMAGE);
+    assert.equal(readState(fixture).envs.w1.services.api, undefined);
+    const recovered = run(fixture, ['attach', 'w1', 'api', '--image', FULL_IMAGE, '--apply']);
+    assert.equal(recovered.status, 0, recovered.stderr);
+    assert.equal(readState(fixture).pending, null);
+  });
+
+  test(`status refuses a clean result for ${label} inventory`, (t) => {
+    const fixture = projectFixture(t);
+    assert.equal(run(fixture, ['create', 'w1', '--apply']).status, 0);
+    assert.equal(run(fixture, ['attach', 'w1', 'api', '--image', FULL_IMAGE, '--apply']).status, 0);
+    const result = run(fixture, ['status'], {
+      GROVE_OVERLAY_STUB_INVENTORY: JSON.stringify([{ env: 'w1', services }]),
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stdout, /drift {9}1/);
+  });
+}
+
+test('status without runtime inventory is non-zero', (t) => {
+  const fixture = projectFixture(t);
+  const result = run(fixture, ['status'], { GROVE_OVERLAY_STUB_OMIT_INVENTORY: 'true' });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout, /drift {9}notMeasured/);
 });

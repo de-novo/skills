@@ -46,10 +46,60 @@ function assertOnlyKeys(value, allowed, field, source) {
 }
 
 function nonEmptyString(value, field, source) {
-  if (typeof value !== 'string' || value.length === 0) {
+  if (typeof value !== 'string' || value.trim().length === 0) {
     fail(source, `${field} must be a non-empty string.`);
   }
   return value;
+}
+
+function optionalMap(value, keys, field, source) {
+  if (value == null) return;
+  if (!isMap(value)) fail(source, `${field} must be a map.`);
+  if (keys) assertOnlyKeys(value, keys, field, source);
+}
+
+function optionalString(value, field, source) {
+  if (value != null) nonEmptyString(value, field, source);
+}
+
+function assertPort(value, field, source) {
+  if (!Number.isInteger(value) || value < 1 || value > 65535) {
+    fail(source, `${field} must be an integer from 1 to 65535.`);
+  }
+}
+
+function validateDocumentValues(doc, source) {
+  assertOnlyKeys(doc.project, ['slug', 'namespace', 'host'], 'project', source);
+  const runtime = doc.runtime ?? {};
+  optionalMap(runtime, ['default', 'single_stack', 'writers', 'profiles', 'commands'], 'runtime', source);
+  optionalMap(runtime.profiles, null, 'runtime.profiles', source);
+  for (const [name, profile] of Object.entries(runtime.profiles ?? {})) {
+    nonEmptyString(name, 'runtime profile name', source);
+    // Backend-specific options belong to the chosen backend, not this parser.
+    optionalMap(profile, null, `runtime.profiles.${name}`, source);
+    if (profile == null) fail(source, `runtime.profiles.${name} must be a map.`);
+    for (const field of ['backend', 'compose_file', 'cluster']) {
+      optionalString(profile[field], `runtime.profiles.${name}.${field}`, source);
+    }
+  }
+  if (runtime.default != null) {
+    nonEmptyString(runtime.default, 'runtime.default', source);
+    if (!Object.hasOwn(runtime.profiles ?? {}, runtime.default)) {
+      fail(source, 'runtime.default must name a declared runtime profile.');
+    }
+  }
+  optionalMap(runtime.commands, ['profile', 'status', 'up', 'overlay'], 'runtime.commands', source);
+  for (const [name, command] of Object.entries(runtime.commands ?? {})) {
+    nonEmptyString(command, `runtime.commands.${name}`, source);
+  }
+  const data = doc.data ?? {};
+  assertOnlyKeys(data, ['infra', 'engines', 'migrate', 'fixtures', 'forbid_direct_db_writes'], 'data', source);
+  optionalString(data.migrate, 'data.migrate', source);
+  if (data.fixtures != null) {
+    if (!Array.isArray(data.fixtures)) fail(source, 'data.fixtures must be a list.');
+    for (const fixture of data.fixtures) nonEmptyString(fixture, 'data.fixtures entry', source);
+    if (new Set(data.fixtures).size !== data.fixtures.length) fail(source, 'data.fixtures has duplicates.');
+  }
 }
 
 function databasesOf(value, dbNamespace, engine, source) {
@@ -247,6 +297,14 @@ function parseAddressing(raw, overlayOn, source) {
   if (typeof raw !== 'object' || Array.isArray(raw)) {
     fail(source, 'addressing must be a map.');
   }
+  assertOnlyKeys(raw, ['tld', 'proxy', 'scheme', 'ports'], 'addressing', source);
+  optionalMap(raw.ports, ['blocks', 'registry'], 'addressing.ports', source);
+  optionalMap(raw.ports?.blocks, null, 'addressing.ports.blocks', source);
+  for (const [name, port] of Object.entries(raw.ports?.blocks ?? {})) {
+    nonEmptyString(name, 'port block name', source);
+    assertPort(port, `addressing.ports.blocks.${name}`, source);
+  }
+  optionalString(raw.ports?.registry, 'addressing.ports.registry', source);
   let proxy = 'none';
   if (raw.proxy != null) {
     if (!PROXY_VALUES.has(raw.proxy)) {
@@ -259,6 +317,7 @@ function parseAddressing(raw, overlayOn, source) {
     if (typeof scheme !== 'object' || Array.isArray(scheme)) {
       fail(source, 'addressing.scheme must be a map.');
     }
+    assertOnlyKeys(scheme, ['shared', 'overlay'], 'addressing.scheme', source);
     if (scheme.shared != null) {
       assertScheme(scheme.shared, 'shared', source, ['service', 'tld']);
     }
@@ -287,6 +346,18 @@ function parseServices(raw, source) {
     assertDnsLabel(name, source, 'services key');
     if (!isMap(spec)) {
       fail(source, `services.${name} must be a map.`);
+    }
+    assertOnlyKeys(spec, ['kind', 'port', 'health', 'reflect'], `services.${name}`, source);
+    optionalString(spec.kind, `services.${name}.kind`, source);
+    if (spec.port != null) assertPort(spec.port, `services.${name}.port`, source);
+    if (spec.health != null) {
+      nonEmptyString(spec.health, `services.${name}.health`, source);
+      if (!spec.health.startsWith('/') || spec.health.startsWith('//') || /\s/.test(spec.health)) {
+        fail(source, `services.${name}.health must be an absolute HTTP path.`);
+      }
+    }
+    if (spec.reflect != null && !['source', 'rebuild', 'restart'].includes(spec.reflect)) {
+      fail(source, `services.${name}.reflect must be source|rebuild|restart.`);
     }
     services[name] = { ...spec };
   }
@@ -333,6 +404,7 @@ export function parseProfile(yamlText, source = 'runtime-profile.yml') {
   if (!isMap(data)) {
     fail(source, 'data must be a map.');
   }
+  validateDocumentValues(doc, source);
   const infra = data.infra ?? 'machine';
   if (!INFRA_VALUES.has(infra)) {
     fail(source, `data.infra must be machine|project — ${JSON.stringify(infra)}`);
@@ -417,6 +489,7 @@ export function formatValidateReport(profile, resolvedAddressing = null) {
   return [
     `■ ${project.slug} — profile`,
     `  invariants  ${invariantCount}/${invariantCount}: ${VALIDATED_INVARIANTS.join(' ')}`,
+    '  scope     configuration only; runtime ownership, health, and routing notMeasured',
     `  overlay ${overlayLine}`,
     `  address   ${addrLine}`,
   ].join('\n');

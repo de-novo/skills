@@ -447,3 +447,53 @@ data: { infra: machine }
     /scheme\.shared/
   );
 });
+
+for (const [name, fragment, error] of [
+  ['negative service port', 'services: {web: {port: -1}}', /port/],
+  ['out of range service port', 'services: {web: {port: 65536}}', /port/],
+  ['invalid reflect', 'services: {web: {reflect: typo}}', /reflect/],
+  ['numeric health', 'services: {web: {health: 123}}', /health/],
+  ['relative health', 'services: {web: {health: health}}', /health/],
+  ['writer typo', 'runtime: {writer: 9}', /unknown key/],
+  ['missing default profile', 'runtime: {default: missing, profiles: {}}', /runtime.default/],
+  ['numeric command', 'runtime: {commands: {up: 123}}', /commands.up/],
+  ['blank command', 'runtime: {commands: {status: " "}}', /commands.status/],
+  ['non-map profile', 'runtime: {profiles: {local: false}}', /profiles.local/],
+  ['non-string backend', 'runtime: {profiles: {local: {backend: 123}}}', /backend/],
+  ['service field typo', 'services: {web: {refelct: rebuild}}', /unknown key/],
+  ['addressing typo', 'addressing: {porxy: project}', /unknown key/],
+  ['invalid port block', 'addressing: {ports: {blocks: {web: -1}}}', /ports.blocks/],
+  ['data policy typo', 'data: {fixture: [ui]}', /unknown key/],
+  ['invalid fixture entry', 'data: {fixtures: [123]}', /fixtures/],
+  ['project field typo', 'project: {slug: validation, namespce: other}', /unknown key/],
+  ['command name typo', 'runtime: {commands: {stats: inspect}}', /unknown key/],
+  ['commands list', 'runtime: {commands: []}', /commands/],
+  ['profiles list', 'runtime: {profiles: []}', /profiles/],
+  ['ports list', 'addressing: {ports: []}', /ports/],
+  ['port registry type', 'addressing: {ports: {registry: 123}}', /registry/],
+  ['port field typo', 'addressing: {ports: {block: {web: 5000}}}', /unknown key/],
+  ['scheme field typo', 'addressing: {scheme: {share: "{service}.{tld}"}}', /unknown key/],
+  ['duplicate fixtures', 'data: {fixtures: [ui, ui]}', /duplicates/],
+  ['numeric migration', 'data: {migrate: 123}', /migrate/],
+  ['numeric kind', 'services: {web: {kind: 123}}', /kind/],
+]) {
+  test(`documented profile values reject ${name}`, () => {
+    assert.throws(() => parse(`${fragment.startsWith('project:') ? '' : 'project: {slug: validation}\n'}${fragment}\n`), error);
+  });
+}
+
+test('schema reference complete YAML block passes the actual profile parser', () => {
+  const file = path.join(REPO_ROOT, 'skills/grove/references/runtime-profile.md');
+  const blocks = [...readFileSync(file, 'utf8').matchAll(/```yaml\n([\s\S]*?)```/g)];
+  assert.equal(blocks.length, 1, 'one complete canonical profile block');
+  for (const [, yaml] of blocks) parseProfile(yaml, file);
+});
+
+test('validation reports configuration scope without claiming runtime ownership', () => {
+  assert.match(formatValidateReport(parse('project: {slug: scope}')), /configuration only.*notMeasured/);
+});
+
+test('custom runtime backend options remain owned by the project', () => {
+  const profile = parse('project: {slug: custom}\nruntime: {default: local, profiles: {local: {backend: custom, socket_path: /tmp/example}}}');
+  assert.equal(profile.runtime.profiles.local.socket_path, '/tmp/example');
+});

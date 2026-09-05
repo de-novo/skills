@@ -69,7 +69,7 @@ Values may change. These may not.
   (`dev-mysql8`, `dev-pg16`, `dev-redis7`, …) stay. Renaming them recreates
   engines that are already running on machines.
 - **Success is counted artifacts**, not exit 0. Print `engines n/n`,
-  `invariants 5/5`, `DB n/n`. The runner prints the number — do not pin it
+  `invariants n/n`, `DB n/n`. The runner prints the number — do not pin it
   in a document.
 - **Changed behavior is actually measured.** A change is not merge-ready until
   the path it changes has been executed at the closest real, safe boundary.
@@ -114,9 +114,18 @@ When you add a parser or CLI guard: revert the production change locally,
 confirm the new test goes red, restore, then commit. Report how many tests
 went red. A guard you have not seen fail is not a guard.
 
-`de-novo skills validate <dir>` counts invariants with no docker. After
-editing `infra/lib/profile.mjs` or examples, run it against
-`skills/grove/examples/`.
+`validate` takes a project root or one profile file, not an examples directory.
+After editing `infra/lib/profile.mjs` or examples, validate every example:
+
+```bash
+for profile in skills/grove/examples/*.runtime-profile.yml; do
+  node infra/bin/cli.mjs validate "$profile" || exit 1
+done
+```
+
+`npm test` also validates the complete profile block in the schema reference.
+Obsolete designs belong in `docs/archive/` with their date and replacement
+links. Active instructions must not use archived plans as operating authority.
 
 ## Shared infra
 

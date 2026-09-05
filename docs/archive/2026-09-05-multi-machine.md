@@ -1,3 +1,7 @@
+> Archived on 2026-09-05. Historical design only; commands and assumptions
+> below may be obsolete or unimplemented. Do not use as operating instructions.
+> Current authority: [documentation index](../README.md).
+
 # Later — other machines (not built)
 
 Goal only. Do not implement in the current CLI or skill procedure.
