@@ -9,6 +9,12 @@ Current operating authority:
 - [Catalog machine backend](../infra/README.md)
 - [Catalog working rules](../AGENTS.md)
 
+## Product direction
+
+[Grove value and intended experience](grove-product-direction.md) evaluates
+current capabilities, alternatives, differentiation hypotheses, and adoption
+measurements. It is an analysis, not operating authority or approved scope.
+
 ## Archive
 
 These records preserve decision history, not current behavior or approved work:

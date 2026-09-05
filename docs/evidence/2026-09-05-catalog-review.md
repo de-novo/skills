@@ -1,7 +1,9 @@
 # Catalog review execution evidence — 2026-09-05
 
 Base: `a77f0800269792f014d0ccad37886cb959f95d81`.
-Candidate: uncommitted working-tree changes; no candidate commit was created.
+Execution snapshot: the candidate was uncommitted when these checks ran.
+The measured changes were subsequently committed and pushed as
+`d7fa8c9988887b605512f3bb5d2f1fa9b6a48f54`.
 Target: Grove skill/docs, profile validation, and overlay lifecycle verification
 in `/Users/denovo/orca/denovo/dev-infra`.
 
@@ -73,6 +75,6 @@ sensitivity measurements, not additional successful runtime deployments.
 
 Shared engine reconciliation, SQL provisioning, migrations, real container/k3d
 rollout, and project hostname routing: `notMeasured`. Their implementations were
-not changed or exercised. No shared engine or database mutation, commit, push,
-or PR publication was performed. The local process backend evidence does not
+not changed or exercised. No shared engine or database mutation or PR publication
+was performed. Commit and push occurred afterward on the user's request. The local process backend evidence does not
 claim any consuming project's adapter has been migrated or deployed.
