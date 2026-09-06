@@ -57,8 +57,13 @@ postcondition:
 If dispatch is interrupted, its receipt is invalid, status cannot measure the
 postcondition, or the postcondition times out, the pending operation remains.
 `status` reports pending operations in its selected scope and returns non-zero
-but never completes them. A pending operation in one environment does not make
-another environment's scoped status fail. Rerun the same mutation with
+but never completes them. Each `pending-item` line carries a liveness label:
+`in-flight pid <n>` while that environment's lock is held by a live process on
+this machine, `stalled` when no live owner holds it, `unknown` when the lock
+names another host or cannot be read. In-flight means wait; stalled means rerun
+the same `--apply` command. The exit code does not depend on the label. A
+pending operation in one environment does not make another environment's
+scoped status fail. Rerun the same mutation with
 `--apply`; Grove redispatches the idempotent project command, checks status
 again, and finalizes only after observation. Until that recovery succeeds, the
 same environment rejects any other mutation, the same mutation with different

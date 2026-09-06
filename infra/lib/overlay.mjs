@@ -1013,8 +1013,23 @@ function resolveStalePolicy(options, profile, required) {
   return { value, milliseconds: parseDuration(value, 'stale policy') };
 }
 
+// A pending journal whose environment lock is held by a live process on this
+// machine is work in flight; one with no live owner is stalled and needs the
+// same --apply command rerun. The label changes nothing about the exit code.
+function pendingLiveness(file, env) {
+  const lock = `${path.join(`${file}.env-locks`, env)}.lock`;
+  let owner = null;
+  try {
+    owner = JSON.parse(readFileSync(lock, 'utf8'));
+  } catch {
+    return 'stalled';
+  }
+  if (owner?.host !== hostname() || !Number.isInteger(owner.pid) || owner.pid <= 0) return 'unknown';
+  return processIsAlive(owner.pid) ? `in-flight pid ${owner.pid}` : 'stalled';
+}
+
 function runStatus({ options, profile, projectRoot, environment }) {
-  const { state } = readOverlayState(profile.project.slug, environment);
+  const { file, state } = readOverlayState(profile.project.slug, environment);
   const statusArgs = [...(options.env == null ? [] : [options.env]), ...options.passthrough];
   let receipt = null;
   let runtimeError = null;
@@ -1074,7 +1089,7 @@ function runStatus({ options, profile, projectRoot, environment }) {
       `  ${env}  ${staleLabel}  idle ${formatAge(record.last_used_at, now)}  services ${Object.keys(record.services).length}  owner ${record.agent ?? 'unknown'}`
     );
   }
-  for (const item of pending) lines.push(`  pending-item  ${operationTarget(item)}`);
+  for (const item of pending) lines.push(`  pending-item  ${operationTarget(item)}  ${pendingLiveness(file, item.env)}`);
   for (const item of drift ?? []) lines.push(`  drift-item  ${item}`);
   console.log(lines.join('\n'));
   return pending.length === 0 &&

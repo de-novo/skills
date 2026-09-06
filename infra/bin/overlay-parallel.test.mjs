@@ -176,3 +176,26 @@ test('a competing dead-lock reclaimer cannot remove the recovery owner marker', 
   f.good(['touch', 'w1']); assert.equal(existsSync(lock), false);
   f.good(['destroy', 'w1', '--apply']);
 });
+
+test('status labels a pending operation in-flight while its lock owner lives and stalled afterwards', async t => {
+  const f = fixture(t);
+  f.good(['create', 'w1', '--apply']);
+  writeFileSync(f.gate('attach', 'w1'), 'hold after runtime mutation');
+  const job = f.launch(['attach', 'w1', 'api', '--image', f.images[0], '--apply']);
+  await f.enter('attach', 'w1');
+  const inFlight = f.run(['status']);
+  assert.notEqual(inFlight.status, 0, 'exit code contract unchanged while pending');
+  assert.match(inFlight.stdout, /pending-item  attach w1\/api  in-flight pid \d+/);
+  rmSync(f.gate('attach', 'w1'));
+  const finished = await job; assert.equal(finished.status, 0, finished.stderr);
+  f.good(['status']);
+
+  const fault = path.join(f.root, 'fail-create-w2'); writeFileSync(fault, 'interrupt');
+  assert.notEqual(f.run(['create', 'w2', '--apply'], 'w2').status, 0);
+  const stalled = f.run(['status']);
+  assert.notEqual(stalled.status, 0);
+  assert.match(stalled.stdout, /pending-item  create w2  stalled/);
+  rmSync(fault); f.good(['create', 'w2', '--apply'], 'w2');
+  for (const env of ['w1', 'w2']) f.good(['destroy', env, '--apply'], env);
+  t.diagnostic('in-flight labels 1/1; stalled labels 1/1; exit code unchanged 2/2');
+});
