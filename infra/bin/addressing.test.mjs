@@ -175,10 +175,30 @@ test('renderHost normalizes namespace tokens and validates the final hostname', 
   );
 });
 
-test('parseUrlsArgs reads --env', () => {
-  assert.deepEqual(parseUrlsArgs([]), { root: undefined, env: null });
-  assert.deepEqual(parseUrlsArgs(['./app', '--env', 'w1']), { root: './app', env: 'w1' });
+test('parseUrlsArgs reads --env and --json', () => {
+  assert.deepEqual(parseUrlsArgs([]), { root: undefined, env: null, json: false });
+  assert.deepEqual(parseUrlsArgs(['./app', '--env', 'w1']), { root: './app', env: 'w1', json: false });
+  assert.deepEqual(parseUrlsArgs(['--json', './app']), { root: './app', env: null, json: true });
   assert.throws(() => parseUrlsArgs(['--env']), /--env needs/);
+  assert.throws(() => parseUrlsArgs(['--json', '--json']), /only once/);
+});
+
+test('de-novo skills urls --json prints tld, shared and overlay hosts as the seam for other tools', () => {
+  const dir = groveDir({ 'runtime-profile.yml': TWO_LABEL });
+  const profilePath = path.join(dir, 'runtime-profile.yml');
+  const withEnv = spawnSync(process.execPath, [CLI, 'urls', profilePath, '--env', 'w1', '--json'], { encoding: 'utf8' });
+  assert.equal(withEnv.status, 0, withEnv.stderr);
+  const report = JSON.parse(withEnv.stdout);
+  assert.equal(report.tld, 'local.example.com');
+  assert.deepEqual(report.shared.map((row) => row.host).sort(), ['api.acme.local.example.com', 'web.acme.local.example.com']);
+  assert.deepEqual(report.overlay.map((row) => [row.service, row.env, row.host]).sort(), [
+    ['api', 'w1', 'api--w1.acme.local.example.com'],
+    ['web', 'w1', 'web--w1.acme.local.example.com'],
+  ]);
+  const shared = spawnSync(process.execPath, [CLI, 'urls', profilePath, '--json'], { encoding: 'utf8' });
+  assert.equal(shared.status, 0, shared.stderr);
+  assert.deepEqual(JSON.parse(shared.stdout).overlay, []);
+  assert.equal(JSON.parse(shared.stdout).shared.length, 2);
 });
 
 test('de-novo skills urls prints counted hosts for the minimal example', () => {

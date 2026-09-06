@@ -194,6 +194,55 @@ function archiveFinishedSeat(slug, environment, id, seat) {
   atomicWriteFile(file, stringify({ version: STATE_VERSION, project: slug, seats }));
 }
 
+// ---------------------------------------------------------- project index
+
+// One machine-local file next to the registries so a tool can find every
+// project that has seated a worker without scanning the disk. plan --apply
+// records the baseline root under the slug; finish leaves it alone.
+export function dryadProjectsIndexPath(environment = process.env) {
+  return path.join(dryadStateDirectory(environment), 'projects.yml');
+}
+
+function blankProjectsIndex() {
+  return { version: STATE_VERSION, projects: {} };
+}
+
+export function readDryadProjectsIndex(environment = process.env) {
+  const file = dryadProjectsIndexPath(environment);
+  if (!existsSync(file)) return { file, index: blankProjectsIndex() };
+  let doc;
+  try {
+    doc = parse(readFileSync(file, 'utf8'));
+  } catch (error) {
+    fail(`${file}: cannot read project index: ${error.message}`);
+  }
+  if (!isMap(doc) || doc.version !== STATE_VERSION || !isMap(doc.projects)) {
+    fail(`${file}: project index must have version ${STATE_VERSION} and a projects map.`);
+  }
+  for (const [slug, entry] of Object.entries(doc.projects)) {
+    if (!ID_PATTERN.test(slug)) fail(`${file}: project ${JSON.stringify(slug)} is not a DNS label.`);
+    if (!isMap(entry) || typeof entry.root !== 'string' || !path.isAbsolute(entry.root) || typeof entry.updated_at !== 'string') {
+      fail(`${file}: project ${slug} must have an absolute root and updated_at.`);
+    }
+  }
+  return { file, index: doc };
+}
+
+// Returns the root the slug pointed at before, or null when unchanged or new.
+function recordProjectRoot(slug, root, environment) {
+  const file = dryadProjectsIndexPath(environment);
+  const release = acquireStateLock(file, LOCK_WAIT_MS);
+  try {
+    const { index } = readDryadProjectsIndex(environment);
+    const previous = index.projects[slug]?.root ?? null;
+    index.projects[slug] = { root, updated_at: now() };
+    atomicWriteFile(file, stringify(index));
+    return previous != null && previous !== root ? previous : null;
+  } finally {
+    release();
+  }
+}
+
 function validateState(state, slug, file) {
   if (!isMap(state) || state.version !== STATE_VERSION || state.project !== slug) {
     fail(`${file}: registry must have version ${STATE_VERSION} and project ${JSON.stringify(slug)}.`);
@@ -368,6 +417,26 @@ function grove(args, project, environment) {
   });
 }
 
+// Seat hostnames come from Grove's `urls --json`; Dryad never renders a
+// hostname itself. Returns { hostnames, error }.
+function probeHostnames(project, env, environment) {
+  const result = spawnSync(process.execPath, [CLI_PATH, 'urls', project.root, '--env', env, '--json'], {
+    cwd: project.root,
+    env: environment,
+    encoding: 'utf8',
+  });
+  let report;
+  try {
+    report = JSON.parse(result.stdout);
+  } catch {
+    return { hostnames: [], error: `urls --env ${env} returned no JSON (exit ${result.status}): ${lastLine(result.stderr) || lastLine(result.stdout)}` };
+  }
+  if (result.status !== 0 || !Array.isArray(report.overlay)) {
+    return { hostnames: [], error: `urls --env ${env} exited ${result.status}: ${lastLine(result.stderr)}` };
+  }
+  return { hostnames: report.overlay.map((row) => row.host), error: null };
+}
+
 function lastLine(text) {
   const lines = text.split('\n').map((line) => line.trim()).filter(Boolean);
   return lines.length === 0 ? '' : lines[lines.length - 1];
@@ -434,6 +503,7 @@ const VERBS = Object.freeze({
   report: { positionals: [1, 1], options: ['status', 'note', 'session', 'project'], flags: [] },
   status: { positionals: [0, 1], options: ['project'], flags: ['json', 'finished'] },
   finish: { positionals: [1, 1], options: ['project'], flags: ['apply'] },
+  projects: { positionals: [0, 0], options: [], flags: ['json'] },
 });
 
 function takeOption(args, index, name) {
@@ -471,7 +541,9 @@ export function parseDryadCliArgs(args) {
     positionals.push(arg);
   }
   const [minimum, maximum] = spec.positionals;
-  if (positionals.length > maximum) fail(`${verb} takes at most ${maximum} positional argument${maximum === 1 ? '' : 's'}.`);
+  if (positionals.length > maximum) {
+    fail(maximum === 0 ? `${verb} takes no positional arguments.` : `${verb} takes at most ${maximum} positional argument${maximum === 1 ? '' : 's'}.`);
+  }
   if (positionals.length < minimum) fail(`${verb} requires a seat id.`);
   options.id = positionals[0] == null ? null : assertSeatId(positionals[0]);
 
@@ -614,6 +686,11 @@ function runPlan({ options, project, environment, cwd }) {
     current.seats[options.id] = record;
     return record;
   });
+
+  const movedFrom = recordProjectRoot(project.slug, project.root, environment);
+  if (movedFrom != null) {
+    console.error(`dryad: project index: ${project.slug} root moved from ${movedFrom} to ${project.root}; index keeps the latest.`);
+  }
 
   console.log(
     [
@@ -772,7 +849,13 @@ function runStatus({ options, project, environment }) {
     if (envState === 'missing') problems.push(`${id}: env ${seat.env} not tracked by overlay status`);
     if (envState === 'pending') problems.push(`${id}: env pending; rerun plan --apply`);
     if (seat.status === 'blocked') problems.push(`${id}: blocked`);
-    return { id, seat, present, ahead, envState };
+    let hostnames = [];
+    if (options.json && project.overlayActive && seat.env != null && seat.env !== 'pending') {
+      const probe = probeHostnames(project, seat.env, environment);
+      hostnames = probe.hostnames;
+      if (probe.error != null) problems.push(`${id}: ${probe.error}`);
+    }
+    return { id, seat, present, ahead, envState, hostnames };
   });
   if (options.id == null && tracked != null) {
     const seated = new Set(entries.map(([, seat]) => seat.env).filter(Boolean));
@@ -805,6 +888,7 @@ function runStatus({ options, project, environment }) {
             ahead: row.ahead,
             env: row.seat.env,
             env_state: row.envState,
+            hostnames: row.hostnames,
             status: row.seat.status,
             by: row.seat.by,
             session: row.seat.session,
@@ -916,7 +1000,52 @@ function runFinish({ options, project, environment }) {
   return 0;
 }
 
+// Overlay mode of an indexed project, read from its Grove profile. Absent or
+// unreadable profiles count as no overlay; the reason goes to stderr.
+function projectOverlayActive(slug, root) {
+  const runtimePath = path.join(root, RUNTIME_PROFILE_RELPATH);
+  if (!existsSync(runtimePath)) return false;
+  try {
+    return parseProfile(readFileSync(runtimePath, 'utf8'), runtimePath).overlay?.mode === 'on';
+  } catch (error) {
+    console.error(`dryad: ${slug}: ${error.message}`);
+    return false;
+  }
+}
+
+function runProjects({ options, environment }) {
+  const { index } = readDryadProjectsIndex(environment);
+  const projects = Object.entries(index.projects)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([slug, entry]) => {
+      const rootPresent = existsSync(entry.root);
+      return {
+        slug,
+        root: entry.root,
+        root_present: rootPresent,
+        seats: Object.keys(readDryadState(slug, environment).state.seats).length,
+        finished: readDryadFinished(slug, environment).seats.length,
+        overlay: rootPresent && projectOverlayActive(slug, entry.root),
+        updated_at: entry.updated_at,
+      };
+    });
+  if (options.json) {
+    console.log(JSON.stringify({ projects }, null, 2));
+    return 0;
+  }
+  const lines = [`■ dryad — projects ${projects.length}`];
+  for (const row of projects) {
+    lines.push(
+      `  ${row.slug}  ${row.root}  ${row.root_present ? 'present' : 'missing'}  seats ${row.seats}  finished ${row.finished}  overlay ${row.overlay ? 'on' : 'off'}  updated ${row.updated_at}`
+    );
+  }
+  console.log(lines.join('\n'));
+  return 0;
+}
+
 export function runDryad({ options, environment = process.env, cwd = process.cwd() }) {
+  // projects is machine-wide: it reads the index, not a project.
+  if (options.verb === 'projects') return runProjects({ options, environment });
   const location = resolveDryadProject({ project: options.project, environment, cwd });
   const project = loadDryadProject(location);
   switch (options.verb) {
@@ -944,6 +1073,7 @@ usage:
   ${cli} dryad report ID --status working|blocked|done [--note TEXT] [--session REF] [--project ROOT]
   ${cli} dryad status [ID] [--json] [--finished] [--project ROOT]
   ${cli} dryad finish ID [--project ROOT] [--apply]
+  ${cli} dryad projects [--json]
 
 plan creates a worktree (or adopts --worktree) and, when the runtime profile
 has overlays, calls \`overlay create\`. seat prints the seat for any launcher.
@@ -951,5 +1081,8 @@ Workers report their own status. finish destroys the env, removes only a
 clean, Dryad-created worktree, and keeps the seat's journal in the finished
 archive; branches are always kept. The seat carries DRYAD_SKILL, the path to
 this skill, so a worker can read it from any launcher. ROOT defaults to
-DRYAD_PROJECT, then the nearest .agents/dryad-profile.yml above the cwd.`;
+DRYAD_PROJECT, then the nearest .agents/dryad-profile.yml above the cwd.
+projects lists every project that has planned a seat on this machine (the
+index next to the registries) with live seat, finished, and overlay counts.
+status --json carries each seat's overlay hostnames, read from \`urls --json\`.`;
 }

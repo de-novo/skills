@@ -9,6 +9,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
+  formatUrlsJson,
   formatUrlsReport,
   loadGroveAddressing,
   parseUrlsArgs,
@@ -397,11 +398,11 @@ project:
   ${CLI} init [project-root] [--slug NAME]
                                  [--engines a,b] [--services a,b] [--force]
   ${CLI} validate [project-root|profile]
-  ${CLI} urls [project-root|profile] [--env NAME]
+  ${CLI} urls [project-root|profile] [--env NAME] [--json]
                                  print hostnames (no listener)
   ${CLI} setup [project-root|profile]  owner-authorized engines + DB/account provisioning
   ${CLI} overlay <verb> ...            create/attach/detach/destroy/status/touch/prune
-  ${CLI} dryad <verb> ...              plan/seat/report/status/finish — seats for workers, no agent launch
+  ${CLI} dryad <verb> ...              plan/seat/report/status/finish/projects — seats for workers, no agent launch
 
 up, status, provision are aliases of infra up|status|provision.
 there is no down command — several projects live on machine infra.`);
@@ -427,12 +428,12 @@ function main() {
       return 0;
     }
     case 'urls': {
-      const { root, env } = parseUrlsArgs(rest);
+      const { root, env, json } = parseUrlsArgs(rest);
       const profilePath = resolveProfilePath(root);
       const profile = parseProfile(readFileSync(profilePath, 'utf8'), profilePath);
       const addressing = resolveAddressing(profile, { profilePath });
       const urls = renderProjectUrls(profile, addressing, { env });
-      console.log(formatUrlsReport(profile, addressing, urls));
+      console.log(json ? formatUrlsJson(addressing, urls) : formatUrlsReport(profile, addressing, urls));
       return 0;
     }
     case 'overlay':
