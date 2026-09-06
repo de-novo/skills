@@ -19,8 +19,9 @@ they reported, and clears the seat when the work is done. Dryad never starts
 an agent process; the launcher and the assignment stay with the human.
 
 This file owns the pattern. Values live in `.agents/dryad-profile.yml` next to
-Grove's `runtime-profile.yml`; Dryad reads the project slug and overlay mode
-from Grove's profile and keeps none of its own. Schema and CLI reference:
+Grove's `runtime-profile.yml`; with Grove present, Dryad reads the project
+slug and overlay mode from Grove's profile and keeps none of its own. A
+project without Grove declares only its slug and gets seats without envs. Schema and CLI reference:
 [README.md](README.md). Grove pattern: [grove](../grove/SKILL.md).
 
 ## You are a dryad when

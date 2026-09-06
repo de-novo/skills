@@ -369,6 +369,10 @@ attach하는 검증은 Grove의 병렬 overlay가 이미 잰 경로 위에 있�
   시점에 이미 finish한 자리의 저널이 없어 대화 기록에 의존해야 했다.
 - `report done`에 session이 없으면 한 줄 알림. 자리 다섯 중 다섯이 남기지 않았다.
 - 규칙 1은 "읽기는 되고 쓰기는 안 된다", 규칙 5는 "done 전에 확인"으로 고쳤다.
+- (2026-09-07) Grove 없는 프로젝트. 설계는 "overlay 없는 프로젝트에서도 워크트리만으로
+  동작한다"고 했지만 구현은 slug를 runtime-profile에서만 읽어 Grove 프로파일이 없으면
+  거부했다. 카탈로그 자체에 Dryad를 쓰려다 드러났다. 이제 runtime-profile이 없을 때만
+  dryad-profile이 `project.slug`를 가질 수 있고, 둘 다 있으면 중복으로 거부한다.
 
 철회한 후보: 자리별 포트 배정. overlay 없는 프로젝트에서 자리마다 dev 서버 포트를
 손으로 나눠야 했지만, 답은 포트가 아니라 overlay 어댑터와 이름이다. 같은 날 그

@@ -69,9 +69,20 @@ export function assertSeatId(value) {
 export function parseDryadProfile(yamlText, source = 'dryad-profile.yml') {
   const doc = parse(yamlText) ?? {};
   if (!isMap(doc)) fail(`${source}: profile must be a map.`);
-  assertOnlyKeys(doc, ['version', 'worktrees'], 'profile', source);
+  assertOnlyKeys(doc, ['version', 'project', 'worktrees'], 'profile', source);
   if (doc.version != null && doc.version !== PROFILE_VERSION) {
     fail(`${source}: version must be ${PROFILE_VERSION} (got ${JSON.stringify(doc.version)}).`);
+  }
+  // A project without Grove has no runtime-profile.yml to carry the slug, so
+  // the Dryad profile may carry it. With a Grove profile present the slug
+  // lives there only; loadDryadProject rejects the duplicate.
+  let project = null;
+  if (doc.project != null) {
+    if (!isMap(doc.project)) fail(`${source}: project must be a map.`);
+    assertOnlyKeys(doc.project, ['slug'], 'project', source);
+    const slug = nonEmptyString(doc.project.slug, 'project.slug', source);
+    if (!ID_PATTERN.test(slug)) fail(`${source}: project.slug must be a DNS label (got ${JSON.stringify(slug)}).`);
+    project = { slug };
   }
   let worktrees = null;
   if (doc.worktrees != null) {
@@ -89,7 +100,7 @@ export function parseDryadProfile(yamlText, source = 'dryad-profile.yml') {
     if (/\s/.test(branch)) fail(`${source}: worktrees.branch must not contain whitespace.`);
     worktrees = { root, branch };
   }
-  return { version: PROFILE_VERSION, worktrees };
+  return { version: PROFILE_VERSION, project, worktrees };
 }
 
 function findProfileUpward(startDir) {
@@ -123,7 +134,13 @@ export function loadDryadProject(location) {
   const dryad = parseDryadProfile(readFileSync(location.profilePath, 'utf8'), location.profilePath);
   const runtimePath = path.join(location.root, RUNTIME_PROFILE_RELPATH);
   if (!existsSync(runtimePath)) {
-    fail(`runtime profile not found: ${runtimePath} — Dryad reads project.slug and overlay from Grove's profile.`);
+    if (dryad.project == null) {
+      fail(`${location.profilePath}: no ${RUNTIME_PROFILE_RELPATH} to take project.slug from; declare project.slug here for a project without Grove.`);
+    }
+    return { root: location.root, dryad, slug: dryad.project.slug, overlayActive: false };
+  }
+  if (dryad.project != null) {
+    fail(`${location.profilePath}: project.slug is declared here and in ${RUNTIME_PROFILE_RELPATH}; keep it only in Grove's profile.`);
   }
   const runtime = parseProfile(readFileSync(runtimePath, 'utf8'), runtimePath);
   return {

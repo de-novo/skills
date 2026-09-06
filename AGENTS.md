@@ -7,7 +7,8 @@ still owns its pattern.
 
 This checkout is a **skill catalog**, not a consuming app. Do not plant
 `.agents/runtime-profile.yml` here — that file belongs in projects that *use*
-Grove.
+Grove. `.agents/dryad-profile.yml` *is* here: the catalog seats its own
+workers with Dryad (worktrees and reports, no overlay envs).
 
 Remote: `git@github.com:de-novo/skills.git`. CLI: `de-novo skills` (alias `de-novo-skills`).
 

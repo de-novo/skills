@@ -124,8 +124,8 @@ function fixture(t, { overlay = false, worktrees = true } = {}) {
 
 test('dryad profile parser accepts the documented shape and rejects unknown keys and placeholders', () => {
   const ok = parseDryadProfile('version: 1\nworktrees:\n  root: ../seats\n  branch: "dryad/{id}"\n');
-  assert.deepEqual(ok, { version: 1, worktrees: { root: '../seats', branch: 'dryad/{id}' } });
-  assert.deepEqual(parseDryadProfile(''), { version: 1, worktrees: null });
+  assert.deepEqual(ok, { version: 1, project: null, worktrees: { root: '../seats', branch: 'dryad/{id}' } });
+  assert.deepEqual(parseDryadProfile(''), { version: 1, project: null, worktrees: null });
   const rejected = [
     'version: 2\n',
     'runners: {}\n',
@@ -143,9 +143,40 @@ test('dryad profile parser accepts the documented shape and rejects unknown keys
   assert.equal(count, rejected.length);
 });
 
+test('a project without Grove carries its slug in the Dryad profile; with Grove the duplicate is rejected', (t) => {
+  assert.deepEqual(parseDryadProfile('project: { slug: solo }\n'), { version: 1, project: { slug: 'solo' }, worktrees: null });
+  assert.throws(() => parseDryadProfile('project: { slug: Solo Project }\n'), /DNS label/);
+  assert.throws(() => parseDryadProfile('project: { slug: solo, namespace: x }\n'), /unknown key/);
+
+  const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'dryad-solo-')));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const baseline = path.join(root, 'baseline');
+  mkdirSync(path.join(baseline, '.agents'), { recursive: true });
+  writeFileSync(path.join(baseline, '.agents/dryad-profile.yml'), 'project: { slug: solo }\nworktrees: { root: ../seats, branch: "dryad/{id}" }\n');
+  writeFileSync(path.join(baseline, 'README.md'), 'solo\n');
+  gitIn(baseline, ['init', '-b', 'main']); gitIn(baseline, ['add', '.']); gitIn(baseline, ['commit', '-m', 'solo']);
+  const env = { ...process.env, GROVE_STATE_DIR: path.join(root, 'state') };
+  delete env.DRYAD_PROJECT;
+  const run = (args) => spawnSync(process.execPath, [CLI, 'dryad', ...args, '--project', baseline], { env, encoding: 'utf8' });
+  const planned = run(['plan', 'w1', '--task', 'solo work', '--apply']);
+  assert.equal(planned.status, 0, planned.stderr);
+  assert.match(planned.stdout, /env       none/);
+  const status = run(['status']);
+  assert.equal(status.status, 0, status.stderr);
+  assert.match(status.stdout, /■ solo — seats 1/);
+  assert.match(status.stdout, /envs       none \(overlay inactive\)/);
+  assert.equal(run(['finish', 'w1', '--apply']).status, 0);
+
+  writeFileSync(path.join(baseline, '.agents/runtime-profile.yml'), 'project: { slug: solo }\nservices: { api: {} }\noverlay: none\ndata: { infra: project }\n');
+  const duplicate = run(['status']);
+  assert.notEqual(duplicate.status, 0);
+  assert.match(duplicate.stderr, /declared here and in/);
+  t.diagnostic('Grove-less project: plan/status/finish 3/3; duplicate slug rejected 1/1');
+});
+
 test('the published example profile parses', () => {
   const example = readFileSync(path.join(HERE, '../../skills/dryad/examples/dryad-profile.yml'), 'utf8');
-  assert.deepEqual(parseDryadProfile(example), { version: 1, worktrees: { root: '../acme-seats', branch: 'dryad/{id}' } });
+  assert.deepEqual(parseDryadProfile(example), { version: 1, project: null, worktrees: { root: '../acme-seats', branch: 'dryad/{id}' } });
 });
 
 test('dryad cli args enforce verb shapes', () => {

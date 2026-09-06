@@ -1,0 +1,8 @@
+# The catalog seats its own workers with Dryad. No Grove profile here (this is
+# not a consuming app), so the slug lives in this file; seats get worktrees and
+# reports, no overlay envs.
+version: 1
+project: { slug: de-novo-skills }
+worktrees:
+  root: ../de-novo-skills-seats
+  branch: "dryad/{id}"

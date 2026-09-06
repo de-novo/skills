@@ -21,16 +21,22 @@ the human uses, counts what workers report, and clears the seat afterwards.
 ## Profile
 
 `.agents/dryad-profile.yml` in the consuming project, next to Grove's
-`runtime-profile.yml`. Allowed top-level keys: `version`, `worktrees`.
+`runtime-profile.yml`. Allowed top-level keys: `version`, `project`,
+`worktrees`.
 
 ```yaml
 version: 1                       # omitted = 1; other values rejected
+# project: { slug: myproject }   # only for a project WITHOUT Grove; with a
+                                 # runtime-profile.yml the slug lives there and
+                                 # declaring it here is rejected as a duplicate
 worktrees:                       # omit when every seat adopts an existing worktree
   root: ../myproject-seats       # where plan creates worktrees; must be outside the checkout
   branch: "dryad/{id}"           # only {id} is substituted
 ```
 
-Dryad reads the project slug and overlay mode from `runtime-profile.yml`.
+With Grove, Dryad reads the project slug and overlay mode from
+`runtime-profile.yml`. Without Grove there are no overlay envs; seats are
+worktrees and reports only.
 There is no launcher configuration: which tool runs in a seat is the
 launcher's own setting, not a Dryad value. Example: [examples/](examples/).
 
