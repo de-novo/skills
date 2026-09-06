@@ -31,6 +31,7 @@ import {
   parseOverlayCliArgs,
   runOverlayLifecycle,
 } from '../lib/overlay.mjs';
+import { dryadHelp, parseDryadCliArgs, runDryad } from '../lib/dryad.mjs';
 import {
   COMPOSE_FILE,
   PROVISION,
@@ -202,6 +203,15 @@ there is no down command.`);
 function cmdProvision(args) {
   const result = spawnSync('bash', [PROVISION, ...args], { stdio: 'inherit' });
   return result.status ?? 1;
+}
+
+function cmdDryad(args) {
+  const options = parseDryadCliArgs(args);
+  if (options.help) {
+    console.log(dryadHelp(CLI));
+    return 0;
+  }
+  return runDryad({ options });
 }
 
 function cmdOverlay(args) {
@@ -391,6 +401,7 @@ project:
                                  print hostnames (no listener)
   ${CLI} setup [project-root|profile]  owner-authorized engines + DB/account provisioning
   ${CLI} overlay <verb> ...            create/attach/detach/destroy/status/touch/prune
+  ${CLI} dryad <verb> ...              plan/seat/report/status/finish — seats for workers, no agent launch
 
 up, status, provision are aliases of infra up|status|provision.
 there is no down command — several projects live on machine infra.`);
@@ -426,6 +437,8 @@ function main() {
     }
     case 'overlay':
       return cmdOverlay(rest);
+    case 'dryad':
+      return cmdDryad(rest);
     case 'infra':
       return cmdInfra(rest);
     case 'up':

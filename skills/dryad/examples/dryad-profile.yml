@@ -1,0 +1,11 @@
+# Shape of values only. Names are fictional.
+# Sits next to .agents/runtime-profile.yml; Dryad reads project.slug and the
+# overlay mode from there and keeps no copy.
+version: 1
+
+worktrees:
+  root: ../acme-seats          # outside the checkout; plan creates <root>/<id>
+  branch: "dryad/{id}"         # {id} is the seat id, e.g. dryad/w1
+
+# No launcher section on purpose. Which tool sits in a seat (and with which
+# flags) is the launcher's configuration, not a Dryad value.

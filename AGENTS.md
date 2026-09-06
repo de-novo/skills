@@ -24,6 +24,8 @@ Remote: `git@github.com:de-novo/skills.git`. CLI: `de-novo skills` (alias `de-no
 | Machine infra commands | `de-novo skills infra` (`infra/bin/cli.mjs`) |
 | CLI | `infra/bin/cli.mjs` |
 | Profile parse + invariants | `infra/lib/profile.mjs` only |
+| Dryad profile schema + CLI | `skills/dryad/README.md` |
+| Dryad profile parse + seat registry | `infra/lib/dryad.mjs` only |
 | Hostname render | `infra/lib/addressing.mjs` |
 | How to work in this catalog | this file |
 | Agent skill load paths | `.agents/` (see `.agents/README.md`) |
@@ -38,6 +40,7 @@ CLAUDE.md        pointer here — do not duplicate
 .agents/         load adapter + repo-only skills
 skills/          published skill sources
   grove/         first skill
+  dryad/         seats on Grove's ground (no agent launch)
 infra/           machine-shared engines Grove's CLI drives
 docs/            design notes (not the user-facing spec)
 ```

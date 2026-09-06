@@ -41,6 +41,7 @@ Agents working in this catalog: [`AGENTS.md`](AGENTS.md). Skill load paths: [`.a
 | Name | One line |
 | --- | --- |
 | [grove](skills/grove/) | Shared local ground: n projects, m apps each, one infra set |
+| [dryad](skills/dryad/) | One seat per worker on that ground: worktree, overlay env, task. No agent launch |
 
 ## CLI
 
@@ -52,7 +53,7 @@ npm install && npm link
 ```
 
 Then consuming projects call `de-novo skills infra status` (and `infra up`,
-`setup`, `init`, `validate`, `urls`, `overlay`). Projects choosing this machine
+`setup`, `init`, `validate`, `urls`, `overlay`, `dryad`). Projects choosing this machine
 backend do not copy its `infra/` directory; projects choosing another backend
 keep their own operating procedure. `de-novo-skills` is an alias without the `skills`
 token. Machine engines are Grove-central (`infra` next to this CLI). `setup`
@@ -71,6 +72,7 @@ AGENTS.md        how agents work in this catalog
 .agents/         skill load adapter (symlinks into skills/)
 skills/          skill sources. add a skill as <name>/SKILL.md
   grove/         first skill
+  dryad/         seats on Grove's ground (no agent launch)
 infra/           machine-shared engines Grove uses
   addressing.yml this checkout's TLD and hostname scheme
   docker-compose.yml engine catalog (profile = engine id)
