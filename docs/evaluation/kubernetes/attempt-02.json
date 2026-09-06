@@ -1,0 +1,445 @@
+{
+  "startedAt": "2026-09-05T19:29:19.802Z",
+  "kind": "isolated-real-kubernetes-synthetic-application",
+  "candidate": "0725d06520ae0ca2062bbff6236da7332cb8840e",
+  "sources": {
+    "infra/lib/overlay.mjs": "c1a970ff4c889fb85fe39b31213c4798b2dd7015cc23d3eafd2e325e6d321be6",
+    "infra/bin/fixtures/kubernetes-lab/backend.mjs": "14edea8f75ebd8fa9b1f5bc2ee05c29630c231e8882ebfb0ce619627ba30e9c9",
+    "infra/bin/fixtures/kubernetes-lab/app.mjs": "d0040469fd22d80162aac11e0ef820cb9db15f67b76478fbfb1241625c104fd7",
+    "docs/evaluation/kubernetes/run.mjs": "3cdb2a1891f34734e9d3b8779c1525b7684a385d5029e031f5552624311578af"
+  },
+  "normalTimeoutOverrides": false,
+  "plannedCases": 12,
+  "cases": [
+    {
+      "name": "private-cluster-and-baseline",
+      "pass": false,
+      "durationMs": 77465,
+      "error": "content/route identity for base: Unexpected token 'U', \"Unknown lab host\" is not valid JSON"
+    }
+  ],
+  "commands": [
+    {
+      "command": "docker",
+      "args": [
+        "ps",
+        "--format",
+        "{{json .}}"
+      ],
+      "started": 1788636559826,
+      "finished": 1788636560274,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "git",
+      "args": [
+        "-c",
+        "core.hooksPath=/dev/null",
+        "-c",
+        "commit.gpgSign=false",
+        "init",
+        "-b",
+        "main"
+      ],
+      "started": 1788636560277,
+      "finished": 1788636560291,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "git",
+      "args": [
+        "-c",
+        "core.hooksPath=/dev/null",
+        "-c",
+        "commit.gpgSign=false",
+        "add",
+        "."
+      ],
+      "started": 1788636560291,
+      "finished": 1788636560303,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "git",
+      "args": [
+        "-c",
+        "core.hooksPath=/dev/null",
+        "-c",
+        "commit.gpgSign=false",
+        "-c",
+        "user.name=Grove Lab",
+        "-c",
+        "user.email=lab@example.invalid",
+        "commit",
+        "-m",
+        "Disposable lab baseline"
+      ],
+      "started": 1788636560303,
+      "finished": 1788636560324,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "git",
+      "args": [
+        "-c",
+        "core.hooksPath=/dev/null",
+        "-c",
+        "commit.gpgSign=false",
+        "worktree",
+        "add",
+        "-b",
+        "w1",
+        "<lab>/w1"
+      ],
+      "started": 1788636560324,
+      "finished": 1788636560358,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "git",
+      "args": [
+        "-c",
+        "core.hooksPath=/dev/null",
+        "-c",
+        "commit.gpgSign=false",
+        "worktree",
+        "add",
+        "-b",
+        "w2",
+        "<lab>/w2"
+      ],
+      "started": 1788636560358,
+      "finished": 1788636560385,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "git",
+      "args": [
+        "-c",
+        "core.hooksPath=/dev/null",
+        "-c",
+        "commit.gpgSign=false",
+        "worktree",
+        "add",
+        "-b",
+        "w3",
+        "<lab>/w3"
+      ],
+      "started": 1788636560385,
+      "finished": 1788636560410,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "k3d",
+      "args": [
+        "cluster",
+        "create",
+        "grove-test-dxaadk-68048",
+        "--image",
+        "rancher/k3s:v1.35.5-k3s1",
+        "--servers",
+        "1",
+        "--agents",
+        "0",
+        "--servers-memory",
+        "2g",
+        "--no-lb",
+        "--api-port",
+        "127.0.0.1:50223",
+        "--kubeconfig-update-default=false",
+        "--kubeconfig-switch-context=false",
+        "--k3s-arg",
+        "--disable=traefik,servicelb,metrics-server@server:0",
+        "--runtime-label",
+        "grove.test/run=grove-test-dxaadk-68048@all",
+        "--timeout",
+        "120s"
+      ],
+      "started": 1788636560414,
+      "finished": 1788636570463,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "build",
+        "--network=none",
+        "--pull=false",
+        "--provenance=false",
+        "--label",
+        "grove.test/run=grove-test-dxaadk-68048",
+        "-t",
+        "grove-lab/grove-test-dxaadk-68048:base-base",
+        "."
+      ],
+      "started": 1788636570597,
+      "finished": 1788636571633,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "image",
+        "inspect",
+        "grove-lab/grove-test-dxaadk-68048:base-base",
+        "--format",
+        "{{.Id}}"
+      ],
+      "started": 1788636571633,
+      "finished": 1788636571812,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "k3d",
+      "args": [
+        "image",
+        "import",
+        "grove-lab/grove-test-dxaadk-68048:base-base",
+        "--cluster",
+        "grove-test-dxaadk-68048"
+      ],
+      "started": 1788636571813,
+      "finished": 1788636601147,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "exec",
+        "k3d-grove-test-dxaadk-68048-server-0",
+        "ctr",
+        "-n",
+        "k8s.io",
+        "images",
+        "ls"
+      ],
+      "started": 1788636601148,
+      "finished": 1788636601984,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "exec",
+        "k3d-grove-test-dxaadk-68048-server-0",
+        "ctr",
+        "-n",
+        "k8s.io",
+        "images",
+        "tag",
+        "docker.io/grove-lab/grove-test-dxaadk-68048:base-base",
+        "docker.io/grove-lab/grove-test-dxaadk-68048@sha256:b083be4d31b36ad6a23a01a90d9673c60344aabf034e54efdbc688310713b95c"
+      ],
+      "started": 1788636601985,
+      "finished": 1788636603989,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "kubectl",
+      "args": [
+        "--kubeconfig",
+        "<lab>/kubeconfig",
+        "--context",
+        "k3d-grove-test-dxaadk-68048",
+        "--request-timeout=10s",
+        "apply",
+        "-f",
+        "<lab>/apply-1788636603989-y9mksknhro.json"
+      ],
+      "started": 1788636603990,
+      "finished": 1788636605253,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "kubectl",
+      "args": [
+        "--kubeconfig",
+        "<lab>/kubeconfig",
+        "--context",
+        "k3d-grove-test-dxaadk-68048",
+        "--request-timeout=10s",
+        "apply",
+        "-f",
+        "<lab>/apply-1788636605253-x5cmjx40sot.json"
+      ],
+      "started": 1788636605254,
+      "finished": 1788636605427,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "kubectl",
+      "args": [
+        "--kubeconfig",
+        "<lab>/kubeconfig",
+        "--context",
+        "k3d-grove-test-dxaadk-68048",
+        "--request-timeout=10s",
+        "-n",
+        "grove-lab-base",
+        "rollout",
+        "status",
+        "deployment/web",
+        "--timeout=90s"
+      ],
+      "started": 1788636605427,
+      "finished": 1788636607632,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "kubectl",
+      "args": [
+        "--kubeconfig",
+        "<lab>/kubeconfig",
+        "--context",
+        "k3d-grove-test-dxaadk-68048",
+        "--request-timeout=10s",
+        "-n",
+        "grove-lab-base",
+        "rollout",
+        "status",
+        "deployment/router",
+        "--timeout=90s"
+      ],
+      "started": 1788636605429,
+      "finished": 1788636607637,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "kubectl",
+      "args": [
+        "--kubeconfig",
+        "<lab>/kubeconfig",
+        "--context",
+        "k3d-grove-test-dxaadk-68048",
+        "--request-timeout=10s",
+        "-n",
+        "grove-lab-base",
+        "rollout",
+        "status",
+        "deployment/api",
+        "--timeout=90s"
+      ],
+      "started": 1788636605429,
+      "finished": 1788636607641,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "kubectl",
+      "args": [
+        "--kubeconfig",
+        "<lab>/kubeconfig",
+        "--context",
+        "k3d-grove-test-dxaadk-68048",
+        "--request-timeout=10s",
+        "-n",
+        "grove-lab-base",
+        "port-forward",
+        "service/router",
+        ":8080",
+        "--address",
+        "127.0.0.1"
+      ],
+      "started": 1788636607641,
+      "finished": 1788636637881,
+      "status": null,
+      "signal": "SIGTERM"
+    },
+    {
+      "command": "docker",
+      "args": [
+        "inspect",
+        "k3d-grove-test-dxaadk-68048-server-0",
+        "--format",
+        "{{index .Config.Labels \"grove.test/run\"}}"
+      ],
+      "started": 1788636637881,
+      "finished": 1788636638082,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "k3d",
+      "args": [
+        "cluster",
+        "delete",
+        "grove-test-dxaadk-68048"
+      ],
+      "started": 1788636638082,
+      "finished": 1788636641522,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "image",
+        "rm",
+        "grove-lab/grove-test-dxaadk-68048:base-base"
+      ],
+      "started": 1788636641522,
+      "finished": 1788636641639,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "ps",
+        "--format",
+        "{{json .}}"
+      ],
+      "started": 1788636641639,
+      "finished": 1788636642094,
+      "status": 0,
+      "signal": null
+    }
+  ],
+  "observations": [],
+  "failures": [
+    "content/route identity for base: Unexpected token 'U', \"Unknown lab host\" is not valid JSON"
+  ],
+  "cleanup": {
+    "clusterRemoved": true,
+    "preexistingContainersPreserved": 14,
+    "defaultKubeconfigUnchanged": true,
+    "temporaryRootRemoved": true,
+    "remainingWorktrees": 0
+  },
+  "notMeasured": [
+    "existing consumer adapter and Istio routing",
+    "real business workflows and authentication",
+    "shared databases, Redis and Kafka",
+    "production adoption readiness"
+  ],
+  "baselineArtifact": {
+    "tree": "base",
+    "version": "base",
+    "multiplier": 1,
+    "tag": "grove-lab/grove-test-dxaadk-68048:base-base",
+    "imageId": "sha256:b083be4d31b36ad6a23a01a90d9673c60344aabf034e54efdbc688310713b95c",
+    "sourceHash": "d0040469fd22d80162aac11e0ef820cb9db15f67b76478fbfb1241625c104fd7",
+    "started": 1788636570597,
+    "finished": 1788636571813,
+    "image": "docker.io/grove-lab/grove-test-dxaadk-68048@sha256:b083be4d31b36ad6a23a01a90d9673c60344aabf034e54efdbc688310713b95c"
+  },
+  "finishedAt": "2026-09-05T19:30:42.096Z",
+  "pathRedaction": "Catalog and temporary roots are placeholders; local Node executable paths are normalized to node. Measurements and source hashes are unchanged."
+}

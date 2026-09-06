@@ -1,0 +1,1063 @@
+{
+  "startedAt": "2026-09-05T19:33:43.728Z",
+  "kind": "isolated-real-kubernetes-synthetic-application",
+  "candidate": "0725d06520ae0ca2062bbff6236da7332cb8840e",
+  "sources": {
+    "infra/lib/overlay.mjs": "c1a970ff4c889fb85fe39b31213c4798b2dd7015cc23d3eafd2e325e6d321be6",
+    "infra/bin/fixtures/kubernetes-lab/backend.mjs": "581eb97bcd2a1d5007c074714f2ab116accd5d0b65cf1a4c14892326efc39217",
+    "infra/bin/fixtures/kubernetes-lab/app.mjs": "d0040469fd22d80162aac11e0ef820cb9db15f67b76478fbfb1241625c104fd7",
+    "docs/evaluation/kubernetes/run.mjs": "2baee71a7ec389987ff5fdc41544e749387d881f5c1d6937c0d39cf707f33fc4"
+  },
+  "normalTimeoutOverrides": false,
+  "imageImport": "serialized per private cluster because k3d shares one tools container; Docker builds and overlay commands remain concurrent",
+  "plannedCases": 12,
+  "cases": [
+    {
+      "name": "private-cluster-and-baseline",
+      "pass": true,
+      "durationMs": 53859,
+      "evidence": {
+        "defaultKubeconfigUnchanged": true,
+        "baselineServices": 3,
+        "hostBind": "loopback-only"
+      }
+    },
+    {
+      "name": "plans-have-no-runtime-side-effects",
+      "pass": true,
+      "durationMs": 469,
+      "evidence": {
+        "unexpectedNamespaces": 0,
+        "trackedEnvironments": 0
+      }
+    },
+    {
+      "name": "real-parallel-worktree-build-and-web-api-fallback",
+      "pass": false,
+      "durationMs": 48529,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ '/private<lab>/w1'\n- '<lab>/w1'\n"
+    }
+  ],
+  "commands": [
+    {
+      "command": "docker",
+      "args": [
+        "ps",
+        "--format",
+        "{{json .}}"
+      ],
+      "started": 1788636823742,
+      "finished": 1788636824018,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "git",
+      "args": [
+        "-c",
+        "core.hooksPath=/dev/null",
+        "-c",
+        "commit.gpgSign=false",
+        "init",
+        "-b",
+        "main"
+      ],
+      "started": 1788636824021,
+      "finished": 1788636824034,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "git",
+      "args": [
+        "-c",
+        "core.hooksPath=/dev/null",
+        "-c",
+        "commit.gpgSign=false",
+        "add",
+        "."
+      ],
+      "started": 1788636824034,
+      "finished": 1788636824044,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "git",
+      "args": [
+        "-c",
+        "core.hooksPath=/dev/null",
+        "-c",
+        "commit.gpgSign=false",
+        "-c",
+        "user.name=Grove Lab",
+        "-c",
+        "user.email=lab@example.invalid",
+        "commit",
+        "-m",
+        "Disposable lab baseline"
+      ],
+      "started": 1788636824044,
+      "finished": 1788636824065,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "git",
+      "args": [
+        "-c",
+        "core.hooksPath=/dev/null",
+        "-c",
+        "commit.gpgSign=false",
+        "worktree",
+        "add",
+        "-b",
+        "w1",
+        "<lab>/w1"
+      ],
+      "started": 1788636824065,
+      "finished": 1788636824101,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "git",
+      "args": [
+        "-c",
+        "core.hooksPath=/dev/null",
+        "-c",
+        "commit.gpgSign=false",
+        "worktree",
+        "add",
+        "-b",
+        "w2",
+        "<lab>/w2"
+      ],
+      "started": 1788636824101,
+      "finished": 1788636824135,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "git",
+      "args": [
+        "-c",
+        "core.hooksPath=/dev/null",
+        "-c",
+        "commit.gpgSign=false",
+        "worktree",
+        "add",
+        "-b",
+        "w3",
+        "<lab>/w3"
+      ],
+      "started": 1788636824135,
+      "finished": 1788636824169,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "k3d",
+      "args": [
+        "cluster",
+        "create",
+        "grove-test-z25r6s-75230",
+        "--image",
+        "rancher/k3s:v1.35.5-k3s1",
+        "--servers",
+        "1",
+        "--agents",
+        "0",
+        "--servers-memory",
+        "2g",
+        "--no-lb",
+        "--api-port",
+        "127.0.0.1:51890",
+        "--kubeconfig-update-default=false",
+        "--kubeconfig-switch-context=false",
+        "--k3s-arg",
+        "--disable=traefik,servicelb,metrics-server@server:0",
+        "--runtime-label",
+        "grove.test/run=grove-test-z25r6s-75230@all",
+        "--timeout",
+        "120s"
+      ],
+      "started": 1788636824173,
+      "finished": 1788636835278,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "build",
+        "--network=none",
+        "--pull=false",
+        "--provenance=false",
+        "--label",
+        "grove.test/run=grove-test-z25r6s-75230",
+        "-t",
+        "grove-lab/grove-test-z25r6s-75230:base-base",
+        "."
+      ],
+      "started": 1788636835332,
+      "finished": 1788636836529,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "image",
+        "inspect",
+        "grove-lab/grove-test-z25r6s-75230:base-base",
+        "--format",
+        "{{.Id}}"
+      ],
+      "started": 1788636836529,
+      "finished": 1788636836699,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "k3d",
+      "args": [
+        "image",
+        "import",
+        "grove-lab/grove-test-z25r6s-75230:base-base",
+        "--cluster",
+        "grove-test-z25r6s-75230"
+      ],
+      "started": 1788636836700,
+      "finished": 1788636874637,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "exec",
+        "k3d-grove-test-z25r6s-75230-server-0",
+        "ctr",
+        "-n",
+        "k8s.io",
+        "images",
+        "ls"
+      ],
+      "started": 1788636874637,
+      "finished": 1788636875040,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "exec",
+        "k3d-grove-test-z25r6s-75230-server-0",
+        "ctr",
+        "-n",
+        "k8s.io",
+        "images",
+        "tag",
+        "docker.io/grove-lab/grove-test-z25r6s-75230:base-base",
+        "docker.io/grove-lab/grove-test-z25r6s-75230@sha256:a9b567132446a99506883cf900e81608671921a1bc71b8c6b9e93e5c56e70d64"
+      ],
+      "started": 1788636875041,
+      "finished": 1788636875204,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "kubectl",
+      "args": [
+        "--kubeconfig",
+        "<lab>/kubeconfig",
+        "--context",
+        "k3d-grove-test-z25r6s-75230",
+        "--request-timeout=10s",
+        "apply",
+        "-f",
+        "<lab>/apply-1788636875206-pakbkqytmi.json"
+      ],
+      "started": 1788636875207,
+      "finished": 1788636875797,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "kubectl",
+      "args": [
+        "--kubeconfig",
+        "<lab>/kubeconfig",
+        "--context",
+        "k3d-grove-test-z25r6s-75230",
+        "--request-timeout=10s",
+        "apply",
+        "-f",
+        "<lab>/apply-1788636875797-sp8qitv8ia.json"
+      ],
+      "started": 1788636875799,
+      "finished": 1788636876063,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "kubectl",
+      "args": [
+        "--kubeconfig",
+        "<lab>/kubeconfig",
+        "--context",
+        "k3d-grove-test-z25r6s-75230",
+        "--request-timeout=10s",
+        "-n",
+        "grove-lab-base",
+        "rollout",
+        "status",
+        "deployment/api",
+        "--timeout=90s"
+      ],
+      "started": 1788636876070,
+      "finished": 1788636876534,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "kubectl",
+      "args": [
+        "--kubeconfig",
+        "<lab>/kubeconfig",
+        "--context",
+        "k3d-grove-test-z25r6s-75230",
+        "--request-timeout=10s",
+        "-n",
+        "grove-lab-base",
+        "rollout",
+        "status",
+        "deployment/web",
+        "--timeout=90s"
+      ],
+      "started": 1788636876063,
+      "finished": 1788636876548,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "kubectl",
+      "args": [
+        "--kubeconfig",
+        "<lab>/kubeconfig",
+        "--context",
+        "k3d-grove-test-z25r6s-75230",
+        "--request-timeout=10s",
+        "-n",
+        "grove-lab-base",
+        "rollout",
+        "status",
+        "deployment/router",
+        "--timeout=90s"
+      ],
+      "started": 1788636876072,
+      "finished": 1788636877494,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "node",
+      "args": [
+        "<catalog>/infra/bin/cli.mjs",
+        "overlay",
+        "create",
+        "w1",
+        "--project",
+        "<lab>/w1"
+      ],
+      "started": 1788636878029,
+      "finished": 1788636878311,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "kubectl",
+      "args": [
+        "--kubeconfig",
+        "<lab>/kubeconfig",
+        "--context",
+        "k3d-grove-test-z25r6s-75230",
+        "--request-timeout=10s",
+        "get",
+        "namespaces",
+        "-o",
+        "json"
+      ],
+      "started": 1788636878311,
+      "finished": 1788636878495,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "build",
+        "--network=none",
+        "--pull=false",
+        "--provenance=false",
+        "--label",
+        "grove.test/run=grove-test-z25r6s-75230",
+        "-t",
+        "grove-lab/grove-test-z25r6s-75230:w1-first",
+        "."
+      ],
+      "started": 1788636878498,
+      "finished": 1788636879985,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "build",
+        "--network=none",
+        "--pull=false",
+        "--provenance=false",
+        "--label",
+        "grove.test/run=grove-test-z25r6s-75230",
+        "-t",
+        "grove-lab/grove-test-z25r6s-75230:w2-second",
+        "."
+      ],
+      "started": 1788636878506,
+      "finished": 1788636880024,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "image",
+        "inspect",
+        "grove-lab/grove-test-z25r6s-75230:w2-second",
+        "--format",
+        "{{.Id}}"
+      ],
+      "started": 1788636880024,
+      "finished": 1788636880373,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "image",
+        "inspect",
+        "grove-lab/grove-test-z25r6s-75230:w1-first",
+        "--format",
+        "{{.Id}}"
+      ],
+      "started": 1788636879985,
+      "finished": 1788636880381,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "k3d",
+      "args": [
+        "image",
+        "import",
+        "grove-lab/grove-test-z25r6s-75230:w2-second",
+        "--cluster",
+        "grove-test-z25r6s-75230"
+      ],
+      "started": 1788636880373,
+      "finished": 1788636897988,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "exec",
+        "k3d-grove-test-z25r6s-75230-server-0",
+        "ctr",
+        "-n",
+        "k8s.io",
+        "images",
+        "ls"
+      ],
+      "started": 1788636897988,
+      "finished": 1788636898835,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "exec",
+        "k3d-grove-test-z25r6s-75230-server-0",
+        "ctr",
+        "-n",
+        "k8s.io",
+        "images",
+        "tag",
+        "docker.io/grove-lab/grove-test-z25r6s-75230:w2-second",
+        "docker.io/grove-lab/grove-test-z25r6s-75230@sha256:5be2cfc24c59a8c2421c47482232b57a5b16d2731ce1f5612292fa69cb8100f8"
+      ],
+      "started": 1788636898836,
+      "finished": 1788636899018,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "k3d",
+      "args": [
+        "image",
+        "import",
+        "grove-lab/grove-test-z25r6s-75230:w1-first",
+        "--cluster",
+        "grove-test-z25r6s-75230"
+      ],
+      "started": 1788636899018,
+      "finished": 1788636919300,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "exec",
+        "k3d-grove-test-z25r6s-75230-server-0",
+        "ctr",
+        "-n",
+        "k8s.io",
+        "images",
+        "ls"
+      ],
+      "started": 1788636919300,
+      "finished": 1788636919658,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "exec",
+        "k3d-grove-test-z25r6s-75230-server-0",
+        "ctr",
+        "-n",
+        "k8s.io",
+        "images",
+        "tag",
+        "docker.io/grove-lab/grove-test-z25r6s-75230:w1-first",
+        "docker.io/grove-lab/grove-test-z25r6s-75230@sha256:9425a244cdcec55b5c5b8ac76e3d2ba267b7653cfdbb7a41773478482b5410bd"
+      ],
+      "started": 1788636919658,
+      "finished": 1788636919869,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "node",
+      "args": [
+        "<catalog>/infra/bin/cli.mjs",
+        "overlay",
+        "create",
+        "w2",
+        "--apply",
+        "--project",
+        "<lab>/w2"
+      ],
+      "started": 1788636919874,
+      "finished": 1788636920866,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "node",
+      "args": [
+        "<catalog>/infra/bin/cli.mjs",
+        "overlay",
+        "create",
+        "w1",
+        "--apply",
+        "--project",
+        "<lab>/w1"
+      ],
+      "started": 1788636919873,
+      "finished": 1788636920877,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "node",
+      "args": [
+        "<catalog>/infra/bin/cli.mjs",
+        "overlay",
+        "attach",
+        "w2",
+        "api",
+        "--image",
+        "docker.io/grove-lab/grove-test-z25r6s-75230@sha256:5be2cfc24c59a8c2421c47482232b57a5b16d2731ce1f5612292fa69cb8100f8",
+        "--apply",
+        "--project",
+        "<lab>/w2"
+      ],
+      "started": 1788636920877,
+      "finished": 1788636923721,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "node",
+      "args": [
+        "<catalog>/infra/bin/cli.mjs",
+        "overlay",
+        "attach",
+        "w1",
+        "web",
+        "--image",
+        "docker.io/grove-lab/grove-test-z25r6s-75230@sha256:9425a244cdcec55b5c5b8ac76e3d2ba267b7653cfdbb7a41773478482b5410bd",
+        "--apply",
+        "--project",
+        "<lab>/w1"
+      ],
+      "started": 1788636920877,
+      "finished": 1788636924240,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "node",
+      "args": [
+        "<catalog>/infra/bin/cli.mjs",
+        "overlay",
+        "attach",
+        "w2",
+        "web",
+        "--image",
+        "docker.io/grove-lab/grove-test-z25r6s-75230@sha256:5be2cfc24c59a8c2421c47482232b57a5b16d2731ce1f5612292fa69cb8100f8",
+        "--apply",
+        "--project",
+        "<lab>/w2"
+      ],
+      "started": 1788636924274,
+      "finished": 1788636927009,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "kubectl",
+      "args": [
+        "--kubeconfig",
+        "<lab>/kubeconfig",
+        "--context",
+        "k3d-grove-test-z25r6s-75230",
+        "--request-timeout=10s",
+        "-n",
+        "grove-lab-base",
+        "port-forward",
+        "service/router",
+        ":8080",
+        "--address",
+        "127.0.0.1"
+      ],
+      "started": 1788636877494,
+      "finished": 1788636927028,
+      "status": null,
+      "signal": "SIGTERM"
+    },
+    {
+      "command": "docker",
+      "args": [
+        "inspect",
+        "k3d-grove-test-z25r6s-75230-server-0",
+        "--format",
+        "{{index .Config.Labels \"grove.test/run\"}}"
+      ],
+      "started": 1788636927028,
+      "finished": 1788636927075,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "k3d",
+      "args": [
+        "cluster",
+        "delete",
+        "grove-test-z25r6s-75230"
+      ],
+      "started": 1788636927075,
+      "finished": 1788636930167,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "image",
+        "rm",
+        "grove-lab/grove-test-z25r6s-75230:base-base"
+      ],
+      "started": 1788636930168,
+      "finished": 1788636930696,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "image",
+        "rm",
+        "grove-lab/grove-test-z25r6s-75230:w1-first"
+      ],
+      "started": 1788636930696,
+      "finished": 1788636930933,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "image",
+        "rm",
+        "grove-lab/grove-test-z25r6s-75230:w2-second"
+      ],
+      "started": 1788636930933,
+      "finished": 1788636931203,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "ps",
+        "--format",
+        "{{json .}}"
+      ],
+      "started": 1788636931203,
+      "finished": 1788636931733,
+      "status": 0,
+      "signal": null
+    }
+  ],
+  "observations": [],
+  "failures": [
+    "Expected values to be strictly equal:\n+ actual - expected\n\n+ '/private<lab>/w1'\n- '<lab>/w1'\n"
+  ],
+  "cleanup": {
+    "clusterRemoved": true,
+    "preexistingContainersPreserved": 14,
+    "defaultKubeconfigUnchanged": true,
+    "temporaryRootRemoved": true,
+    "remainingWorktrees": 0
+  },
+  "notMeasured": [
+    "existing consumer adapter and Istio routing",
+    "real business workflows and authentication",
+    "shared databases, Redis and Kafka",
+    "production adoption readiness"
+  ],
+  "baselineArtifact": {
+    "tree": "base",
+    "version": "base",
+    "multiplier": 1,
+    "tag": "grove-lab/grove-test-z25r6s-75230:base-base",
+    "imageId": "sha256:a9b567132446a99506883cf900e81608671921a1bc71b8c6b9e93e5c56e70d64",
+    "sourceHash": "d0040469fd22d80162aac11e0ef820cb9db15f67b76478fbfb1241625c104fd7",
+    "started": 1788636835331,
+    "finished": 1788636836699,
+    "image": "docker.io/grove-lab/grove-test-z25r6s-75230@sha256:a9b567132446a99506883cf900e81608671921a1bc71b8c6b9e93e5c56e70d64"
+  },
+  "finishedAt": "2026-09-05T19:35:31.735Z",
+  "sourceDrift": [],
+  "backendTrace": [
+    {
+      "stage": "start",
+      "verb": "create",
+      "env": "w1",
+      "pid": 77758,
+      "ppid": 77611,
+      "at": 1788636878292
+    },
+    {
+      "stage": "end",
+      "verb": "create",
+      "env": "w1",
+      "pid": 77758,
+      "ppid": 77611,
+      "at": 1788636878293
+    },
+    {
+      "stage": "start",
+      "verb": "create",
+      "env": "w2",
+      "pid": 79856,
+      "ppid": 79854,
+      "at": 1788636920055
+    },
+    {
+      "stage": "start",
+      "verb": "create",
+      "env": "w1",
+      "pid": 79855,
+      "ppid": 79853,
+      "at": 1788636920055
+    },
+    {
+      "stage": "mutated",
+      "verb": "create",
+      "env": "w1",
+      "pid": 79855,
+      "ppid": 79853,
+      "at": 1788636920238
+    },
+    {
+      "stage": "end",
+      "verb": "create",
+      "env": "w1",
+      "pid": 79855,
+      "ppid": 79853,
+      "at": 1788636920239
+    },
+    {
+      "stage": "mutated",
+      "verb": "create",
+      "env": "w2",
+      "pid": 79856,
+      "ppid": 79854,
+      "at": 1788636920241
+    },
+    {
+      "stage": "end",
+      "verb": "create",
+      "env": "w2",
+      "pid": 79856,
+      "ppid": 79854,
+      "at": 1788636920243
+    },
+    {
+      "stage": "start",
+      "verb": "status",
+      "env": "w1",
+      "pid": 79933,
+      "ppid": 79853,
+      "at": 1788636920317
+    },
+    {
+      "stage": "start",
+      "verb": "status",
+      "env": "w2",
+      "pid": 79934,
+      "ppid": 79854,
+      "at": 1788636920318
+    },
+    {
+      "stage": "end",
+      "verb": "status",
+      "env": "w1",
+      "pid": 79933,
+      "ppid": 79853,
+      "at": 1788636920856
+    },
+    {
+      "stage": "end",
+      "verb": "status",
+      "env": "w2",
+      "pid": 79934,
+      "ppid": 79854,
+      "at": 1788636920856
+    },
+    {
+      "stage": "start",
+      "verb": "attach",
+      "env": "w1",
+      "service": "web",
+      "pid": 80011,
+      "ppid": 80009,
+      "at": 1788636920996
+    },
+    {
+      "stage": "start",
+      "verb": "attach",
+      "env": "w2",
+      "service": "api",
+      "pid": 80023,
+      "ppid": 80010,
+      "at": 1788636921010
+    },
+    {
+      "stage": "mutated",
+      "verb": "attach",
+      "env": "w2",
+      "service": "api",
+      "pid": 80023,
+      "ppid": 80010,
+      "at": 1788636921214
+    },
+    {
+      "stage": "end",
+      "verb": "attach",
+      "env": "w2",
+      "service": "api",
+      "pid": 80023,
+      "ppid": 80010,
+      "at": 1788636921215
+    },
+    {
+      "stage": "mutated",
+      "verb": "attach",
+      "env": "w1",
+      "service": "web",
+      "pid": 80011,
+      "ppid": 80009,
+      "at": 1788636921215
+    },
+    {
+      "stage": "end",
+      "verb": "attach",
+      "env": "w1",
+      "service": "web",
+      "pid": 80011,
+      "ppid": 80009,
+      "at": 1788636921216
+    },
+    {
+      "stage": "start",
+      "verb": "status",
+      "env": "w2",
+      "pid": 80117,
+      "ppid": 80010,
+      "at": 1788636921287
+    },
+    {
+      "stage": "start",
+      "verb": "status",
+      "env": "w1",
+      "pid": 80118,
+      "ppid": 80009,
+      "at": 1788636921287
+    },
+    {
+      "stage": "end",
+      "verb": "status",
+      "env": "w2",
+      "pid": 80117,
+      "ppid": 80010,
+      "at": 1788636922175
+    },
+    {
+      "stage": "end",
+      "verb": "status",
+      "env": "w1",
+      "pid": 80118,
+      "ppid": 80009,
+      "at": 1788636922175
+    },
+    {
+      "stage": "start",
+      "verb": "status",
+      "env": "w2",
+      "pid": 80261,
+      "ppid": 80010,
+      "at": 1788636922493
+    },
+    {
+      "stage": "start",
+      "verb": "status",
+      "env": "w1",
+      "pid": 80260,
+      "ppid": 80009,
+      "at": 1788636922493
+    },
+    {
+      "stage": "end",
+      "verb": "status",
+      "env": "w1",
+      "pid": 80260,
+      "ppid": 80009,
+      "at": 1788636923713
+    },
+    {
+      "stage": "end",
+      "verb": "status",
+      "env": "w2",
+      "pid": 80261,
+      "ppid": 80010,
+      "at": 1788636923713
+    },
+    {
+      "stage": "start",
+      "verb": "status",
+      "env": "w1",
+      "pid": 80366,
+      "ppid": 80009,
+      "at": 1788636924028
+    },
+    {
+      "stage": "end",
+      "verb": "status",
+      "env": "w1",
+      "pid": 80366,
+      "ppid": 80009,
+      "at": 1788636924234
+    },
+    {
+      "stage": "start",
+      "verb": "attach",
+      "env": "w2",
+      "service": "web",
+      "pid": 80413,
+      "ppid": 80412,
+      "at": 1788636924381
+    },
+    {
+      "stage": "mutated",
+      "verb": "attach",
+      "env": "w2",
+      "service": "web",
+      "pid": 80413,
+      "ppid": 80412,
+      "at": 1788636924560
+    },
+    {
+      "stage": "end",
+      "verb": "attach",
+      "env": "w2",
+      "service": "web",
+      "pid": 80413,
+      "ppid": 80412,
+      "at": 1788636924561
+    },
+    {
+      "stage": "start",
+      "verb": "status",
+      "env": "w2",
+      "pid": 80459,
+      "ppid": 80412,
+      "at": 1788636924621
+    },
+    {
+      "stage": "end",
+      "verb": "status",
+      "env": "w2",
+      "pid": 80459,
+      "ppid": 80412,
+      "at": 1788636925557
+    },
+    {
+      "stage": "start",
+      "verb": "status",
+      "env": "w2",
+      "pid": 80515,
+      "ppid": 80412,
+      "at": 1788636925968
+    },
+    {
+      "stage": "end",
+      "verb": "status",
+      "env": "w2",
+      "pid": 80515,
+      "ppid": 80412,
+      "at": 1788636927002
+    }
+  ],
+  "pathRedaction": "Catalog and temporary roots are placeholders; local Node executable paths are normalized to node. Measurements and source hashes are unchanged."
+}

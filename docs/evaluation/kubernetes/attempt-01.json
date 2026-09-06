@@ -1,0 +1,347 @@
+{
+  "startedAt": "2026-09-05T19:26:39.237Z",
+  "kind": "isolated-real-kubernetes-synthetic-application",
+  "candidate": "0725d06520ae0ca2062bbff6236da7332cb8840e",
+  "sources": {
+    "infra/lib/overlay.mjs": "c1a970ff4c889fb85fe39b31213c4798b2dd7015cc23d3eafd2e325e6d321be6",
+    "infra/bin/fixtures/kubernetes-lab/backend.mjs": "14edea8f75ebd8fa9b1f5bc2ee05c29630c231e8882ebfb0ce619627ba30e9c9",
+    "infra/bin/fixtures/kubernetes-lab/app.mjs": "d0040469fd22d80162aac11e0ef820cb9db15f67b76478fbfb1241625c104fd7",
+    "docs/evaluation/kubernetes/run.mjs": "0591a89dc33f25422fb7df70617b7fb4d6eb38c150e3491a77098ded8f54c991"
+  },
+  "normalTimeoutOverrides": false,
+  "plannedCases": 10,
+  "cases": [
+    {
+      "name": "private-cluster-and-baseline",
+      "pass": false,
+      "durationMs": 90972,
+      "error": "kubectl --kubeconfig <lab>/kubeconfig --context k3d-grove-test-lq9y6y-63285 --request-timeout=10s: error: error validating \"<lab>/apply-1788636490534-eenbmg10ioq.json\": error validating data: Get \"https://127.0.0.1:0/openapi/v2?timeout=10s\": dial tcp 127.0.0.1:0: connect: can't assign requested address; if you choose to ignore these errors, turn validation off with --validate=false\n\n\n1 !== 0\n"
+    }
+  ],
+  "commands": [
+    {
+      "command": "docker",
+      "args": [
+        "ps",
+        "--format",
+        "{{json .}}"
+      ],
+      "started": 1788636399255,
+      "finished": 1788636399569,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "git",
+      "args": [
+        "-c",
+        "core.hooksPath=/dev/null",
+        "-c",
+        "commit.gpgSign=false",
+        "init",
+        "-b",
+        "main"
+      ],
+      "started": 1788636399572,
+      "finished": 1788636399586,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "git",
+      "args": [
+        "-c",
+        "core.hooksPath=/dev/null",
+        "-c",
+        "commit.gpgSign=false",
+        "add",
+        "."
+      ],
+      "started": 1788636399586,
+      "finished": 1788636399597,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "git",
+      "args": [
+        "-c",
+        "core.hooksPath=/dev/null",
+        "-c",
+        "commit.gpgSign=false",
+        "-c",
+        "user.name=Grove Lab",
+        "-c",
+        "user.email=lab@example.invalid",
+        "commit",
+        "-m",
+        "Disposable lab baseline"
+      ],
+      "started": 1788636399597,
+      "finished": 1788636399614,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "git",
+      "args": [
+        "-c",
+        "core.hooksPath=/dev/null",
+        "-c",
+        "commit.gpgSign=false",
+        "worktree",
+        "add",
+        "-b",
+        "w1",
+        "<lab>/w1"
+      ],
+      "started": 1788636399614,
+      "finished": 1788636399644,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "git",
+      "args": [
+        "-c",
+        "core.hooksPath=/dev/null",
+        "-c",
+        "commit.gpgSign=false",
+        "worktree",
+        "add",
+        "-b",
+        "w2",
+        "<lab>/w2"
+      ],
+      "started": 1788636399644,
+      "finished": 1788636399672,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "git",
+      "args": [
+        "-c",
+        "core.hooksPath=/dev/null",
+        "-c",
+        "commit.gpgSign=false",
+        "worktree",
+        "add",
+        "-b",
+        "w3",
+        "<lab>/w3"
+      ],
+      "started": 1788636399672,
+      "finished": 1788636399697,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "k3d",
+      "args": [
+        "cluster",
+        "create",
+        "grove-test-lq9y6y-63285",
+        "--image",
+        "rancher/k3s:v1.35.5-k3s1",
+        "--servers",
+        "1",
+        "--agents",
+        "0",
+        "--servers-memory",
+        "2g",
+        "--no-lb",
+        "--api-port",
+        "127.0.0.1:0",
+        "--kubeconfig-update-default=false",
+        "--kubeconfig-switch-context=false",
+        "--k3s-arg",
+        "--disable=traefik,servicelb,metrics-server@server:0",
+        "--runtime-label",
+        "grove.test/run=grove-test-lq9y6y-63285@all",
+        "--timeout",
+        "120s"
+      ],
+      "started": 1788636399697,
+      "finished": 1788636410254,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "build",
+        "--network=none",
+        "--pull=false",
+        "--provenance=false",
+        "--label",
+        "grove.test/run=grove-test-lq9y6y-63285",
+        "-t",
+        "grove-lab/grove-test-lq9y6y-63285:base-base",
+        "."
+      ],
+      "started": 1788636410302,
+      "finished": 1788636456941,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "image",
+        "inspect",
+        "grove-lab/grove-test-lq9y6y-63285:base-base",
+        "--format",
+        "{{.Id}}"
+      ],
+      "started": 1788636456941,
+      "finished": 1788636457237,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "k3d",
+      "args": [
+        "image",
+        "import",
+        "grove-lab/grove-test-lq9y6y-63285:base-base",
+        "--cluster",
+        "grove-test-lq9y6y-63285"
+      ],
+      "started": 1788636457242,
+      "finished": 1788636487818,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "exec",
+        "k3d-grove-test-lq9y6y-63285-server-0",
+        "ctr",
+        "-n",
+        "k8s.io",
+        "images",
+        "ls"
+      ],
+      "started": 1788636487818,
+      "finished": 1788636489298,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "exec",
+        "k3d-grove-test-lq9y6y-63285-server-0",
+        "ctr",
+        "-n",
+        "k8s.io",
+        "images",
+        "tag",
+        "docker.io/grove-lab/grove-test-lq9y6y-63285:base-base",
+        "docker.io/grove-lab/grove-test-lq9y6y-63285@sha256:f5f01292d0ca11704e79181d499bf4e1050d87b9a371c6a8e2816fd4edacebd1"
+      ],
+      "started": 1788636489300,
+      "finished": 1788636490534,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "kubectl",
+      "args": [
+        "--kubeconfig",
+        "<lab>/kubeconfig",
+        "--context",
+        "k3d-grove-test-lq9y6y-63285",
+        "--request-timeout=10s",
+        "apply",
+        "-f",
+        "<lab>/apply-1788636490534-eenbmg10ioq.json"
+      ],
+      "started": 1788636490535,
+      "finished": 1788636490666,
+      "status": 1,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "inspect",
+        "k3d-grove-test-lq9y6y-63285-server-0",
+        "--format",
+        "{{index .Config.Labels \"grove.test/run\"}}"
+      ],
+      "started": 1788636490669,
+      "finished": 1788636490706,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "k3d",
+      "args": [
+        "cluster",
+        "delete",
+        "grove-test-lq9y6y-63285"
+      ],
+      "started": 1788636490706,
+      "finished": 1788636495271,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "image",
+        "rm",
+        "grove-lab/grove-test-lq9y6y-63285:base-base"
+      ],
+      "started": 1788636495271,
+      "finished": 1788636495587,
+      "status": 0,
+      "signal": null
+    },
+    {
+      "command": "docker",
+      "args": [
+        "ps",
+        "--format",
+        "{{json .}}"
+      ],
+      "started": 1788636495587,
+      "finished": 1788636496363,
+      "status": 0,
+      "signal": null
+    }
+  ],
+  "observations": [],
+  "failures": [
+    "kubectl --kubeconfig <lab>/kubeconfig --context k3d-grove-test-lq9y6y-63285 --request-timeout=10s: error: error validating \"<lab>/apply-1788636490534-eenbmg10ioq.json\": error validating data: Get \"https://127.0.0.1:0/openapi/v2?timeout=10s\": dial tcp 127.0.0.1:0: connect: can't assign requested address; if you choose to ignore these errors, turn validation off with --validate=false\n\n\n1 !== 0\n"
+  ],
+  "cleanup": {
+    "clusterRemoved": true,
+    "preexistingContainersPreserved": 14,
+    "defaultKubeconfigUnchanged": true,
+    "temporaryRootRemoved": true,
+    "remainingWorktrees": 0
+  },
+  "notMeasured": [
+    "existing consumer adapter and Istio routing",
+    "real business workflows and authentication",
+    "shared databases, Redis and Kafka",
+    "production adoption readiness"
+  ],
+  "baselineArtifact": {
+    "tree": "base",
+    "version": "base",
+    "multiplier": 1,
+    "tag": "grove-lab/grove-test-lq9y6y-63285:base-base",
+    "imageId": "sha256:f5f01292d0ca11704e79181d499bf4e1050d87b9a371c6a8e2816fd4edacebd1",
+    "sourceHash": "d0040469fd22d80162aac11e0ef820cb9db15f67b76478fbfb1241625c104fd7",
+    "started": 1788636410302,
+    "finished": 1788636457241,
+    "image": "docker.io/grove-lab/grove-test-lq9y6y-63285@sha256:f5f01292d0ca11704e79181d499bf4e1050d87b9a371c6a8e2816fd4edacebd1"
+  },
+  "finishedAt": "2026-09-05T19:28:16.367Z",
+  "pathRedaction": "Catalog and temporary roots are placeholders; local Node executable paths are normalized to node. Measurements and source hashes are unchanged."
+}

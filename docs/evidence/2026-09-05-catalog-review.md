@@ -5,7 +5,7 @@ Execution snapshot: the candidate was uncommitted when these checks ran.
 The measured changes were subsequently committed and pushed as
 `d7fa8c9988887b605512f3bb5d2f1fa9b6a48f54`.
 Target: Grove skill/docs, profile validation, and overlay lifecycle verification
-in `/Users/denovo/orca/denovo/dev-infra`.
+in the catalog checkout.
 
 ## Result and compatibility
 
@@ -21,9 +21,9 @@ Profile validation rejects unknown documented keys, malformed command/service
 values, and missing default profiles. Backend-specific runtime profile options
 remain project-owned. See the current schema and overlay contract for authority.
 
-The original unified design and multi-machine proposal moved to `docs/archive/`
-with preserved bodies and explicit historical status. The ignored machine-local
-registry note was not changed. `data.infra: project` remains a supported backend
+At the time of this review, earlier proposals were marked as historical.
+The retained [design rationale](../archive/2026-09-02-design-decisions.md) is now
+a condensed account of reusable decisions. `data.infra: project` remains a supported backend
 choice; runtime compatibility was not deleted without consumer evidence.
 
 ## Executed checks

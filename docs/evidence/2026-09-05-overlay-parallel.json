@@ -1,0 +1,133 @@
+{
+  "recorded_at": "2026-09-05T14:10:01.954258+00:00",
+  "candidate_base_sha": "0725d06520ae0ca2062bbff6236da7332cb8840e",
+  "candidate_state": "uncommitted production and test changes; commit and push not performed",
+  "working_files_sha256": {
+    "infra/lib/overlay.mjs": "c1a970ff4c889fb85fe39b31213c4798b2dd7015cc23d3eafd2e325e6d321be6",
+    "infra/bin/overlay-parallel.test.mjs": "7d5e565961bc63ecc54df4db4a00c4e3add8af5a191e9a88c350fb11da45ed1a",
+    "infra/bin/fixtures/process-overlay.mjs": "ffd29569bdd849916f3ea22ae0474ccb12cb65a598b9a7a919c2cc21c8176882",
+    "infra/bin/fixtures/process-workload.mjs": "34b0ad1e72ca552a1ac4a658986d5e7dcb256aa6ffa1f90dd29a22f192dc1f29",
+    "infra/bin/overlay-process.test.mjs": "0e6a662c6e3e3477e36f058311ea71f5c5b7e68529bb9dcf5db31b17222cbf14",
+    "infra/bin/overlay.test.mjs": "928fa4a4c26fb344a7e04be33eb4f6d997b253420d6d2890bdbe39516eb4e2fa",
+    "infra/bin/overlay-stub.mjs": "d158132a875e06f47cd8646c1638b75d12845d93710149d3e7ef25bb2597ed85"
+  },
+  "commands": [
+    "node --test infra/bin/overlay-parallel.test.mjs",
+    "node docs/evaluation/synthetic/worktrees.mjs docs/evaluation/synthetic/worktree-parallel-results.json",
+    "node docs/evaluation/synthetic/run.mjs docs/evaluation/synthetic/parallel-results.json",
+    "node --check infra/lib/overlay.mjs",
+    "node --test --test-name-pattern=\"mismatched pending\" infra/bin/overlay-parallel.test.mjs",
+    "node --test --test-name-pattern=\"real worktrees\" infra/bin/overlay-parallel.test.mjs",
+    "node --test --test-name-pattern=\"competing dead-lock\" infra/bin/overlay-parallel.test.mjs",
+    "npm test",
+    "git diff --check"
+  ],
+  "focused_mutation_command_argv": [
+    [
+      "node",
+      "--test",
+      "--test-name-pattern=mismatched pending",
+      "infra/bin/overlay-parallel.test.mjs"
+    ],
+    [
+      "node",
+      "--test",
+      "--test-name-pattern=real worktrees",
+      "infra/bin/overlay-parallel.test.mjs"
+    ],
+    [
+      "node",
+      "--test",
+      "--test-name-pattern=competing dead-lock",
+      "infra/bin/overlay-parallel.test.mjs"
+    ]
+  ],
+  "unit_tests": {
+    "tests": 178,
+    "pass": 178,
+    "fail": 0,
+    "skipped": 0
+  },
+  "mutation_checks": [
+    {
+      "mutation": "previous-production",
+      "exit_code": 1,
+      "summary": [
+        "ℹ tests 5",
+        "ℹ pass 0",
+        "ℹ fail 5",
+        "ℹ skipped 0"
+      ]
+    },
+    {
+      "mutation": "missing-pending-map-key-guard",
+      "exit_code": 1,
+      "summary": [
+        "ℹ tests 1",
+        "ℹ pass 0",
+        "ℹ fail 1",
+        "ℹ skipped 0"
+      ]
+    },
+    {
+      "mutation": "missing-environment-lock",
+      "exit_code": 1,
+      "summary": [
+        "ℹ tests 1",
+        "ℹ pass 0",
+        "ℹ fail 1",
+        "ℹ skipped 0"
+      ]
+    },
+    {
+      "mutation": "previous-production-final-tests",
+      "exit_code": 1,
+      "summary": [
+        "ℹ tests 6",
+        "ℹ pass 0",
+        "ℹ fail 6",
+        "ℹ skipped 0"
+      ]
+    },
+    {
+      "mutation": "missing-recovery-owner-gate",
+      "exit_code": 1,
+      "summary": [
+        "ℹ tests 1",
+        "ℹ pass 0",
+        "ℹ fail 1",
+        "ℹ skipped 0"
+      ]
+    }
+  ],
+  "restored_production_matches_both_runtime_receipts": true,
+  "worktree_execution": {
+    "completed_runs": 10,
+    "planned_runs": 10,
+    "overlapped_edit_build_runs": 10,
+    "source_build_baseline_preserved_runs": 10,
+    "caller_retries": 0,
+    "cleanup": {
+      "live_owned_processes": 0,
+      "reachable_owned_endpoints": 0,
+      "temporary_root_removed": true
+    }
+  },
+  "synthetic_runtime_execution": {
+    "normal_runs": 20,
+    "planned_normal_runs": 20,
+    "concurrent_reader_checks": 400,
+    "fault_cases": 16,
+    "planned_fault_cases": 16,
+    "contention_cases": 4,
+    "leftover_endpoints": 0,
+    "live_owned_processes": 0,
+    "private_root_removed": true
+  },
+  "unmeasured": [
+    "consumer-specific adapter concurrency on shared infrastructure",
+    "shared database and router mutation",
+    "human productivity"
+  ],
+  "privacy": "Only synthetic projects were used; no existing consumer identities or results are retained."
+}

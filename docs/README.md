@@ -15,14 +15,27 @@ Current operating authority:
 current capabilities, alternatives, differentiation hypotheses, and adoption
 measurements. It is an analysis, not operating authority or approved scope.
 
+## Reproducible examples and evidence
+
+- [Kubernetes lifecycle lab](evaluation/kubernetes/README.md): build and change
+  independent overlays, inject failures, and verify recovery in a disposable
+  synthetic application.
+- [Recorded Kubernetes results](evidence/2026-09-06-kubernetes-lifecycle.md):
+  observed behavior, failed attempts, commands, and measurement boundaries.
+- [Parallel worktree experiment](evaluation/2026-09-05-worktree-evaluation.md):
+  source changes and lifecycle operations from separate Git worktrees.
+
+Published evidence uses repository-owned synthetic applications. Private project
+identities, configuration, source fingerprints, and adoption history do not
+belong in this documentation, including its archives.
+
 ## Archive
 
 These records preserve decision history, not current behavior or approved work:
 
-- [Original unified infra design](archive/2026-09-02-unified-local-infra.md):
-  historical implementation snapshots and proposed proxy, writer, doctor, and
-  installer work. Current supported commands are in CLI help; these proposals
-  are not an implementation backlog or execution authority.
+- [Initial design decisions](archive/2026-09-02-design-decisions.md): rationale
+  for profile boundaries, optional backends, and observed lifecycle completion.
+  Historical proposals are not an implementation backlog or execution authority.
 - [Multi-machine proposal](archive/2026-09-05-multi-machine.md): deferred until
   repeated cross-machine needs justify a separate design. Not implemented.
 

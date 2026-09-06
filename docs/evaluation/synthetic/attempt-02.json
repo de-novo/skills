@@ -1,0 +1,485 @@
+{
+  "kind": "synthetic-exploratory",
+  "started_at": "2026-09-05T13:14:57.552Z",
+  "candidate_sha": "0725d06520ae0ca2062bbff6236da7332cb8840e",
+  "harness_sha256": "ed4ad7b522fef5dd0239a6be7ae9ed84f89b12e560f088d4c44fc4ca24cba1be",
+  "backend_sha256": "f6809dba95fca7b1e00f6eda8d9e59e8f4cdb8d688466d87fde4f9d419d52c44",
+  "machine": {
+    "node": "v26.8.1",
+    "platform": "darwin",
+    "arch": "arm64",
+    "logical_cpus": 18,
+    "load_start": [
+      6.55322265625,
+      6.734375,
+      6.9814453125
+    ],
+    "load_end": [
+      6.97412109375,
+      6.8115234375,
+      6.9990234375
+    ]
+  },
+  "protocol": {
+    "normal_pairs_per_project": 5,
+    "readers": 2,
+    "reads_per_reader": 10,
+    "acceptance": "none; exploratory",
+    "readiness": "independent HTTP status, artifact digest, feature result, and shared dependency identity",
+    "build": "generated executable JavaScript; no compiler or image build",
+    "baseline": "direct process lifecycle with the same independent postconditions",
+    "failure_cases": [
+      "old-image",
+      "unready",
+      "interrupted-dispatch",
+      "cleanup-failure"
+    ],
+    "unmeasured": [
+      "human effort",
+      "real application integration cost",
+      "shared Docker or Kubernetes",
+      "database isolation",
+      "DNS and proxy routing",
+      "actual human or agent collaboration"
+    ]
+  },
+  "normal": [
+    {
+      "project": "board",
+      "pair": 1,
+      "method": "direct",
+      "ready_ms": 284.829833,
+      "cleanup_ms": 107.20070899999996,
+      "reader_checks": 20,
+      "baseline_checks": 1,
+      "absent_endpoints": 2
+    },
+    {
+      "project": "board",
+      "pair": 1,
+      "method": "grove",
+      "ready_ms": 613.0648339999999,
+      "cleanup_ms": 288.84950000000003,
+      "reader_checks": 20,
+      "baseline_checks": 1,
+      "absent_endpoints": 2
+    },
+    {
+      "project": "board",
+      "pair": 2,
+      "method": "grove",
+      "ready_ms": 656.1431249999998,
+      "cleanup_ms": 252.74745799999982,
+      "reader_checks": 20,
+      "baseline_checks": 1,
+      "absent_endpoints": 2
+    },
+    {
+      "project": "board",
+      "pair": 2,
+      "method": "direct",
+      "ready_ms": 269.68287499999997,
+      "cleanup_ms": 98.638958,
+      "reader_checks": 20,
+      "baseline_checks": 1,
+      "absent_endpoints": 2
+    },
+    {
+      "project": "board",
+      "pair": 3,
+      "method": "direct",
+      "ready_ms": 265.7000830000002,
+      "cleanup_ms": 104.65962499999978,
+      "reader_checks": 20,
+      "baseline_checks": 1,
+      "absent_endpoints": 2
+    },
+    {
+      "project": "board",
+      "pair": 3,
+      "method": "grove",
+      "ready_ms": 663.5995419999999,
+      "cleanup_ms": 386.19574999999986,
+      "reader_checks": 20,
+      "baseline_checks": 1,
+      "absent_endpoints": 2
+    },
+    {
+      "project": "board",
+      "pair": 4,
+      "method": "grove",
+      "ready_ms": 624.3015000000005,
+      "cleanup_ms": 343.31825000000026,
+      "reader_checks": 20,
+      "baseline_checks": 1,
+      "absent_endpoints": 2
+    },
+    {
+      "project": "board",
+      "pair": 4,
+      "method": "direct",
+      "ready_ms": 277.1949170000007,
+      "cleanup_ms": 103.52708299999995,
+      "reader_checks": 20,
+      "baseline_checks": 1,
+      "absent_endpoints": 2
+    },
+    {
+      "project": "board",
+      "pair": 5,
+      "method": "direct",
+      "ready_ms": 290.3711659999999,
+      "cleanup_ms": 109.58649999999943,
+      "reader_checks": 20,
+      "baseline_checks": 1,
+      "absent_endpoints": 2
+    },
+    {
+      "project": "board",
+      "pair": 5,
+      "method": "grove",
+      "ready_ms": 615.0641670000005,
+      "cleanup_ms": 270.52245800000037,
+      "reader_checks": 20,
+      "baseline_checks": 1,
+      "absent_endpoints": 2
+    },
+    {
+      "project": "shop",
+      "pair": 1,
+      "method": "direct",
+      "ready_ms": 251.37691699999777,
+      "cleanup_ms": 97.74254199999996,
+      "reader_checks": 20,
+      "baseline_checks": 1,
+      "absent_endpoints": 2
+    },
+    {
+      "project": "shop",
+      "pair": 1,
+      "method": "grove",
+      "ready_ms": 554.3371250000018,
+      "cleanup_ms": 271.731834000002,
+      "reader_checks": 20,
+      "baseline_checks": 1,
+      "absent_endpoints": 2
+    },
+    {
+      "project": "shop",
+      "pair": 2,
+      "method": "grove",
+      "ready_ms": 579.2840829999986,
+      "cleanup_ms": 246.76529200000004,
+      "reader_checks": 20,
+      "baseline_checks": 1,
+      "absent_endpoints": 2
+    },
+    {
+      "project": "shop",
+      "pair": 2,
+      "method": "direct",
+      "ready_ms": 260.83308399999805,
+      "cleanup_ms": 92.22441600000093,
+      "reader_checks": 20,
+      "baseline_checks": 1,
+      "absent_endpoints": 2
+    },
+    {
+      "project": "shop",
+      "pair": 3,
+      "method": "direct",
+      "ready_ms": 254.82874999999694,
+      "cleanup_ms": 97.03741599999921,
+      "reader_checks": 20,
+      "baseline_checks": 1,
+      "absent_endpoints": 2
+    },
+    {
+      "project": "shop",
+      "pair": 3,
+      "method": "grove",
+      "ready_ms": 564.497540999997,
+      "cleanup_ms": 248.61525000000256,
+      "reader_checks": 20,
+      "baseline_checks": 1,
+      "absent_endpoints": 2
+    },
+    {
+      "project": "shop",
+      "pair": 4,
+      "method": "grove",
+      "ready_ms": 651.5224170000001,
+      "cleanup_ms": 266.7082499999997,
+      "reader_checks": 20,
+      "baseline_checks": 1,
+      "absent_endpoints": 2
+    },
+    {
+      "project": "shop",
+      "pair": 4,
+      "method": "direct",
+      "ready_ms": 270.9953749999986,
+      "cleanup_ms": 101.31925000000047,
+      "reader_checks": 20,
+      "baseline_checks": 1,
+      "absent_endpoints": 2
+    },
+    {
+      "project": "shop",
+      "pair": 5,
+      "method": "direct",
+      "ready_ms": 248.297083999998,
+      "cleanup_ms": 95.0454159999972,
+      "reader_checks": 20,
+      "baseline_checks": 1,
+      "absent_endpoints": 2
+    },
+    {
+      "project": "shop",
+      "pair": 5,
+      "method": "grove",
+      "ready_ms": 630.0070410000008,
+      "cleanup_ms": 252.0477499999979,
+      "reader_checks": 20,
+      "baseline_checks": 1,
+      "absent_endpoints": 2
+    }
+  ],
+  "failures": [
+    {
+      "project": "board",
+      "scenario": "old-image",
+      "method": "direct",
+      "rejected": true,
+      "failure_ms": 961.5712910000002,
+      "recovery_ms": 127.42612499999996,
+      "recovery_retries": 1,
+      "durable_pending": false,
+      "unrelated_mutation_blocked": null,
+      "runtime_checked": true
+    },
+    {
+      "project": "board",
+      "scenario": "old-image",
+      "method": "grove",
+      "rejected": true,
+      "failure_ms": 994.7786669999987,
+      "recovery_ms": 218.5192079999997,
+      "recovery_retries": 1,
+      "durable_pending": true,
+      "unrelated_mutation_blocked": true,
+      "runtime_checked": true
+    },
+    {
+      "project": "board",
+      "scenario": "unready",
+      "method": "direct",
+      "rejected": true,
+      "failure_ms": 1006.0891250000004,
+      "recovery_ms": 76.98958299999867,
+      "recovery_retries": 1,
+      "durable_pending": false,
+      "unrelated_mutation_blocked": null,
+      "runtime_checked": true
+    },
+    {
+      "project": "board",
+      "scenario": "unready",
+      "method": "grove",
+      "rejected": true,
+      "failure_ms": 1066.0100000000002,
+      "recovery_ms": 159.30099999999948,
+      "recovery_retries": 1,
+      "durable_pending": true,
+      "unrelated_mutation_blocked": true,
+      "runtime_checked": true
+    },
+    {
+      "project": "board",
+      "scenario": "interrupted-dispatch",
+      "method": "direct",
+      "rejected": true,
+      "failure_ms": 111.43562500000007,
+      "recovery_ms": 65.12937500000044,
+      "recovery_retries": 1,
+      "durable_pending": false,
+      "unrelated_mutation_blocked": null,
+      "runtime_checked": true
+    },
+    {
+      "project": "board",
+      "scenario": "interrupted-dispatch",
+      "method": "grove",
+      "rejected": true,
+      "failure_ms": 190.1388339999994,
+      "recovery_ms": 147.91229199999907,
+      "recovery_retries": 1,
+      "durable_pending": true,
+      "unrelated_mutation_blocked": true,
+      "runtime_checked": true
+    },
+    {
+      "project": "board",
+      "scenario": "cleanup-failure",
+      "method": "direct",
+      "rejected": true,
+      "failure_ms": 29.090415999999095,
+      "recovery_ms": 51.64733299999898,
+      "recovery_retries": 1,
+      "durable_pending": false,
+      "unrelated_mutation_blocked": null,
+      "runtime_checked": true
+    },
+    {
+      "project": "board",
+      "scenario": "cleanup-failure",
+      "method": "grove",
+      "rejected": true,
+      "failure_ms": 82.27299999999923,
+      "recovery_ms": 128.54491700000108,
+      "recovery_retries": 1,
+      "durable_pending": true,
+      "unrelated_mutation_blocked": true,
+      "runtime_checked": true
+    },
+    {
+      "project": "shop",
+      "scenario": "old-image",
+      "method": "direct",
+      "rejected": true,
+      "failure_ms": 984.7854579999985,
+      "recovery_ms": 118.3058749999982,
+      "recovery_retries": 1,
+      "durable_pending": false,
+      "unrelated_mutation_blocked": null,
+      "runtime_checked": true
+    },
+    {
+      "project": "shop",
+      "scenario": "old-image",
+      "method": "grove",
+      "rejected": true,
+      "failure_ms": 991.1002090000002,
+      "recovery_ms": 210.91175000000294,
+      "recovery_retries": 1,
+      "durable_pending": true,
+      "unrelated_mutation_blocked": true,
+      "runtime_checked": true
+    },
+    {
+      "project": "shop",
+      "scenario": "unready",
+      "method": "direct",
+      "rejected": true,
+      "failure_ms": 1053.1316250000018,
+      "recovery_ms": 81.69000000000233,
+      "recovery_retries": 1,
+      "durable_pending": false,
+      "unrelated_mutation_blocked": null,
+      "runtime_checked": true
+    },
+    {
+      "project": "shop",
+      "scenario": "unready",
+      "method": "grove",
+      "rejected": true,
+      "failure_ms": 1075.2748749999992,
+      "recovery_ms": 158.3338330000006,
+      "recovery_retries": 1,
+      "durable_pending": true,
+      "unrelated_mutation_blocked": true,
+      "runtime_checked": true
+    },
+    {
+      "project": "shop",
+      "scenario": "interrupted-dispatch",
+      "method": "direct",
+      "rejected": true,
+      "failure_ms": 231.27649999999994,
+      "recovery_ms": 69.50904099999752,
+      "recovery_retries": 1,
+      "durable_pending": false,
+      "unrelated_mutation_blocked": null,
+      "runtime_checked": true
+    },
+    {
+      "project": "shop",
+      "scenario": "interrupted-dispatch",
+      "method": "grove",
+      "rejected": true,
+      "failure_ms": 148.3037089999998,
+      "recovery_ms": 137.5161659999976,
+      "recovery_retries": 1,
+      "durable_pending": true,
+      "unrelated_mutation_blocked": true,
+      "runtime_checked": true
+    },
+    {
+      "project": "shop",
+      "scenario": "cleanup-failure",
+      "method": "direct",
+      "rejected": true,
+      "failure_ms": 27.802707999999257,
+      "recovery_ms": 43.25399999999718,
+      "recovery_retries": 1,
+      "durable_pending": false,
+      "unrelated_mutation_blocked": null,
+      "runtime_checked": true
+    },
+    {
+      "project": "shop",
+      "scenario": "cleanup-failure",
+      "method": "grove",
+      "rejected": true,
+      "failure_ms": 76.69558300000062,
+      "recovery_ms": 126.62158400000044,
+      "recovery_retries": 1,
+      "durable_pending": true,
+      "unrelated_mutation_blocked": true,
+      "runtime_checked": true
+    }
+  ],
+  "contention": [
+    {
+      "project": "board",
+      "method": "direct",
+      "blocked": false,
+      "retries": 0,
+      "independent_readers_passed": 2
+    },
+    {
+      "project": "board",
+      "method": "grove",
+      "blocked": true,
+      "retries": 1,
+      "independent_readers_passed": 2
+    },
+    {
+      "project": "shop",
+      "method": "direct",
+      "blocked": false,
+      "retries": 0,
+      "independent_readers_passed": 2
+    },
+    {
+      "project": "shop",
+      "method": "grove",
+      "blocked": true,
+      "retries": 1,
+      "independent_readers_passed": 2
+    }
+  ],
+  "checks": {
+    "normal_runs": 20,
+    "planned_normal_runs": 20,
+    "concurrent_reader_checks": 400,
+    "fault_cases": 16,
+    "planned_fault_cases": 16,
+    "contention_cases": 4,
+    "leftover_endpoints": 0,
+    "live_owned_processes": 0,
+    "private_root_removed": true
+  },
+  "errors": [],
+  "finished_at": "2026-09-05T13:15:30.540Z"
+}

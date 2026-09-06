@@ -1,0 +1,118 @@
+{
+  "kind": "actual-git-worktrees-synthetic-developer-processes",
+  "started_at": "2026-09-05T13:29:38.238Z",
+  "candidate_sha": "0725d06520ae0ca2062bbff6236da7332cb8840e",
+  "sources": {
+    "worktrees.mjs": "794830c658ec9f603ad3af7805decacb1218dc68d5532c7d67fc6dfd5cc82854",
+    "worktree-worker.mjs": "b2c9631ba8e757c031188c224aef0ad405730213b9f3a8247e3386aa0146b218",
+    "backend.mjs": "f6809dba95fca7b1e00f6eda8d9e59e8f4cdb8d688466d87fde4f9d419d52c44"
+  },
+  "machine": {
+    "node": "v26.8.1",
+    "platform": "darwin",
+    "arch": "arm64",
+    "load_start": [
+      6.6201171875,
+      6.8388671875,
+      6.99267578125
+    ],
+    "load_end": [
+      6.6201171875,
+      6.8388671875,
+      6.99267578125
+    ]
+  },
+  "protocol": {
+    "pairs": 5,
+    "worktrees_per_run": 2,
+    "common_base": true,
+    "common_grove_project_and_registry": true,
+    "timing": "simultaneous edit request through independent readiness of both builds",
+    "build": "per-worktree feature edit, executable assembly and real node --check; not a container build",
+    "artifact_registration": "coordinator merges manifests after both parallel builds; not timed as developer labor",
+    "contention": "bounded caller retries only for an observed live registry lock; not automatic Grove behavior",
+    "baseline": "same isolated process backend and HTTP identity checks, without Grove lifecycle journal",
+    "unmeasured": [
+      "human or AI coding productivity",
+      "Git merge conflict resolution",
+      "Docker or Kubernetes",
+      "DB isolation",
+      "DNS routing",
+      "production adapter integration cost"
+    ]
+  },
+  "runs": [
+    {
+      "pair": 1,
+      "method": "direct",
+      "setup_ms": 255.791166,
+      "initial_edit_build_ready_ms": 281.42270799999994,
+      "redeploy_ms": 151.46137499999998,
+      "first_worktree_cleanup_ms": 59.61225000000002,
+      "independent_worktrees": 2,
+      "distinct_branch_sources_and_builds": true,
+      "registry_worktree_identity_checked": false,
+      "peer_source_and_build_unchanged": true,
+      "baseline_unchanged": true,
+      "removed_worktrees": 2,
+      "observation": {
+        "peer_reads": 15,
+        "baseline_reads": 15,
+        "errors": []
+      },
+      "workers": {
+        "w1": [
+          {
+            "verb": "create",
+            "busy_retries": 0,
+            "elapsed_ms": 29.868459
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "elapsed_ms": 143.37037500000002
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "elapsed_ms": 99.11162499999995
+          },
+          {
+            "verb": "destroy",
+            "busy_retries": 0,
+            "elapsed_ms": 45.46224999999998
+          }
+        ],
+        "w2": [
+          {
+            "verb": "create",
+            "busy_retries": 0,
+            "elapsed_ms": 29.825125000000007
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "elapsed_ms": 143.412125
+          },
+          {
+            "verb": "destroy",
+            "busy_retries": 0,
+            "elapsed_ms": 50.60195799999997
+          }
+        ]
+      }
+    }
+  ],
+  "errors": [
+    {
+      "name": "AssertionError",
+      "message": "de-novo skills: overlay: pending operation create w2 must be recovered first; rerun the pending create w2 operation with --apply.\n\n\n'error' !== 'ready'\n"
+    }
+  ],
+  "cleanup": {
+    "live_owned_processes": 0,
+    "reachable_owned_endpoints": 0,
+    "temporary_root_removed": true
+  },
+  "finished_at": "2026-09-05T13:29:39.849Z"
+}

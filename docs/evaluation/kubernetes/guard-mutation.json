@@ -1,0 +1,8 @@
+{
+  "kind": "isolated-copy-target-guard-mutation",
+  "sourceSha256": "581eb97bcd2a1d5007c074714f2ab116accd5d0b65cf1a4c14892326efc39217",
+  "guardRemovalVerified": true,
+  "failedTests": 3,
+  "totalTests": 4,
+  "productionSourceUnchanged": true
+}

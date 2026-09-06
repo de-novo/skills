@@ -71,8 +71,10 @@ recovery, leases, and cleanup have one authority:
 
 Renew the lease during long work. Detach unused overrides and destroy the
 environment when the task ends. Stale cleanup is an explicit backstop, not the
-normal completion path. Overlay registry locks serialize lifecycle commands;
-they do not establish baseline writer ownership.
+normal completion path. Lifecycle commands for different overlays can overlap;
+commands targeting the same overlay remain exclusive. These locks do not
+establish baseline writer ownership. The overlay contract owns concurrency and
+recovery details.
 
 ## Verification
 

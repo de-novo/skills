@@ -1,0 +1,68 @@
+{
+  "kind": "synthetic-exploratory",
+  "started_at": "2026-09-05T13:14:25.948Z",
+  "candidate_sha": "0725d06520ae0ca2062bbff6236da7332cb8840e",
+  "harness_sha256": "3aecd5ed667f6a2b138f85953ba301021f06000e4e49eb2b60c37a810c046fed",
+  "backend_sha256": "b6eaf80752ee671c7e9721dca4c2a21601188bb33ca72b8df4a9c167fb57d881",
+  "machine": {
+    "node": "v26.8.1",
+    "platform": "darwin",
+    "arch": "arm64",
+    "logical_cpus": 18,
+    "load_start": [
+      6.66455078125,
+      6.76220703125,
+      7.00048828125
+    ],
+    "load_end": [
+      6.66455078125,
+      6.76220703125,
+      7.00048828125
+    ]
+  },
+  "protocol": {
+    "normal_pairs_per_project": 5,
+    "readers": 2,
+    "reads_per_reader": 10,
+    "acceptance": "none; exploratory",
+    "readiness": "independent HTTP status, artifact digest, feature result, and shared dependency identity",
+    "build": "generated executable JavaScript; no compiler or image build",
+    "baseline": "direct process lifecycle with the same independent postconditions",
+    "failure_cases": [
+      "old-image",
+      "unready",
+      "interrupted-dispatch",
+      "cleanup-failure"
+    ],
+    "unmeasured": [
+      "human effort",
+      "real application integration cost",
+      "shared Docker or Kubernetes",
+      "database isolation",
+      "DNS and proxy routing",
+      "actual human or agent collaboration"
+    ]
+  },
+  "normal": [],
+  "failures": [],
+  "contention": [],
+  "checks": {
+    "normal_runs": 0,
+    "planned_normal_runs": 20,
+    "concurrent_reader_checks": 0,
+    "fault_cases": 0,
+    "planned_fault_cases": 16,
+    "contention_cases": 0,
+    "leftover_endpoints": 0,
+    "live_owned_processes": 0,
+    "private_root_removed": true
+  },
+  "errors": [
+    {
+      "name": "AssertionError",
+      "message": "file://<catalog>/docs/evaluation/synthetic/backend.mjs:53\n    child.once('exit', code => { clearTimeout(timer); reject(new Error(`startup exit ${code}`)); });\n                                                             ^\n\nError: startup exit 1\n    at ChildProcess.<anonymous> (file://<catalog>/docs/evaluation/synthetic/backend.mjs:53:62)\n    at ChildProcess.wrapper (node:events:639:12)\n    at ChildProcess.emit (node:events:514:20)\n    at ChildProcess._handle.onexit (node:internal/child_process:294:12)\n\nNode.js v26.8.1\n\n\n1 !== 0\n"
+    }
+  ],
+  "finished_at": "2026-09-05T13:14:26.175Z",
+  "interpretation": "Harness startup failure before comparisons: fork inherited --input-type=module; corrected with explicit empty execArgv. Not a Grove result."
+}

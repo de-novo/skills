@@ -1,0 +1,57 @@
+{
+  "kind": "actual-git-worktrees-synthetic-developer-processes",
+  "started_at": "2026-09-05T13:29:27.351Z",
+  "candidate_sha": "0725d06520ae0ca2062bbff6236da7332cb8840e",
+  "sources": {
+    "worktrees.mjs": "946351f3cc02eac3a50508e59648606f51b67c0e52c15196bc9405d088f44a76",
+    "worktree-worker.mjs": "b2c9631ba8e757c031188c224aef0ad405730213b9f3a8247e3386aa0146b218",
+    "backend.mjs": "f6809dba95fca7b1e00f6eda8d9e59e8f4cdb8d688466d87fde4f9d419d52c44"
+  },
+  "machine": {
+    "node": "v26.8.1",
+    "platform": "darwin",
+    "arch": "arm64",
+    "load_start": [
+      7.00341796875,
+      6.91796875,
+      7.0234375
+    ],
+    "load_end": [
+      6.9228515625,
+      6.90234375,
+      7.01708984375
+    ]
+  },
+  "protocol": {
+    "pairs": 5,
+    "worktrees_per_run": 2,
+    "common_base": true,
+    "common_grove_project_and_registry": true,
+    "timing": "simultaneous edit request through independent readiness of both builds",
+    "build": "per-worktree feature edit, executable assembly and real node --check; not a container build",
+    "artifact_registration": "coordinator merges manifests after both parallel builds; not timed as developer labor",
+    "contention": "bounded caller retries only for an observed live registry lock; not automatic Grove behavior",
+    "baseline": "same isolated process backend and HTTP identity checks, without Grove lifecycle journal",
+    "unmeasured": [
+      "human or AI coding productivity",
+      "Git merge conflict resolution",
+      "Docker or Kubernetes",
+      "DB isolation",
+      "DNS routing",
+      "production adapter integration cost"
+    ]
+  },
+  "runs": [],
+  "errors": [
+    {
+      "name": "AssertionError",
+      "message": "The expression evaluated to a falsy value:\n\n  assert.ok(a.file.startsWith(ctx.trees.w1))\n"
+    }
+  ],
+  "cleanup": {
+    "live_owned_processes": 0,
+    "reachable_owned_endpoints": 0,
+    "temporary_root_removed": true
+  },
+  "finished_at": "2026-09-05T13:29:27.820Z"
+}

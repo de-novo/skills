@@ -1,0 +1,737 @@
+{
+  "kind": "actual-git-worktrees-synthetic-developer-processes",
+  "started_at": "2026-09-05T13:58:05.330Z",
+  "candidate_sha": "0725d06520ae0ca2062bbff6236da7332cb8840e",
+  "production_sources": {
+    "infra/lib/overlay.mjs": "c1a970ff4c889fb85fe39b31213c4798b2dd7015cc23d3eafd2e325e6d321be6",
+    "infra/bin/cli.mjs": "dd63611af8705bd4d5ecf3b0605c17bb992abc52b755fede32c0629266573ff9"
+  },
+  "sources": {
+    "worktrees.mjs": "415b4259d873b247db32d51576e7b37fd6f25d492ad5445c671044bf43c13428",
+    "worktree-worker.mjs": "ef6dc0e48dbff2898cbfbe0505ffed2a1884d44fd759fc057ae053c9eb32a176",
+    "backend.mjs": "f6809dba95fca7b1e00f6eda8d9e59e8f4cdb8d688466d87fde4f9d419d52c44"
+  },
+  "machine": {
+    "node": "v26.8.1",
+    "platform": "darwin",
+    "arch": "arm64",
+    "load_start": [
+      12.25830078125,
+      10.70263671875,
+      9.25927734375
+    ],
+    "load_end": [
+      12.64404296875,
+      10.86376953125,
+      9.34130859375
+    ]
+  },
+  "protocol": {
+    "pairs": 5,
+    "worktrees_per_run": 2,
+    "common_base": true,
+    "common_grove_project_and_registry": true,
+    "timing": "simultaneous edit request through independent readiness of both builds",
+    "build": "per-worktree feature edit, executable assembly and real node --check; not a container build",
+    "artifact_registration": "coordinator merges manifests after both parallel builds; not timed as developer labor",
+    "contention": "one attempt per lifecycle command; no evaluation-only waiting or retries",
+    "baseline": "same isolated process backend and HTTP identity checks, without Grove lifecycle journal",
+    "unmeasured": [
+      "human or AI coding productivity",
+      "Git merge conflict resolution",
+      "Docker or Kubernetes",
+      "DB isolation",
+      "DNS routing",
+      "production adapter integration cost"
+    ]
+  },
+  "runs": [
+    {
+      "pair": 1,
+      "method": "direct",
+      "setup_ms": 310.183583,
+      "initial_edit_build_ready_ms": 215.47787500000004,
+      "redeploy_ms": 141.05770799999993,
+      "first_worktree_cleanup_ms": 64.96899999999994,
+      "independent_worktrees": 2,
+      "edit_build_overlap_ms": 46.25875,
+      "distinct_branch_sources_and_builds": true,
+      "registry_worktree_identity_checked": false,
+      "peer_source_and_build_unchanged": true,
+      "baseline_unchanged": true,
+      "removed_worktrees": 2,
+      "observation": {
+        "peer_reads": 15,
+        "baseline_reads": 15,
+        "errors": []
+      },
+      "workers": {
+        "w1": [
+          {
+            "verb": "create",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 29.972291999999996
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 105.596958
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 101.09733399999999
+          },
+          {
+            "verb": "destroy",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 47.30175000000003
+          }
+        ],
+        "w2": [
+          {
+            "verb": "create",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 30.011749999999992
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 105.58099999999999
+          },
+          {
+            "verb": "destroy",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 47.075958000000014
+          }
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "method": "grove",
+      "setup_ms": 224.30054200000018,
+      "initial_edit_build_ready_ms": 632.095583,
+      "redeploy_ms": 385.5279169999999,
+      "first_worktree_cleanup_ms": 204.36404100000027,
+      "independent_worktrees": 2,
+      "edit_build_overlap_ms": 40.672542,
+      "distinct_branch_sources_and_builds": true,
+      "registry_worktree_identity_checked": true,
+      "peer_source_and_build_unchanged": true,
+      "baseline_unchanged": true,
+      "removed_worktrees": 2,
+      "observation": {
+        "peer_reads": 40,
+        "baseline_reads": 40,
+        "errors": []
+      },
+      "workers": {
+        "w1": [
+          {
+            "verb": "create",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 124.267708
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 416.722625
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 310.996542
+          },
+          {
+            "verb": "destroy",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 189.75091700000007
+          }
+        ],
+        "w2": [
+          {
+            "verb": "create",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 134.392625
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 426.512917
+          },
+          {
+            "verb": "destroy",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 207.8849170000001
+          }
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "method": "grove",
+      "setup_ms": 417.717541,
+      "initial_edit_build_ready_ms": 634.3119999999999,
+      "redeploy_ms": 483.82479200000034,
+      "first_worktree_cleanup_ms": 154.936334,
+      "independent_worktrees": 2,
+      "edit_build_overlap_ms": 38.366125,
+      "distinct_branch_sources_and_builds": true,
+      "registry_worktree_identity_checked": true,
+      "peer_source_and_build_unchanged": true,
+      "baseline_unchanged": true,
+      "removed_worktrees": 2,
+      "observation": {
+        "peer_reads": 43,
+        "baseline_reads": 43,
+        "errors": []
+      },
+      "workers": {
+        "w1": [
+          {
+            "verb": "create",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 169.655667
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 324.268167
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 422.07975
+          },
+          {
+            "verb": "destroy",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 140.3832500000001
+          }
+        ],
+        "w2": [
+          {
+            "verb": "create",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 182.952291
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 384.18783299999996
+          },
+          {
+            "verb": "destroy",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 154.11349999999993
+          }
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "method": "direct",
+      "setup_ms": 264.60512500000004,
+      "initial_edit_build_ready_ms": 260.31666700000005,
+      "redeploy_ms": 171.671292,
+      "first_worktree_cleanup_ms": 69.59400000000005,
+      "independent_worktrees": 2,
+      "edit_build_overlap_ms": 79.512125,
+      "distinct_branch_sources_and_builds": true,
+      "registry_worktree_identity_checked": false,
+      "peer_source_and_build_unchanged": true,
+      "baseline_unchanged": true,
+      "removed_worktrees": 2,
+      "observation": {
+        "peer_reads": 18,
+        "baseline_reads": 18,
+        "errors": []
+      },
+      "workers": {
+        "w1": [
+          {
+            "verb": "create",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 49.205792
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 106.67733300000003
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 120.45770799999997
+          },
+          {
+            "verb": "destroy",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 56.64262500000001
+          }
+        ],
+        "w2": [
+          {
+            "verb": "create",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 46.493667
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 109.456083
+          },
+          {
+            "verb": "destroy",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 49.20295799999997
+          }
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "method": "direct",
+      "setup_ms": 259.00554099999954,
+      "initial_edit_build_ready_ms": 261.7814159999998,
+      "redeploy_ms": 202.6192920000003,
+      "first_worktree_cleanup_ms": 61.0923329999996,
+      "independent_worktrees": 2,
+      "edit_build_overlap_ms": 64.4535,
+      "distinct_branch_sources_and_builds": true,
+      "registry_worktree_identity_checked": false,
+      "peer_source_and_build_unchanged": true,
+      "baseline_unchanged": true,
+      "removed_worktrees": 2,
+      "observation": {
+        "peer_reads": 19,
+        "baseline_reads": 19,
+        "errors": []
+      },
+      "workers": {
+        "w1": [
+          {
+            "verb": "create",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 40.63562499999999
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 133.32129099999997
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 148.047667
+          },
+          {
+            "verb": "destroy",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 47.52999999999997
+          }
+        ],
+        "w2": [
+          {
+            "verb": "create",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 40.603624999999994
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 133.37312500000002
+          },
+          {
+            "verb": "destroy",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 51.629792000000066
+          }
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "method": "grove",
+      "setup_ms": 316.07108400000016,
+      "initial_edit_build_ready_ms": 531.8156659999995,
+      "redeploy_ms": 281.3087919999998,
+      "first_worktree_cleanup_ms": 323.54712500000005,
+      "independent_worktrees": 2,
+      "edit_build_overlap_ms": 56.45225,
+      "distinct_branch_sources_and_builds": true,
+      "registry_worktree_identity_checked": true,
+      "peer_source_and_build_unchanged": true,
+      "baseline_unchanged": true,
+      "removed_worktrees": 2,
+      "observation": {
+        "peer_reads": 41,
+        "baseline_reads": 41,
+        "errors": []
+      },
+      "workers": {
+        "w1": [
+          {
+            "verb": "create",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 248.793334
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 206.44495899999998
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 235.44654200000002
+          },
+          {
+            "verb": "destroy",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 295.6456249999999
+          }
+        ],
+        "w2": [
+          {
+            "verb": "create",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 222.88850000000002
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 221.96191699999997
+          },
+          {
+            "verb": "destroy",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 210.098209
+          }
+        ]
+      }
+    },
+    {
+      "pair": 4,
+      "method": "grove",
+      "setup_ms": 303.91420800000014,
+      "initial_edit_build_ready_ms": 725.6234590000004,
+      "redeploy_ms": 375.36254200000076,
+      "first_worktree_cleanup_ms": 202.90770800000064,
+      "independent_worktrees": 2,
+      "edit_build_overlap_ms": 97.064333,
+      "distinct_branch_sources_and_builds": true,
+      "registry_worktree_identity_checked": true,
+      "peer_source_and_build_unchanged": true,
+      "baseline_unchanged": true,
+      "removed_worktrees": 2,
+      "observation": {
+        "peer_reads": 39,
+        "baseline_reads": 39,
+        "errors": []
+      },
+      "workers": {
+        "w1": [
+          {
+            "verb": "create",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 267.71504200000004
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 321.49504200000007
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 309.830875
+          },
+          {
+            "verb": "destroy",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 184.2087079999999
+          }
+        ],
+        "w2": [
+          {
+            "verb": "create",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 275.3195
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 321.05891599999995
+          },
+          {
+            "verb": "destroy",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 174.61304199999995
+          }
+        ]
+      }
+    },
+    {
+      "pair": 4,
+      "method": "direct",
+      "setup_ms": 221.59912499999882,
+      "initial_edit_build_ready_ms": 239.77779200000077,
+      "redeploy_ms": 163.99983299999985,
+      "first_worktree_cleanup_ms": 69.63320899999962,
+      "independent_worktrees": 2,
+      "edit_build_overlap_ms": 50.453,
+      "distinct_branch_sources_and_builds": true,
+      "registry_worktree_identity_checked": false,
+      "peer_source_and_build_unchanged": true,
+      "baseline_unchanged": true,
+      "removed_worktrees": 2,
+      "observation": {
+        "peer_reads": 17,
+        "baseline_reads": 17,
+        "errors": []
+      },
+      "workers": {
+        "w1": [
+          {
+            "verb": "create",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 43.231375
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 120.844542
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 112.461791
+          },
+          {
+            "verb": "destroy",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 54.42029100000002
+          }
+        ],
+        "w2": [
+          {
+            "verb": "create",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 43.211665999999994
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 120.82962500000001
+          },
+          {
+            "verb": "destroy",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 51.046208999999976
+          }
+        ]
+      }
+    },
+    {
+      "pair": 5,
+      "method": "direct",
+      "setup_ms": 228.56545899999946,
+      "initial_edit_build_ready_ms": 311.7683340000003,
+      "redeploy_ms": 183.2301669999997,
+      "first_worktree_cleanup_ms": 123.53258300000016,
+      "independent_worktrees": 2,
+      "edit_build_overlap_ms": 97.854459,
+      "distinct_branch_sources_and_builds": true,
+      "registry_worktree_identity_checked": false,
+      "peer_source_and_build_unchanged": true,
+      "baseline_unchanged": true,
+      "removed_worktrees": 2,
+      "observation": {
+        "peer_reads": 23,
+        "baseline_reads": 23,
+        "errors": []
+      },
+      "workers": {
+        "w1": [
+          {
+            "verb": "create",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 49.880042
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 143.50575
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 141.047167
+          },
+          {
+            "verb": "destroy",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 94.06433300000003
+          }
+        ],
+        "w2": [
+          {
+            "verb": "create",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 49.867915999999994
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 143.32612499999996
+          },
+          {
+            "verb": "destroy",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 76.76983299999995
+          }
+        ]
+      }
+    },
+    {
+      "pair": 5,
+      "method": "grove",
+      "setup_ms": 300.8519580000011,
+      "initial_edit_build_ready_ms": 463.9311669999988,
+      "redeploy_ms": 316.94879199999923,
+      "first_worktree_cleanup_ms": 186.91804199999933,
+      "independent_worktrees": 2,
+      "edit_build_overlap_ms": 38.395959,
+      "distinct_branch_sources_and_builds": true,
+      "registry_worktree_identity_checked": true,
+      "peer_source_and_build_unchanged": true,
+      "baseline_unchanged": true,
+      "removed_worktrees": 2,
+      "observation": {
+        "peer_reads": 35,
+        "baseline_reads": 35,
+        "errors": []
+      },
+      "workers": {
+        "w1": [
+          {
+            "verb": "create",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 138.959292
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 252.432625
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 273.065917
+          },
+          {
+            "verb": "destroy",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 172.95108300000004
+          }
+        ],
+        "w2": [
+          {
+            "verb": "create",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 152.87366699999998
+          },
+          {
+            "verb": "attach",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 253.105208
+          },
+          {
+            "verb": "destroy",
+            "busy_retries": 0,
+            "in_flight_pending_retries": 0,
+            "elapsed_ms": 123.92245800000012
+          }
+        ]
+      }
+    }
+  ],
+  "errors": [],
+  "cleanup": {
+    "live_owned_processes": 0,
+    "reachable_owned_endpoints": 0,
+    "temporary_root_removed": true
+  },
+  "finished_at": "2026-09-05T13:58:19.943Z"
+}

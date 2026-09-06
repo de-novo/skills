@@ -1,6 +1,36 @@
 # de-novo skills
 
-Research and publish agent skills for development environments and how we work.
+Open-source skills and tools for developers and agents sharing development environments.
+
+Grove helps independent worktrees verify their changes against a shared app
+baseline. Give each task a named overlay, replace only the services it changes,
+and track the work through readiness checks, interruption, retry, and cleanup.
+
+## Why Grove
+
+- **Work in parallel.** Different overlays can change concurrently; operations
+  on the same overlay remain exclusive.
+- **Verify the running change.** Attachment checks the adapter's observed image
+  and readiness before marking the operation complete.
+- **Recover unfinished work.** Pending operations remain visible for inspection
+  and retry, including failed cleanup.
+- **Bring your backend.** A project profile connects existing build and runtime
+  commands to the common lifecycle contract.
+
+The [reproducible Kubernetes lab](docs/evaluation/kubernetes/README.md) demonstrates
+these behaviors with a synthetic web/API app, real worktrees, Docker builds,
+and failure injection. [Recorded results](docs/evidence/2026-09-06-kubernetes-lifecycle.md)
+include unsuccessful attempts and the limits of what was measured.
+
+Projects supply workloads, routing, and data isolation through their adapters.
+Grove's lifecycle checks do not establish application correctness or measured
+productivity gains.
+
+## Start here
+
+- [Understand Grove and connect a project](skills/grove/README.md)
+- [Run the disposable lab](docs/evaluation/kubernetes/README.md)
+- [Read the overlay adapter contract](skills/grove/references/overlay-contract.md)
 
 The source of truth for each skill is `skills/<name>/SKILL.md`. Human docs sit next to it as README. Project-specific values do not belong in a skill.
 

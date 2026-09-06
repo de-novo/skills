@@ -1,0 +1,26 @@
+{
+  "taskId": 134,
+  "kind": "synthetic-browser-dom-verification",
+  "results": [
+    {
+      "url": "http://web.lab.localhost:53171/",
+      "web": "base-web @ base",
+      "api": "base-api @ base",
+      "reload": true
+    },
+    {
+      "url": "http://web--w1.lab.localhost:53171/",
+      "web": "revised-web @ w1",
+      "api": "revised-api @ w1",
+      "reload": true
+    },
+    {
+      "url": "http://web--w2.lab.localhost:53171/",
+      "web": "second-web @ w2",
+      "api": "second-api @ w2",
+      "reload": true
+    }
+  ],
+  "passed": 3,
+  "observedAt": "2026-09-05T19:38:57.713Z"
+}

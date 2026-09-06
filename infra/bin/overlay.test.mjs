@@ -145,7 +145,7 @@ test('an apply intent exists on disk before the project mutation starts', (t) =>
     GROVE_OVERLAY_STUB_REQUIRE_PENDING: 'true',
   });
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(readState(fixture).pending, null);
+  assert.equal(readState(fixture).pending_by_env.w1, undefined);
 });
 
 test('a successful receipt cannot finalize state before the runtime postcondition exists', (t) => {
@@ -158,8 +158,8 @@ test('a successful receipt cannot finalize state before the runtime postconditio
   assert.match(result.stderr, /postcondition.*pending.*retained/i);
   const state = readState(fixture);
   assert.equal(state.envs.w1, undefined);
-  assert.equal(state.pending.verb, 'create');
-  assert.equal(state.pending.env, 'w1');
+  assert.equal(state.pending_by_env.w1.verb, 'create');
+  assert.equal(state.pending_by_env.w1.env, 'w1');
 });
 
 test('postcondition verification retries asynchronous status before finalizing', (t) => {
@@ -170,7 +170,7 @@ test('postcondition verification retries asynchronous status before finalizing',
   });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /postcondition 1\/1.*attempts 3/);
-  assert.equal(readState(fixture).pending, null);
+  assert.equal(readState(fixture).pending_by_env.w1, undefined);
   assert.ok(calls(fixture).filter((call) => call.verb === 'status').length >= 3);
 });
 
@@ -199,7 +199,7 @@ test('destroy keeps its lease and pending intent when successful receipt leaves 
   assert.notEqual(unverified.status, 0);
   assert.match(unverified.stderr, /postcondition.*pending operation retained/i);
   assert.ok(readState(fixture).envs.w1);
-  assert.equal(readState(fixture).pending.verb, 'destroy');
+  assert.equal(readState(fixture).pending_by_env.w1.verb, 'destroy');
   assert.deepEqual(runtimeState(fixture).environments, { w1: [] });
 
   const recovered = run(fixture, ['destroy', 'w1', '--apply']);
@@ -217,7 +217,7 @@ test('missing status inventory cannot finalize an applied mutation', (t) => {
   });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /omitted environments/);
-  assert.equal(readState(fixture).pending.verb, 'create');
+  assert.equal(readState(fixture).pending_by_env.w1.verb, 'create');
   assert.equal(readState(fixture).envs.w1, undefined);
 });
 
@@ -240,12 +240,12 @@ test('rerunning the same apply recovers an interruption after the runtime side e
   });
   assert.notEqual(interrupted.status, 0);
   assert.deepEqual(runtimeState(fixture).environments, { w1: [] });
-  assert.equal(readState(fixture).pending.verb, 'create');
+  assert.equal(readState(fixture).pending_by_env.w1.verb, 'create');
 
   const recovered = run(fixture, ['create', 'w1', '--apply']);
   assert.equal(recovered.status, 0, recovered.stderr);
   assert.match(recovered.stdout, /recovered pending create/);
-  assert.equal(readState(fixture).pending, null);
+  assert.equal(readState(fixture).pending_by_env.w1, undefined);
   assert.deepEqual(Object.keys(readState(fixture).envs), ['w1']);
 });
 
@@ -260,10 +260,10 @@ test('status exposes a pending operation without completing it', (t) => {
   assert.notEqual(status.status, 0);
   assert.match(status.stdout, /pending {7}1/);
   assert.match(status.stdout, /pending-item {2}create w1/);
-  assert.equal(readState(fixture).pending.verb, 'create');
+  assert.equal(readState(fixture).pending_by_env.w1.verb, 'create');
 });
 
-test('a pending operation blocks conflicting mutations and lease renewal', (t) => {
+test('a pending operation blocks only its environment mutations and lease renewal', (t) => {
   const fixture = projectFixture(t);
   const interrupted = run(fixture, ['create', 'w1', '--apply'], {
     GROVE_OVERLAY_STUB_FAIL_AFTER_MUTATION: 'true',
@@ -271,15 +271,17 @@ test('a pending operation blocks conflicting mutations and lease renewal', (t) =
   assert.notEqual(interrupted.status, 0);
   const before = calls(fixture).length;
 
-  const conflicting = run(fixture, ['create', 'w2', '--apply']);
+  const conflicting = run(fixture, ['destroy', 'w1', '--apply']);
   assert.notEqual(conflicting.status, 0);
   assert.match(conflicting.stderr, /pending operation create w1 must be recovered first/);
   assert.equal(calls(fixture).length, before);
+  assert.equal(run(fixture, ['create', 'w2', '--apply']).status, 0);
+  assert.equal(run(fixture, ['touch', 'w2']).status, 0);
 
   const touched = run(fixture, ['touch', 'w1']);
   assert.notEqual(touched.status, 0);
   assert.match(touched.stderr, /pending operation create w1.*before touch/);
-  assert.equal(readState(fixture).pending.env, 'w1');
+  assert.equal(readState(fixture).pending_by_env.w1.env, 'w1');
 });
 
 test('recovery requires matching passthrough context and reuses it for status', (t) => {
@@ -292,7 +294,7 @@ test('recovery requires matching passthrough context and reuses it for status', 
   assert.notEqual(interrupted.status, 0);
   const journal = readFileSync(fixture.stateFile, 'utf8');
   assert.doesNotMatch(journal, /--context=a/);
-  assert.match(readState(fixture).pending.passthrough_sha256, /^[0-9a-f]{64}$/);
+  assert.match(readState(fixture).pending_by_env.w1.passthrough_sha256, /^[0-9a-f]{64}$/);
   const before = calls(fixture).length;
 
   const wrongContext = run(fixture, ['create', 'w1', '--apply', '--', '--context=b']);
@@ -304,7 +306,7 @@ test('recovery requires matching passthrough context and reuses it for status', 
   assert.equal(recovered.status, 0, recovered.stderr);
   const statusCall = calls(fixture).filter((call) => call.verb === 'status').at(-1);
   assert.ok(statusCall.args.includes('--context=a'));
-  assert.equal(readState(fixture).pending, null);
+  assert.equal(readState(fixture).pending_by_env.w1, undefined);
 });
 
 test('overlay lifecycle creates, attaches, touches, detaches, and destroys counted state', (t) => {
@@ -430,14 +432,14 @@ test('failed or malformed project receipts retain intent without mutating tracke
   const failed = run(fixture, ['create', 'bad', '--apply', '--', '--fail']);
   assert.notEqual(failed.status, 0);
   assert.match(failed.stderr, /ok: true/);
-  assert.equal(readState(fixture).pending.verb, 'create');
+  assert.equal(readState(fixture).pending_by_env.bad.verb, 'create');
   assert.deepEqual(readState(fixture).envs, {});
 
   const malformedFixture = projectFixture(t);
   const malformed = run(malformedFixture, ['create', 'bad', '--apply', '--', '--malformed']);
   assert.notEqual(malformed.status, 0);
   assert.match(malformed.stderr, /JSON/);
-  assert.equal(readState(malformedFixture).pending.verb, 'create');
+  assert.equal(readState(malformedFixture).pending_by_env.bad.verb, 'create');
   assert.deepEqual(readState(malformedFixture).envs, {});
 });
 
@@ -463,7 +465,7 @@ test('an apply request rejects a project receipt that is still only a plan', (t)
   });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /returned a plan during --apply/);
-  assert.equal(readState(fixture).pending.verb, 'create');
+  assert.equal(readState(fixture).pending_by_env.w1.verb, 'create');
   assert.deepEqual(readState(fixture).envs, {});
 });
 
@@ -483,8 +485,8 @@ test('prune keeps failed environments tracked and counts partial cleanup', (t) =
   assert.match(result.stdout, /overlay prune 1\/2/);
   assert.match(result.stderr, /retained z-keep/);
   assert.deepEqual(Object.keys(readState(fixture).envs), ['z-keep']);
-  assert.equal(readState(fixture).pending.verb, 'destroy');
-  assert.equal(readState(fixture).pending.source, 'prune');
+  assert.equal(readState(fixture).pending_by_env['z-keep'].verb, 'destroy');
+  assert.equal(readState(fixture).pending_by_env['z-keep'].source, 'prune');
 
   const pendingState = readState(fixture);
   pendingState.envs['z-keep'].last_used_at = '2999-01-01T00:00:00.000Z';
@@ -575,11 +577,11 @@ for (const [label, services] of [
     });
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /postcondition.*pending operation retained/i);
-    assert.equal(readState(fixture).pending.image, FULL_IMAGE);
+    assert.equal(readState(fixture).pending_by_env.w1.image, FULL_IMAGE);
     assert.equal(readState(fixture).envs.w1.services.api, undefined);
     const recovered = run(fixture, ['attach', 'w1', 'api', '--image', FULL_IMAGE, '--apply']);
     assert.equal(recovered.status, 0, recovered.stderr);
-    assert.equal(readState(fixture).pending, null);
+    assert.equal(readState(fixture).pending_by_env.w1, undefined);
   });
 
   test(`status refuses a clean result for ${label} inventory`, (t) => {

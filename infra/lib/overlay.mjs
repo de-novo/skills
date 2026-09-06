@@ -9,6 +9,7 @@ import {
   readFileSync,
   realpathSync,
   renameSync,
+  rmdirSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -28,7 +29,7 @@ const DURATION_UNITS = Object.freeze({
 });
 const TAGGED_FULL_SHA = /^.+:[0-9a-f]{40}$/;
 const DIGESTED_SHA256 = /^.+@sha256:[0-9a-f]{64}$/;
-const STATE_VERSION = 1;
+const STATE_VERSION = 2;
 const DEFAULT_TIMEOUT_MS = 120_000;
 const DEFAULT_VERIFY_TIMEOUT_MS = 120_000;
 const VERIFY_POLL_INTERVAL_MS = 250;
@@ -262,7 +263,7 @@ export function overlayStatePath(slug, environment = process.env) {
 }
 
 function blankState(slug) {
-  return { version: STATE_VERSION, project: slug, envs: {}, pending: null };
+  return { version: STATE_VERSION, project: slug, envs: {}, pending_by_env: {} };
 }
 
 function assertTimestamp(value, field, file) {
@@ -277,17 +278,26 @@ function assertTimestamp(value, field, file) {
 }
 
 function validateState(state, slug, file) {
-  if (!isMap(state) || state.version !== STATE_VERSION || state.project !== slug) {
+  if (!isMap(state) || ![1, STATE_VERSION].includes(state.version) || state.project !== slug) {
     fail(`${file}: registry must have version ${STATE_VERSION} and project ${JSON.stringify(slug)}.`);
   }
   if (!isMap(state.envs)) fail(`${file}: envs must be a map.`);
-  if (!Object.hasOwn(state, 'pending')) state.pending = null;
-  if (state.pending != null) {
-    const pending = state.pending;
+  if (state.version === 1) {
+    if (Object.hasOwn(state, 'pending_by_env')) fail(`${file}: legacy registry cannot contain pending_by_env.`);
+    state.pending_by_env = state.pending == null ? {} : { [state.pending.env]: state.pending };
+    delete state.pending;
+    state.version = STATE_VERSION;
+  } else if (Object.hasOwn(state, 'pending')) {
+    fail(`${file}: version ${STATE_VERSION} uses pending_by_env, not pending.`);
+  }
+  if (!isMap(state.pending_by_env)) fail(`${file}: pending_by_env must be a map.`);
+  for (const [env, pending] of Object.entries(state.pending_by_env)) {
+    assertOverlayEnv(env);
     if (!isMap(pending) || !['create', 'attach', 'detach', 'destroy'].includes(pending.verb)) {
       fail(`${file}: pending must be null or a lifecycle mutation.`);
     }
     assertOverlayEnv(pending.env);
+    if (pending.env !== env) fail(`${file}: pending environment must match its map key.`);
     if (['attach', 'detach'].includes(pending.verb)) {
       if (typeof pending.service !== 'string' || pending.service.length === 0) {
         fail(`${file}: pending ${pending.verb} must name a service.`);
@@ -333,13 +343,14 @@ export function readOverlayState(slug, environment = process.env) {
   try {
     state = parse(readFileSync(file, 'utf8'));
   } catch (error) {
+    if (error.code === 'ENOENT') return { file, state: blankState(slug) };
     fail(`${file}: cannot read registry: ${error.message}`);
   }
   return { file, state: validateState(state, slug, file) };
 }
 
 function atomicWriteState(file, state) {
-  if (Object.keys(state.envs).length === 0 && state.pending == null) {
+  if (Object.keys(state.envs).length === 0 && Object.keys(state.pending_by_env).length === 0) {
     if (existsSync(file)) unlinkSync(file);
     return;
   }
@@ -370,7 +381,7 @@ function processIsAlive(pid) {
   }
 }
 
-function acquireStateLock(file) {
+function acquireStateLock(file, waitMs = 0) {
   const directory = path.dirname(file);
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   const lock = `${file}.lock`;
@@ -394,27 +405,49 @@ function acquireStateLock(file) {
   };
 
   let descriptor;
-  try {
-    descriptor = open();
-  } catch (error) {
-    if (error.code !== 'EEXIST') throw error;
-    let owner = null;
+  const deadline = Date.now() + waitMs;
+  while (descriptor == null) {
     try {
-      owner = JSON.parse(readFileSync(lock, 'utf8'));
-    } catch {
-      // An unreadable lock is not safe to steal.
-    }
-    if (
-      owner?.host === hostname() &&
-      Number.isInteger(owner.pid) &&
-      owner.pid > 0 &&
-      !processIsAlive(owner.pid)
-    ) {
-      unlinkSync(lock);
       descriptor = open();
-    } else {
-      const detail = owner ? `pid ${owner.pid ?? '?'} on ${owner.host ?? '?'}` : 'unknown owner';
-      fail(`registry is locked by ${detail}; retry after that lifecycle command finishes.`);
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      let owner = null;
+      try {
+        owner = JSON.parse(readFileSync(lock, 'utf8'));
+      } catch {
+        // An unreadable lock is not safe to steal.
+      }
+      if (
+        owner?.host === hostname() &&
+        Number.isInteger(owner.pid) &&
+        owner.pid > 0 &&
+        !processIsAlive(owner.pid)
+      ) {
+        // Serialize dead-owner recovery too: two reclaimers must not unlink a
+        // replacement lock acquired by a live process after their first read.
+        const recovery = `${lock}.recovery`;
+        try { mkdirSync(recovery); }
+        catch (error) {
+          if (error.code !== 'EEXIST') throw error;
+          if (Date.now() < deadline) { sleepSync(10); continue; }
+          fail(`registry lock recovery is busy or interrupted: ${recovery}.`);
+        }
+        try {
+          let current;
+          try { current = JSON.parse(readFileSync(lock, 'utf8')); } catch {}
+          if (current?.host === hostname() && Number.isInteger(current.pid) && current.pid > 0 && !processIsAlive(current.pid)) {
+            unlinkSync(lock);
+          }
+        } finally { rmdirSync(recovery); }
+        continue;
+      } else {
+        if (Date.now() < deadline) {
+          sleepSync(Math.min(10, deadline - Date.now()));
+          continue;
+        }
+        const detail = owner ? `pid ${owner.pid ?? '?'} on ${owner.host ?? '?'}` : 'unknown owner';
+        fail(`registry is locked by ${detail}; retry after that lifecycle command finishes.`);
+      }
     }
   }
 
@@ -425,12 +458,32 @@ function acquireStateLock(file) {
 }
 
 function withStateLock(file, operation) {
-  const release = acquireStateLock(file);
+  // Only registry read/merge/write work belongs inside this short critical section.
+  const release = acquireStateLock(file, 2000);
   try {
     return operation();
   } finally {
     release();
   }
+}
+
+function withEnvironmentLock(file, env, operation) {
+  const release = acquireStateLock(path.join(`${file}.env-locks`, assertOverlayEnv(env)));
+  try { return operation(); } finally { release(); }
+}
+
+function updateRegistry(profile, environment, operation) {
+  const file = overlayStatePath(profile.project.slug, environment);
+  return withStateLock(file, () => {
+    const { state } = readOverlayState(profile.project.slug, environment);
+    const result = operation(state);
+    atomicWriteState(file, state);
+    return result;
+  });
+}
+
+function pendingFor(state, env) {
+  return Object.hasOwn(state.pending_by_env, env) ? state.pending_by_env[env] : null;
 }
 
 function timeoutFromEnvironment(environment) {
@@ -638,10 +691,11 @@ function pendingMatchesOptions(pending, options) {
 }
 
 function assertPendingCompatible(state, options, apply) {
-  if (state.pending == null) return;
-  const instruction = `rerun the pending ${operationTarget(state.pending)} operation with --apply`;
-  if (!apply || !pendingMatchesOptions(state.pending, options)) {
-    fail(`pending operation ${operationTarget(state.pending)} must be recovered first; ${instruction}.`);
+  const pending = pendingFor(state, options.env);
+  if (pending == null) return;
+  const instruction = `rerun the pending ${operationTarget(pending)} operation with --apply`;
+  if (!apply || !pendingMatchesOptions(pending, options)) {
+    fail(`pending operation ${operationTarget(pending)} must be recovered first; ${instruction}.`);
   }
 }
 
@@ -742,8 +796,6 @@ function verifyMutationPostcondition({
 }
 
 function executeAppliedMutation({
-  state,
-  file,
   options,
   profile,
   projectRoot,
@@ -753,15 +805,15 @@ function executeAppliedMutation({
 }) {
   const commandTimeout = timeoutFromEnvironment(environment);
   const verifyTimeout = verifyTimeoutFromEnvironment(environment);
-  let pending = state.pending;
-  if (pending == null) {
-    pending = newPendingOperation(options, owner, source);
-    state.pending = pending;
-    atomicWriteState(file, state);
-  } else {
+  const pending = updateRegistry(profile, environment, state => {
     assertPendingCompatible(state, options, true);
-    console.log(`recovered pending ${operationTarget(pending)}: redispatching idempotently`);
-  }
+    assertMutationInputs(options, profile, state);
+    const previous = pendingFor(state, options.env);
+    if (previous) console.log(`recovered pending ${operationTarget(previous)}: redispatching idempotently`);
+    const operation = previous ?? newPendingOperation(options, owner, source);
+    state.pending_by_env[options.env] = operation;
+    return operation;
+  });
 
   try {
     const receipt = dispatchProjectCommand({
@@ -787,9 +839,11 @@ function executeAppliedMutation({
       commandTimeout,
       passthrough: options.passthrough,
     });
-    applyMutation(state, options, receipt, new Date().toISOString(), owner);
-    state.pending = null;
-    atomicWriteState(file, state);
+    updateRegistry(profile, environment, state => {
+      assertPendingCompatible(state, options, true);
+      applyMutation(state, options, receipt, new Date().toISOString(), owner);
+      delete state.pending_by_env[options.env];
+    });
     return receipt;
   } catch (error) {
     if (/pending operation retained/i.test(error.message)) throw error;
@@ -813,9 +867,9 @@ function runMutation({ options, profile, projectRoot, environment, cwd }) {
   }
 
   const firstRead = readOverlayState(profile.project.slug, environment);
-  assertPendingCompatible(firstRead.state, options, options.apply);
-  assertMutationInputs(options, profile, firstRead.state);
   if (!options.apply) {
+    assertPendingCompatible(firstRead.state, options, false);
+    assertMutationInputs(options, profile, firstRead.state);
     dispatchProjectCommand({
       profile,
       projectRoot,
@@ -833,13 +887,8 @@ function runMutation({ options, profile, projectRoot, environment, cwd }) {
     return 0;
   }
 
-  return withStateLock(firstRead.file, () => {
-    const { file, state } = readOverlayState(profile.project.slug, environment);
-    assertPendingCompatible(state, options, true);
-    assertMutationInputs(options, profile, state);
+  return withEnvironmentLock(firstRead.file, options.env, () => {
     executeAppliedMutation({
-      state,
-      file,
       options,
       profile,
       projectRoot,
@@ -1006,12 +1055,13 @@ function runStatus({ options, profile, projectRoot, environment }) {
     }
   }
   const drift = compareInventory(state, runtimeInventory, options.env);
+  const pending = Object.values(state.pending_by_env).filter(item => options.env == null || item.env === options.env);
 
   const lines = [
     `■ ${profile.project.slug} — overlay lifecycle`,
     `  environments  ${selectedEntries.length}`,
     `  attachments   ${attachments}`,
-    `  pending       ${state.pending == null ? 0 : 1}`,
+    `  pending       ${pending.length}`,
     policy
       ? `  stale         ${stale.length} (after ${policy.value})`
       : '  stale         notConfigured',
@@ -1024,10 +1074,10 @@ function runStatus({ options, profile, projectRoot, environment }) {
       `  ${env}  ${staleLabel}  idle ${formatAge(record.last_used_at, now)}  services ${Object.keys(record.services).length}  owner ${record.agent ?? 'unknown'}`
     );
   }
-  if (state.pending != null) lines.push(`  pending-item  ${operationTarget(state.pending)}`);
+  for (const item of pending) lines.push(`  pending-item  ${operationTarget(item)}`);
   for (const item of drift ?? []) lines.push(`  drift-item  ${item}`);
   console.log(lines.join('\n'));
-  return state.pending == null &&
+  return pending.length === 0 &&
     runtimeError == null &&
     stale.length === 0 &&
     drift != null && drift.length === 0
@@ -1036,16 +1086,15 @@ function runStatus({ options, profile, projectRoot, environment }) {
 }
 
 function runTouch({ options, profile, environment }) {
-  const firstRead = readOverlayState(profile.project.slug, environment);
-  return withStateLock(firstRead.file, () => {
-    const { file, state } = readOverlayState(profile.project.slug, environment);
-    if (state.pending != null) {
-      fail(`pending operation ${operationTarget(state.pending)} must be recovered before touch.`);
-    }
-    const record = state.envs[options.env];
-    if (!record) fail(`environment ${JSON.stringify(options.env)} is not tracked.`);
-    record.last_used_at = new Date().toISOString();
-    atomicWriteState(file, state);
+  const file = overlayStatePath(profile.project.slug, environment);
+  return withEnvironmentLock(file, options.env, () => {
+    updateRegistry(profile, environment, state => {
+      const pending = pendingFor(state, options.env);
+      if (pending) fail(`pending operation ${operationTarget(pending)} must be recovered before touch.`);
+      const record = state.envs[options.env];
+      if (!record) fail(`environment ${JSON.stringify(options.env)} is not tracked.`);
+      record.last_used_at = new Date().toISOString();
+    });
     console.log(`overlay touch 1/1: ${options.env} lease renewed`);
     return 0;
   });
@@ -1054,69 +1103,45 @@ function runTouch({ options, profile, environment }) {
 function runPrune({ options, profile, projectRoot, environment, cwd }) {
   const policy = resolveStalePolicy(options, profile, true);
   const firstRead = readOverlayState(profile.project.slug, environment);
-  if (firstRead.state.pending != null && !options.apply) {
-    fail(
-      `pending operation ${operationTarget(firstRead.state.pending)} must be recovered before a prune plan.`
-    );
-  }
   const plan = staleOverlayEnvironments(firstRead.state, policy.milliseconds);
   const total = Object.keys(firstRead.state.envs).length;
   if (!options.apply) {
-    console.log(
-      `overlay prune plan: stale ${plan.length}/${total}, destroyed 0/${plan.length} (after ${policy.value})`
-    );
+    console.log(`overlay prune plan: stale ${plan.length}/${total}, destroyed 0/${plan.length} (after ${policy.value})`);
     for (const { env } of plan) console.log(`  destroy ${env}`);
     return 0;
   }
 
-  return withStateLock(firstRead.file, () => {
-    const { file, state } = readOverlayState(profile.project.slug, environment);
-    if (state.pending != null && state.pending.source !== 'prune') {
-      fail(
-        `pending operation ${operationTarget(state.pending)} must be recovered with the same --apply command before prune.`
-      );
-    }
-    const stale = staleOverlayEnvironments(state, policy.milliseconds);
-    const targets = state.pending == null
-      ? stale.map(({ env }) => env)
-      : [
-          state.pending.env,
-          ...stale.map(({ env }) => env).filter((env) => env !== state.pending.env),
-        ];
-    let destroyed = 0;
-    for (const env of targets) {
-      const mutation = {
-        ...options,
-        verb: 'destroy',
-        env,
-        service: null,
-        image: null,
-      };
-      try {
+  const recovering = Object.values(firstRead.state.pending_by_env)
+    .filter(item => item.source === 'prune').map(item => item.env);
+  const targets = [...new Set([...recovering, ...plan.map(({ env }) => env)])];
+  let destroyed = 0;
+  let attempted = 0;
+  for (const env of targets) {
+    let counted = false;
+    try {
+      withEnvironmentLock(firstRead.file, env, () => {
+        // Touch or another prune may have won the environment lock since planning.
+        const { state } = readOverlayState(profile.project.slug, environment);
+        const pending = pendingFor(state, env);
+        if (pending == null && !staleOverlayEnvironments(state, policy.milliseconds).some(item => item.env === env)) return;
+        attempted++; counted = true;
+        if (pending && pending.source !== 'prune') {
+          fail(`pending operation ${operationTarget(pending)} must be recovered with the same --apply command before prune.`);
+        }
         executeAppliedMutation({
-          state,
-          file,
-          options: mutation,
-          profile,
-          projectRoot,
-          environment,
-          source: 'prune',
-          owner: {
-            worktree: safeRealpath(cwd),
-            agent: environment.DEVINFRA_AGENT ?? environment.USER ?? 'unknown',
-          },
+          options: { ...options, verb: 'destroy', env, service: null, image: null },
+          profile, projectRoot, environment, source: 'prune',
+          owner: { worktree: safeRealpath(cwd), agent: environment.DEVINFRA_AGENT ?? environment.USER ?? 'unknown' },
         });
-        destroyed += 1;
-      } catch (error) {
-        console.error(`overlay prune: retained ${env}: ${error.message}`);
-        break;
-      }
+        destroyed++;
+      });
+    } catch (error) {
+      if (!counted) attempted++;
+      console.error(`overlay prune: retained ${env}: ${error.message}`);
     }
-    console.log(
-      `overlay prune ${destroyed}/${targets.length}: stale environments destroyed (after ${policy.value})`
-    );
-    return destroyed === targets.length ? 0 : 1;
-  });
+  }
+  console.log(`overlay prune ${destroyed}/${attempted}: stale environments destroyed (after ${policy.value})`);
+  return destroyed === attempted ? 0 : 1;
 }
 
 export function runOverlayLifecycle({

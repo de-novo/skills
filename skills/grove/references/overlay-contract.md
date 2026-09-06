@@ -42,7 +42,8 @@ idempotent for the same arguments so a command can be retried after a process
 interruption. A valid success receipt says that the command was accepted; it
 does not by itself prove the runtime result.
 
-For every applied mutation, Grove writes a `pending` operation to the registry
+For every applied mutation, Grove writes a pending operation for that environment
+to the registry
 before dispatch. It then polls project `status <env>` and finalizes the registry
 only after observing the postcondition:
 
@@ -55,11 +56,14 @@ only after observing the postcondition:
 
 If dispatch is interrupted, its receipt is invalid, status cannot measure the
 postcondition, or the postcondition times out, the pending operation remains.
-`status` reports it and returns non-zero but never completes it. Rerun the same
+`status` reports pending operations in its selected scope and returns non-zero
+but never completes them. A pending operation in one environment does not make
+another environment's scoped status fail. Rerun the same
 mutation with `--apply`; Grove redispatches the idempotent project command,
 checks status again, and finalizes only after observation. A different mutation
-or different project-specific passthrough arguments and `touch` are blocked
-until recovery. Internal `status <env>` receives the same passthrough arguments
+or different project-specific passthrough arguments and `touch` for that same
+environment are blocked until recovery. Other environments can continue.
+Internal `status <env>` receives the same passthrough arguments
 so it measures the same project context.
 
 ## Leases and stale environments
@@ -91,11 +95,12 @@ is a backstop for abandoned work, not the normal end path.
   destroyed and does not invoke the project command.
 - With `--apply`, it dispatches `destroy` once per stale environment. A failed
   or unverified destroy stays in the registry with its pending operation and is
-  counted as retained. Destructions verified before that failure are finalized;
-  later candidates are not attempted until the same prune command recovers the
-  pending operation.
-- An environment touched after the plan is recalculated under the registry
-  lock and is not removed.
+  counted as retained. Cleanup continues with unrelated candidates. A busy
+  environment or a pending non-prune operation is retained too. Rerun prune to
+  recover its failed target; a non-prune operation needs its original command.
+- Each target's staleness is checked again under that environment's lock. A
+  lease renewed before cleanup acquires the lock is not removed. Environments
+  already removed by another command are skipped.
 
 An environment reported by project `status` but absent from the registry is
 `untracked` drift. Grove does not assign an invented age and will not prune it
@@ -211,16 +216,45 @@ command returned a valid receipt; it is not presented as a clean runtime.
 
 The machine-local registry is `~/.dev-infra/overlays/<project-slug>.yml`.
 `GROVE_STATE_DIR` overrides its directory for isolated tooling and tests.
-Files are written by temporary-file rename with private permissions. Mutations
-hold a per-project exclusive lock; a dead same-machine process lock is
-recovered, while a live or unknown owner is not stolen.
+Files are written by temporary-file rename with private permissions. Each
+environment has an exclusive lock under `<project-slug>.yml.env-locks/` held
+through project dispatch, readiness verification, and finalization. Commands
+for different environments can run concurrently; a command for an already
+busy environment fails without dispatch. Same-environment commands are not
+automatically queued.
+
+The project registry lock protects only short read/merge/write transactions.
+Contending metadata writers retry for up to two seconds; no project workload
+command or readiness poll runs while holding this lock. Finalization rereads
+the registry and updates only its own environment so another command's records
+and pending operations survive. Touch and prune use the same environment locks;
+prune never holds a project lock across its cleanup loop.
+
+A dead same-machine process lock is recovered, while a live or unknown owner
+is not stolen. Dead-owner recovery itself is serialized. An interrupted lock
+recovery marker is retained for inspection rather than removed speculatively.
+
+Project adapters must support concurrent operations on different environments.
+Use environment-specific workload state, and serialize only genuinely shared
+backend updates such as a shared routing file. Grove's registry lock does not
+protect project-owned files, routers, or database changes. Update adapters that
+relied on project-wide dispatch serialization before using the parallel CLI.
 
 The registry contains lifecycle metadata, image references, optional upstreams,
-the creating agent/worktree, and at most one pending mutation. The pending
+the creating agent/worktree, and at most one pending mutation per environment
+in `pending_by_env`. The pending
 record is the crash-recovery journal and is written before project dispatch. It
 contains no credentials or raw project-specific passthrough arguments; only a
 SHA-256 digest is retained to reject recovery in a different context. The
 registry is not a second workload controller: runtime drift is reported, not
 silently repaired.
+
+Registry version 2 stores these per-environment journals. Version 1 registries
+are accepted on read, including an existing single `pending` operation; the
+next successful metadata write preserves it under its environment and writes
+version 2. Read-only status does not rewrite the file. Older CLIs reject
+version 2, preventing them from silently overwriting concurrent journals.
+Upgrade CLI users of a shared registry together; downgrading requires finishing
+or explicitly recovering outstanding work with the current CLI first.
 
 Overlay cleanup never stops Grove's shared engines. There is no `down` command.

@@ -70,7 +70,7 @@ function assertPendingIntent() {
   if (process.env.GROVE_OVERLAY_STUB_REQUIRE_PENDING !== 'true') return;
   const stateFile = join(process.env.GROVE_STATE_DIR, 'lifecycle-test.yml');
   if (!existsSync(stateFile)) throw new Error('pending intent is missing before dispatch');
-  const pending = parse(readFileSync(stateFile, 'utf8')).pending;
+  const pending = parse(readFileSync(stateFile, 'utf8')).pending_by_env?.[positional[0]];
   if (
     !pending ||
     pending.verb !== verb ||
