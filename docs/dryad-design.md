@@ -373,6 +373,12 @@ attach하는 검증은 Grove의 병렬 overlay가 이미 잰 경로 위에 있�
   동작한다"고 했지만 구현은 slug를 runtime-profile에서만 읽어 Grove 프로파일이 없으면
   거부했다. 카탈로그 자체에 Dryad를 쓰려다 드러났다. 이제 runtime-profile이 없을 때만
   dryad-profile이 `project.slug`를 가질 수 있고, 둘 다 있으면 중복으로 거부한다.
+- (2026-09-07) 프로젝트 색인과 자리 호스트명. 어느 프로젝트가 Dryad를 쓰는지 도구가
+  알 길이 없었고, 자리의 env 이름만으로는 브라우저를 열 주소가 나오지 않았다. `plan
+  --apply`가 레지스트리 옆 `projects.yml`에 slug→baseline root를 적고 `projects`가
+  살아 있는 자리·finish한 자리·overlay 여부와 함께 센다. `status --json`의 자리마다
+  `hostnames`가 붙는데, 값은 Grove의 `urls --json`에서 읽는다. Dryad는 호스트명을
+  직접 그리지 않는다.
 
 철회한 후보: 자리별 포트 배정. overlay 없는 프로젝트에서 자리마다 dev 서버 포트를
 손으로 나눠야 했지만, 답은 포트가 아니라 overlay 어댑터와 이름이다. 같은 날 그

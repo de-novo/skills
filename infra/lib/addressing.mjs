@@ -279,11 +279,31 @@ export function formatUrlsReport(profile, addressing, urls) {
   return lines.join('\n');
 }
 
+// Machine-readable urls. Overlay is an empty list without --env so a reader
+// never has to distinguish null from absent.
+export function formatUrlsJson(addressing, urls) {
+  return JSON.stringify(
+    {
+      tld: addressing.tld,
+      shared: urls.shared.map((row) => ({ service: row.service, host: row.host })),
+      overlay: (urls.overlay ?? []).map((row) => ({ service: row.service, env: row.env, host: row.host })),
+    },
+    null,
+    2
+  );
+}
+
 export function parseUrlsArgs(args) {
   let root;
   let env = null;
+  let json = false;
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
+    if (arg === '--json') {
+      if (json) throw new Error('--json may be passed only once.');
+      json = true;
+      continue;
+    }
     if (arg === '--env') {
       const value = args[i + 1];
       if (value == null || value.startsWith('--')) {
@@ -301,5 +321,5 @@ export function parseUrlsArgs(args) {
     }
     root = arg;
   }
-  return { root, env };
+  return { root, env, json };
 }

@@ -51,6 +51,17 @@ repair it. `finish` moves the record to `<slug>.finished.yml` next to it;
 `status --finished` reads that archive. It grows without bound; trim it by
 hand when it stops being useful.
 
+Next to the registries, `projects.yml` is the machine's project index:
+`version: 1` and `projects: { <slug>: { root, updated_at } }`, one entry per
+slug that has ever planned a seat on this machine, `root` being the baseline
+checkout. Every `plan --apply` that registers a seat rewrites the slug's
+entry (same lock and atomic write as the registry); when the root differs
+from the recorded one, `plan` prints one warning line and keeps the latest.
+`finish` leaves the index alone. `projects` reads it and joins each entry
+with what exists now: whether the root is still there, live seats from the
+registry, finished seats from the archive, and whether the project's Grove
+profile has overlays on.
+
 ## CLI
 
 ```text
@@ -59,6 +70,7 @@ de-novo skills dryad seat   ID [--json | --env | --shell | --task]
 de-novo skills dryad report ID --status working|blocked|done [--note TEXT] [--session REF]
 de-novo skills dryad status [ID] [--json] [--finished]
 de-novo skills dryad finish ID [--apply]
+de-novo skills dryad projects [--json]
 ```
 
 | Verb | Without `--apply` | With `--apply` |
@@ -68,6 +80,12 @@ de-novo skills dryad finish ID [--apply]
 | report | always writes the worker's status and a journal line | — |
 | status | always read-only: counts and problems; non-zero on any problem. Another seat's in-flight overlay mutation is shown as `in-flight`, not counted as a problem; a stalled one is | — |
 | finish | prints what would be destroyed or removed | `overlay destroy`, remove a clean Dryad-created worktree, move the seat and its journal to `<slug>.finished.yml`; branches kept |
+| projects | always read-only, machine-wide (no project needed): one counted line per indexed project — root, present or missing, `seats n`, `finished n`, `overlay on|off`; `--json` prints `{ projects: [ { slug, root, root_present, seats, finished, overlay, updated_at } ] }`; a missing index prints `projects 0` | — |
+
+`status --json` gives every seat a `hostnames` list: the overlay hostnames of
+its env, read from Grove's `urls --env <id> --json` (Dryad renders no
+hostname itself). The list is empty when the project has no Grove profile,
+overlays are off, or the seat's env is pending.
 
 `--project ROOT` names the baseline checkout. Omitted, Dryad uses
 `DRYAD_PROJECT`, then the nearest `.agents/dryad-profile.yml` above the cwd.

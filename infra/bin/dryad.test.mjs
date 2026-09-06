@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse, stringify } from 'yaml';
 
-import { parseDryadCliArgs, parseDryadProfile, readDryadFinished, readDryadState } from '../lib/dryad.mjs';
+import { parseDryadCliArgs, parseDryadProfile, readDryadFinished, readDryadProjectsIndex, readDryadState } from '../lib/dryad.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CLI = path.join(HERE, 'cli.mjs');
@@ -44,7 +44,8 @@ function fixture(t, { overlay = false, worktrees = true } = {}) {
   writeFileSync(path.join(root, 'process-test-marker'), 'owned fixture');
   const runtime = { project: { slug: 'dryad-test' }, services: { api: {} }, data: { infra: 'project' } };
   if (overlay) {
-    runtime.addressing = { scheme: { overlay: '{service}--{env}.{project}.{tld}' } };
+    // tld pinned so the rendered hostnames do not depend on this machine's addressing.local.yml.
+    runtime.addressing = { tld: 'localhost', scheme: { overlay: '{service}--{env}.{project}.{tld}' } };
     runtime.runtime = { commands: { overlay: `${JSON.stringify(process.execPath)} ${JSON.stringify(BACKEND)}` } };
     runtime.overlay = { attachable: ['api'], stale_after: '1h' };
   } else {
@@ -103,6 +104,7 @@ function fixture(t, { overlay = false, worktrees = true } = {}) {
     });
   const state = () => readDryadState('dryad-test', environment).state;
   const stateFile = path.join(stateDir, 'dryads', 'dryad-test.yml');
+  const indexFile = path.join(stateDir, 'dryads', 'projects.yml');
   const groveStateFile = path.join(stateDir, 'dryad-test.yml');
   const seatPath = (id) => path.join(root, 'seats', id);
 
@@ -119,7 +121,7 @@ function fixture(t, { overlay = false, worktrees = true } = {}) {
     }
     rmSync(root, { recursive: true, force: true });
   });
-  return { root, baseline, head, environment, run, good, bad, state, stateFile, groveStateFile, seatPath, images, gate, enter, launchOverlay };
+  return { root, baseline, head, environment, run, good, bad, state, stateFile, indexFile, groveStateFile, seatPath, images, gate, enter, launchOverlay };
 }
 
 test('dryad profile parser accepts the documented shape and rejects unknown keys and placeholders', () => {
@@ -197,6 +199,79 @@ test('dryad cli args enforce verb shapes', () => {
   assert.deepEqual([plan.verb, plan.id, plan.taskFile, plan.by, plan.apply], ['plan', 'w1', 'tasks/w1.md', 'codex', true]);
   assert.equal(parseDryadCliArgs(['seat', 'w1', '--shell']).format, 'shell');
   assert.equal(parseDryadCliArgs(['seat', 'w1']).format, 'text');
+  assert.equal(parseDryadCliArgs(['projects', '--json']).json, true);
+  assert.throws(() => parseDryadCliArgs(['projects', 'w1']), /no positional/);
+  assert.throws(() => parseDryadCliArgs(['projects', '--project', 'x']), /not valid for projects/);
+});
+
+test('plan --apply records the baseline root in the machine index; finish leaves it alone; a moved root warns once', (t) => {
+  const f = fixture(t);
+  f.good(['plan', 'w1', '--task', 'first']);
+  assert.equal(existsSync(f.indexFile), false, 'plan without --apply writes no index');
+  f.good(['plan', 'w1', '--task', 'first', '--apply']);
+  const { index } = readDryadProjectsIndex(f.environment);
+  assert.equal(index.version, 1);
+  assert.equal(index.projects['dryad-test'].root, f.baseline);
+  assert.match(index.projects['dryad-test'].updated_at, /^\d{4}-\d{2}-\d{2}T/);
+  const written = readFileSync(f.indexFile, 'utf8');
+  f.good(['finish', 'w1', '--apply']);
+  assert.equal(existsSync(f.stateFile), false);
+  assert.equal(readFileSync(f.indexFile, 'utf8'), written, 'finish leaves the index untouched');
+
+  writeFileSync(f.indexFile, stringify({ version: 1, projects: { 'dryad-test': { root: '/elsewhere/old', updated_at: '2026-01-01T00:00:00.000Z' } } }));
+  const moved = f.good(['plan', 'w2', '--task', 'second', '--apply']);
+  assert.equal((moved.stderr.match(/root moved from \/elsewhere\/old to /g) ?? []).length, 1, moved.stderr);
+  assert.equal(readDryadProjectsIndex(f.environment).index.projects['dryad-test'].root, f.baseline);
+  const again = f.good(['plan', 'w3', '--task', 'third', '--apply']);
+  assert.doesNotMatch(again.stderr, /root moved/);
+  t.diagnostic('index written on apply 1/1; untouched by finish 1/1; moved-root warning 1/1');
+});
+
+test('projects joins the index with live registries: two seats, then one finished; a missing index is projects 0', (t) => {
+  const f = fixture(t);
+  const empty = path.join(f.root, 'empty-state');
+  const none = f.good(['projects'], { cwd: f.root, env: { GROVE_STATE_DIR: empty } });
+  assert.match(none.stdout, /projects 0/);
+  assert.deepEqual(JSON.parse(f.good(['projects', '--json'], { cwd: f.root, env: { GROVE_STATE_DIR: empty } }).stdout), { projects: [] });
+
+  for (const id of ['w1', 'w2']) f.good(['plan', id, '--task', id, '--apply']);
+  // projects is machine-wide: no dryad profile above f.root, no --project.
+  const two = JSON.parse(f.good(['projects', '--json'], { cwd: f.root }).stdout).projects;
+  assert.equal(two.length, 1);
+  assert.equal(two[0].slug, 'dryad-test');
+  assert.equal(two[0].root, f.baseline);
+  assert.deepEqual([two[0].root_present, two[0].seats, two[0].finished, two[0].overlay], [true, 2, 0, false]);
+  assert.match(two[0].updated_at, /^\d{4}-/);
+  assert.match(f.good(['projects'], { cwd: f.root }).stdout, /dryad-test  .*  present  seats 2  finished 0  overlay off/);
+
+  f.good(['finish', 'w1', '--apply']);
+  const one = JSON.parse(f.good(['projects', '--json'], { cwd: f.root }).stdout).projects[0];
+  assert.deepEqual([one.seats, one.finished], [1, 1]);
+  assert.match(f.good(['projects'], { cwd: f.root }).stdout, /projects 1\n.*seats 1  finished 1/);
+
+  writeFileSync(f.indexFile, stringify({ version: 1, projects: { 'dryad-test': { root: path.join(f.root, 'gone'), updated_at: '2026-01-01T00:00:00.000Z' } } }));
+  const gone = JSON.parse(f.good(['projects', '--json'], { cwd: f.root }).stdout).projects[0];
+  assert.deepEqual([gone.root_present, gone.seats, gone.finished], [false, 1, 1]);
+  assert.match(f.good(['projects'], { cwd: f.root }).stdout, /missing  seats 1/);
+  t.diagnostic('missing index 2/2; two seats counted 1/1; one finished counted 1/1; missing root flagged 1/1');
+});
+
+test('status --json carries each seat\'s overlay hostnames from urls --json; without overlays the list is empty', (t) => {
+  const f = fixture(t, { overlay: true });
+  f.good(['plan', 'w1', '--task', 'named seat', '--apply']);
+  const seated = JSON.parse(f.good(['status', '--json']).stdout);
+  assert.deepEqual(seated.seats[0].hostnames, ['api--w1.dryad-test.localhost']);
+  assert.equal(JSON.parse(f.good(['projects', '--json'], { cwd: f.root }).stdout).projects[0].overlay, true);
+  // A pending env has no hostnames yet.
+  f.bad(['plan', 'w2', '--task', 'pending', '--apply'], { env: { GROVE_PROCESS_TEST_ROOT: path.join(f.root, 'missing') } });
+  const pending = JSON.parse(f.bad(['status', '--json']).stdout);
+  assert.deepEqual(pending.seats.find((seat) => seat.id === 'w2').hostnames, []);
+  assert.deepEqual(pending.seats.find((seat) => seat.id === 'w1').hostnames, ['api--w1.dryad-test.localhost']);
+
+  const plain = fixture(t);
+  plain.good(['plan', 'w1', '--task', 'no grove overlay', '--apply']);
+  assert.deepEqual(JSON.parse(plain.good(['status', '--json']).stdout).seats[0].hostnames, []);
+  t.diagnostic('hostnames with overlay 1/1; pending empty 1/1; without overlay empty 1/1');
 });
 
 test('plan without --apply creates nothing; with --apply it creates a worktree seat that seat, report, status and finish round-trip', (t) => {
