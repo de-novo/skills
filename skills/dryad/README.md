@@ -80,6 +80,24 @@ SKILL.md inside the installed catalog, so the project need not vendor or
 symlink it). The task text is not an environment variable; launchers read it
 from `seat --json` or `seat --task`.
 
+## Canopy
+
+`de-novo skills canopy` serves a local overview at `http://127.0.0.1:7420/`.
+Use `--port N` to choose another port, or `--once` to print the same state JSON
+and exit. The page refreshes every five seconds; without JavaScript, reload
+to refresh its server-rendered first view.
+
+It reads only public CLI JSON: `dryad projects --json`, each project's
+`dryad status --json` and `dryad status --finished --json`, and
+`overlay status --json` for projects with overlays. The page shows counts,
+seats, journals, sessions, hostname links, Grove reports, and problems.
+Finished seats expand to show their journals. Failed or timed-out commands
+appear as errors while other projects remain visible.
+
+Canopy never reads registry files directly, launches workers, writes reports,
+changes worktrees, renews leases, or mutates environments or shared engines.
+It accepts only GET requests, binds only to `127.0.0.1`, and refuses `--host`.
+
 ## Handing a seat to a launcher
 
 ```bash

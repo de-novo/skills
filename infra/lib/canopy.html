@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Canopy</title>
+<style>
+:root { color-scheme: light dark; --bg: #fafafa; --fg: #222; --muted: #666; --line: #ccc; --problem: #fff0e8; --alert: #a32908; --link: #135eb2; }
+@media (prefers-color-scheme: dark) { :root { --bg: #151719; --fg: #e0e3e6; --muted: #a0a7ae; --line: #3a4148; --problem: #35251e; --alert: #ffb08c; --link: #86baff; } }
+* { box-sizing: border-box; }
+body { margin: 20px; background: var(--bg); color: var(--fg); font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; }
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+h1 { font-size: 19px; margin: 0; } h2 { font-size: 13px; margin: 0; }
+header p, .root { color: var(--muted); } .root { margin: 3px 0 10px; overflow-wrap: anywhere; }
+section { border-top: 1px solid var(--line); padding: 14px 0; margin-top: 12px; }
+.table-wrap { overflow-x: auto; } table { border-collapse: collapse; width: 100%; text-align: left; }
+th, td { padding: 5px 10px 5px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: normal; white-space: nowrap; } td { max-width: 440px; overflow-wrap: anywhere; }
+pre { white-space: pre-wrap; margin: 3px 0; font: inherit; } a { color: var(--link); }
+.grove { margin: 9px 0; } .problem { background: var(--problem); color: var(--alert); padding: 6px 8px; margin: 5px 0; overflow-wrap: anywhere; }
+summary { cursor: pointer; padding: 4px 0; } details { margin-top: 8px; }
+</style>
+</head>
+<body>
+<header><h1>Canopy</h1><p>last updated <time id="updated"><!-- CANOPY_UPDATED --></time> · refresh 5s</p></header>
+<noscript><p>Automatic refresh requires JavaScript. Reload to update.</p></noscript>
+<p id="refresh-error" class="problem" hidden></p>
+<main id="state"><!-- CANOPY_STATE --></main>
+<script>
+/* CANOPY_RENDERER */
+async function refresh() {
+  try {
+    const response = await fetch('/api/state', { cache: 'no-store' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const state = await response.json();
+    const open = new Set([...document.querySelectorAll('details[open]')].map(node => node.dataset.project));
+    document.getElementById('state').innerHTML = renderState(state);
+    for (const node of document.querySelectorAll('details')) node.open = open.has(node.dataset.project);
+    document.getElementById('updated').textContent = state.updated_at;
+    document.getElementById('refresh-error').hidden = true;
+  } catch (error) {
+    const node = document.getElementById('refresh-error');
+    node.textContent = `Refresh failed: ${error.message}`;
+    node.hidden = false;
+  } finally { setTimeout(refresh, 5000); }
+}
+setTimeout(refresh, 5000);
+</script>
+</body>
+</html>
