@@ -151,6 +151,12 @@ Guesses stay out. Dated incidents only.
 - **Catalog rename did not rename containers.** Package and CLI became
   `de-novo-skills`; compose network and `dev-*` container names stayed so
   existing engines were not torn down.
+- **`setup` recreated running engines.** A throwaway project's `setup` ran
+  `compose up -d --wait` while the compose file's config hash had drifted from
+  the running `dev-pg16` and `dev-redis7`; both containers were recreated
+  (data survived on named volumes). `setup` and `infra up` now pass
+  `--no-recreate`; a config change reaches a running engine only by a human
+  using Docker directly (2026-09-06).
 
 ## Do not
 

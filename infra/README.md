@@ -120,8 +120,12 @@ Before executing, identify the project namespace, declared engines/databases,
 and credential source; obtain machine-owner authorization for those targets.
 Routine app work and a successful `validate` do not grant this authority.
 
-`setup` executes Compose `up -d --wait` for every declared engine, including
-engines already running. Compose may reconcile changed configuration. It then
+`setup` executes Compose `up -d --no-recreate --wait` for every declared
+engine. Engines already running are left exactly as they are, even when the
+compose file has changed since they started; applying a configuration change
+to a running engine is a separate human decision made with Docker directly,
+never through a project's setup (measured 2026-09-06: before `--no-recreate`,
+a throwaway project's setup recreated two running shared engines). It then
 provisions each declared SQL database and account, setting existing account
 passwords from `GROVE_PROVISION_PASSWORD` or the local-development default and
 reapplying grants. Repeated execution with different credentials can break

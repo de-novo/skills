@@ -34,6 +34,7 @@ import {
 import { dryadHelp, parseDryadCliArgs, runDryad } from '../lib/dryad.mjs';
 import {
   COMPOSE_FILE,
+  COMPOSE_UP_FLAGS,
   PROVISION,
   containerState,
   resolveProfilePath,
@@ -108,8 +109,7 @@ function cmdUp(args) {
       COMPOSE_FILE,
       ...profiles.flatMap((p) => ['--profile', p]),
       'up',
-      '-d',
-      '--wait',
+      ...COMPOSE_UP_FLAGS,
       ...services,
     ],
     { stdio: 'inherit', encoding: undefined }

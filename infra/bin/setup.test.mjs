@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -190,4 +190,39 @@ test('direct setup invocation rejects extra arguments before any engine action',
   const result = spawnSync(process.execPath, [SETUP, root, 'ignored-extra'], { encoding: 'utf8' });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /unexpected argument/);
+});
+
+// Compose up must never recreate a running shared engine. A docker shim on
+// PATH records every argv so both entry points (setup, infra up) are measured
+// at the command boundary without a daemon.
+function dockerShim(t) {
+  const bin = mkdtempSync(path.join(tmpdir(), 'docker-shim-'));
+  const log = path.join(bin, 'docker.log');
+  writeFileSync(
+    path.join(bin, 'docker'),
+    '#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$DOCKER_SHIM_LOG"\ncase "$1" in inspect) echo "true|healthy";; esac\nexit 0\n',
+    { mode: 0o755 }
+  );
+  t.after(() => rmSync(bin, { recursive: true, force: true }));
+  return { env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, DOCKER_SHIM_LOG: log }, log };
+}
+
+test('setup and infra up pass --no-recreate so running shared engines are never recreated', (t) => {
+  const shim = dockerShim(t);
+  const root = mkdtempSync(path.join(tmpdir(), 'setup-norecreate-'));
+  mkdirSync(path.join(root, '.agents'));
+  writeFileSync(
+    path.join(root, '.agents', 'runtime-profile.yml'),
+    'project: { slug: norecreate }\nservices: { api: {} }\noverlay: none\ndata: { infra: machine, engines: { pg: true, redis: true } }\n'
+  );
+  const setup = spawnSync(process.execPath, [SETUP, root], { env: shim.env, encoding: 'utf8' });
+  assert.equal(setup.status, 0, setup.stderr + setup.stdout);
+  const infraUp = spawnSync(process.execPath, [path.join(REPO_ROOT, 'infra/bin/cli.mjs'), 'infra', 'up', 'pg'], { env: shim.env, encoding: 'utf8' });
+  assert.equal(infraUp.status, 0, infraUp.stderr + infraUp.stdout);
+  const ups = readFileSync(shim.log, 'utf8').split('\n').filter((line) => / up /.test(line));
+  assert.equal(ups.length, 2, `expected one compose up per entry point, got:\n${ups.join('\n')}`);
+  for (const line of ups) {
+    assert.match(line, /^compose -f .* up -d --no-recreate --wait /);
+  }
+  t.diagnostic('compose up invocations 2/2 carry --no-recreate');
 });

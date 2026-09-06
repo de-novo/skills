@@ -19,6 +19,11 @@ export { ALIASES, ENGINES };
 const INFRA_DIR = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 export const COMPOSE_FILE = path.join(INFRA_DIR, 'docker-compose.yml');
 export const PROVISION = path.join(INFRA_DIR, 'bin', 'provision');
+// Engines already running are never recreated: several projects live on them,
+// and a compose config-hash drift must not restart their containers under a
+// project's setup. Measured 2026-09-06: without --no-recreate, `setup` on a
+// throwaway profile recreated dev-pg16 and dev-redis7 (container IDs changed).
+export const COMPOSE_UP_FLAGS = Object.freeze(['-d', '--no-recreate', '--wait']);
 const PROFILE_RELPATH = path.join('.agents', 'runtime-profile.yml');
 
 export function resolveProfilePath(arg, cwd = process.cwd()) {
@@ -113,8 +118,7 @@ export function runSetup(pathArg) {
     COMPOSE_FILE,
     ...plan.composeProfiles.flatMap((p) => ['--profile', p]),
     'up',
-    '-d',
-    '--wait',
+    ...COMPOSE_UP_FLAGS,
     ...plan.services,
   ];
   const up = run('docker', upArgs, { stdio: 'inherit', encoding: undefined });
