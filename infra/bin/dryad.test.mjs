@@ -386,3 +386,34 @@ test('two seats attach concurrently; an in-flight attach is not a problem for st
   assert.equal(existsSync(f.stateFile), false);
   t.diagnostic('concurrent attaches 2/2; in-flight tolerated 1/1; stalled flagged 1/1; recovered 1/1; finished 2/2');
 });
+
+// The worker side of the seat contract, without any agent tool: a scripted
+// worker is launched exactly the way a launcher would launch an agent (the
+// --shell line, then the program), and must find its seat, the skill, and
+// the task through DRYAD_* alone, then report its own completion.
+test('a scripted worker seated through --shell reads seat, skill and task, commits on its branch, and reports done', (t) => {
+  const f = fixture(t);
+  const worker = path.join(HERE, 'fixtures/dryad-worker.mjs');
+  f.good(['plan', 'w1', '--task', 'write the work note', '--by', 'worker', '--apply']);
+  const shellLine = f.good(['seat', 'w1', '--shell']).stdout.trim();
+  const run = spawnSync('sh', ['-c', `${shellLine} && exec ${JSON.stringify(process.execPath)} ${JSON.stringify(worker)}`], {
+    encoding: 'utf8',
+    env: { ...f.environment, DRYAD_TEST_CLI: CLI },
+    cwd: f.root, // deliberately not the worktree: the --shell line must move the worker there
+  });
+  assert.equal(run.status, 0, run.stderr);
+  const out = JSON.parse(run.stdout.trim().split('\n').at(-1));
+  assert.equal(out.branch, 'dryad/w1');
+  assert.equal(gitIn(f.seatPath('w1'), ['rev-parse', 'HEAD']), out.head);
+  assert.equal(gitIn(f.seatPath('w1'), ['status', '--porcelain']), '', 'worker left its worktree clean');
+  assert.equal(gitIn(f.baseline, ['rev-parse', 'HEAD']), f.head, 'baseline untouched');
+  assert.equal(readFileSync(path.join(f.seatPath('w1'), 'WORK.md'), 'utf8'), 'seat w1 on dryad/w1: write the work note\n');
+  const seat = f.state().seats.w1;
+  assert.equal(seat.status, 'done');
+  assert.match(seat.session, /^worker-\d+$/);
+  assert.deepEqual(seat.journal.map((entry) => entry.event), ['plan', 'report', 'report']);
+  const status = f.good(['status']);
+  assert.match(status.stdout, /reported   done 1/);
+  assert.match(status.stdout, /\+1/);
+  t.diagnostic('scripted worker: seat+skill+task read 3/3; commit on own branch 1/1; baseline untouched 1/1; done with session 1/1');
+});
