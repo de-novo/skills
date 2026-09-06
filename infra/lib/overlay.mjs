@@ -512,6 +512,21 @@ function verifyTimeoutFromEnvironment(environment) {
   return Number(raw);
 }
 
+// A project command that rejects a request before touching the runtime says
+// so with its last stdout line: ok false, mutated false. Anything else on a
+// non-zero exit is treated as a possible half-done mutation.
+function refusalReceipt(stdout) {
+  const lines = stdout.split('\n').map((line) => line.trim()).filter(Boolean);
+  if (lines.length === 0) return null;
+  let receipt;
+  try {
+    receipt = JSON.parse(lines[lines.length - 1]);
+  } catch {
+    return null;
+  }
+  return isMap(receipt) && receipt.ok === false && receipt.mutated === false ? receipt : null;
+}
+
 function parseReceipt(stdout) {
   const last = String(stdout)
     .split(/\r?\n/)
@@ -606,6 +621,12 @@ function dispatchProjectCommand({
     fail(`cannot run project command: ${result.error.message}`);
   }
   if (result.status !== 0) {
+    const refusal = refusalReceipt(result.stdout);
+    if (refusal) {
+      const error = new Error(`overlay: project refused ${verb}: ${refusal.error ?? 'no reason given'}`);
+      error.refused = true;
+      throw error;
+    }
     fail(`project command failed with exit ${result.status}.`);
   }
   const receipt = parseReceipt(result.stdout);
@@ -813,10 +834,12 @@ function executeAppliedMutation({
 }) {
   const commandTimeout = timeoutFromEnvironment(environment);
   const verifyTimeout = verifyTimeoutFromEnvironment(environment);
+  let previousPending = null;
   const pending = updateRegistry(profile, environment, state => {
     assertPendingCompatible(state, options, true);
     assertMutationInputs(options, profile, state);
     const previous = pendingFor(state, options.env);
+    previousPending = previous;
     if (previous) console.log(`recovered pending ${operationTarget(previous)}: redispatching idempotently`);
     const operation = previous ?? newPendingOperation(options, owner, source);
     state.pending_by_env[options.env] = operation;
@@ -854,6 +877,15 @@ function executeAppliedMutation({
     });
     return receipt;
   } catch (error) {
+    if (error.refused && previousPending == null) {
+      // Nothing ran: the journal this dispatch wrote is withdrawn. A refused
+      // retry of an older pending keeps that journal; its first attempt may
+      // have mutated the runtime.
+      updateRegistry(profile, environment, state => {
+        if (pendingMatchesOptions(pendingFor(state, options.env) ?? {}, options)) delete state.pending_by_env[options.env];
+      });
+      throw new Error(`${error.message} Nothing pending.`);
+    }
     if (/pending operation retained/i.test(error.message)) throw error;
     throw new Error(
       `${error.message} Pending operation retained; rerun the same --apply command to recover.`
@@ -1239,6 +1271,10 @@ export function runOverlayLifecycle({
 }) {
   assertOverlayActive(profile);
   const projectRoot = projectRootFromProfile(profilePath);
+  // The project command runs with cwd = project root; the caller's own
+  // directory (a seat worktree, usually) reaches it as GROVE_CALLER_CWD so an
+  // adapter can default its worktree argument without a passthrough flag.
+  environment = { ...environment, GROVE_CALLER_CWD: safeRealpath(cwd) };
   switch (options.verb) {
     case 'status':
       return runStatus({ options, profile, projectRoot, environment });

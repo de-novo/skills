@@ -633,3 +633,43 @@ test('status --json reports environments, pending liveness and drift as data wit
   assert.equal(text.status, pending.status, 'json and text share the exit code');
   t.diagnostic('json reports 2/2; verdict parity 1/1; --json rejected off status 1/1');
 });
+
+test('the project command receives the caller directory as GROVE_CALLER_CWD', (t) => {
+  const fixture = projectFixture(t);
+  const elsewhere = mkdtempSync(path.join(tmpdir(), 'caller-cwd-'));
+  t.after(() => rmSync(elsewhere, { recursive: true, force: true }));
+  const result = spawnSync(process.execPath, [CLI, 'overlay', 'create', 'w1', '--apply', '--project', fixture.root], {
+    cwd: elsewhere,
+    encoding: 'utf8',
+    env: { ...process.env, GROVE_STATE_DIR: fixture.stateDir, GROVE_OVERLAY_STUB_LOG: fixture.log, GROVE_OVERLAY_STUB_RUNTIME_STATE: fixture.runtimeState, GROVE_OVERLAY_STUB_PLAN_FIRST: 'true' },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const dispatched = calls(fixture);
+  assert.ok(dispatched.length >= 2, 'create and its status verification were dispatched');
+  for (const call of dispatched) {
+    assert.equal(call.callerCwd, realpathSync(elsewhere));
+    assert.equal(call.cwd, realpathSync(fixture.root), 'the command still runs from the project root');
+  }
+  t.diagnostic(`GROVE_CALLER_CWD present on ${dispatched.length}/${dispatched.length} dispatches`);
+});
+
+test('a refusal receipt before mutation withdraws the pending journal; a refused retry keeps an older one', (t) => {
+  const fixture = projectFixture(t);
+  assert.equal(run(fixture, ['create', 'w1', '--apply']).status, 0);
+  const refused = run(fixture, ['attach', 'w1', 'api', '--image', FULL_IMAGE, '--apply'], { GROVE_OVERLAY_STUB_REFUSE: 'true' });
+  assert.notEqual(refused.status, 0);
+  assert.match(refused.stderr, /project refused attach: refused by fixture/);
+  assert.match(refused.stderr, /Nothing pending/);
+  assert.equal(readState(fixture).pending_by_env.w1, undefined, 'no journal after a clean refusal');
+  assert.deepEqual(runtimeState(fixture).environments.w1, [], 'runtime untouched');
+  assert.equal(run(fixture, ['destroy', 'w1', '--apply']).status, 0, 'the environment is not locked afterwards');
+
+  assert.equal(run(fixture, ['create', 'w2', '--apply']).status, 0);
+  const interrupted = run(fixture, ['attach', 'w2', 'api', '--image', FULL_IMAGE, '--apply'], { GROVE_OVERLAY_STUB_FAIL_AFTER_MUTATION: 'true' });
+  assert.notEqual(interrupted.status, 0);
+  assert.equal(readState(fixture).pending_by_env.w2.verb, 'attach');
+  const refusedRetry = run(fixture, ['attach', 'w2', 'api', '--image', FULL_IMAGE, '--apply'], { GROVE_OVERLAY_STUB_REFUSE: 'true' });
+  assert.notEqual(refusedRetry.status, 0);
+  assert.equal(readState(fixture).pending_by_env.w2.verb, 'attach', 'an older journal survives a refused retry');
+  t.diagnostic('clean refusal withdrew 1/1 journals; refused retry kept 1/1');
+});

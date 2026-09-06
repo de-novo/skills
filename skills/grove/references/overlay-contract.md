@@ -149,7 +149,13 @@ does not evaluate a shell expression.
 cwd     = project root containing .agents/runtime-profile.yml
 timeout = 120000ms
 argv    = configured command + verb + lifecycle arguments
+env     = the caller's environment + GROVE_CALLER_CWD (the directory the Grove
+          command was run from, resolved; a seat worktree when a worker calls)
 ```
+
+`GROVE_CALLER_CWD` lets an adapter default a per-environment worktree without a
+passthrough flag. It is informational; an adapter that needs the worktree must
+still validate it belongs to the repository.
 
 `GROVE_OVERLAY_TIMEOUT_MS` may set a positive timeout in milliseconds
 (`DEVINFRA_OVERLAY_TIMEOUT_MS` is a legacy alias read only when the Grove name
@@ -158,7 +164,13 @@ is unset). Postcondition polling also defaults to 120000ms;
 call is bounded by the remaining verification time.
 
 The last non-empty stdout line must be one JSON object. Exit code zero without
-`ok: true` is a failure. Identity fields must match the request; otherwise
+`ok: true` is a failure. A command that rejects a request **before touching the
+runtime** exits non-zero with `{ "ok": false, "mutated": false, "error": "…" }`
+as that line; Grove then withdraws the pending journal it wrote for that
+dispatch and reports the refusal, so a validation error does not lock the
+environment. A refused retry of an older pending operation keeps that journal,
+because its first attempt may have mutated the runtime. Any other non-zero
+exit retains the pending operation. Identity fields must match the request; otherwise
 tracked environments remain unchanged and an applied operation retains its
 pending journal.
 

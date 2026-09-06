@@ -32,7 +32,7 @@ for (let index = 0; index < args.length; index += 1) {
 if (process.env.GROVE_OVERLAY_STUB_LOG) {
   appendFileSync(
     process.env.GROVE_OVERLAY_STUB_LOG,
-    `${JSON.stringify({ verb, args, apply, cwd: process.cwd() })}\n`,
+    `${JSON.stringify({ verb, args, apply, cwd: process.cwd(), callerCwd: process.env.GROVE_CALLER_CWD ?? null })}\n`,
     'utf8'
   );
 }
@@ -40,6 +40,12 @@ if (process.env.GROVE_OVERLAY_STUB_LOG) {
 if (args.includes('--malformed')) {
   console.log('not-json');
   process.exit(0);
+}
+
+// Refuse before any mutation: the receipt says so and the exit is non-zero.
+if (process.env.GROVE_OVERLAY_STUB_REFUSE === 'true' && verb !== 'status') {
+  console.log(JSON.stringify({ ok: false, verb, env: positional[0], service: positional[1], image: valueAfter('--image'), mutated: false, error: 'refused by fixture' }));
+  process.exit(1);
 }
 
 const result = {
