@@ -6,6 +6,7 @@ Current operating authority:
 - [Onboarding and human diagram](../skills/grove/README.md)
 - [Profile schema](../skills/grove/references/runtime-profile.md)
 - [Overlay contract](../skills/grove/references/overlay-contract.md)
+- [Dryad pattern](../skills/dryad/SKILL.md) and [profile, registry, CLI](../skills/dryad/README.md)
 - [Catalog machine backend](../infra/README.md)
 - [Catalog working rules](../AGENTS.md)
 
@@ -14,6 +15,13 @@ Current operating authority:
 [Grove value and intended experience](grove-product-direction.md) evaluates
 current capabilities, alternatives, differentiation hypotheses, and adoption
 measurements. It is an analysis, not operating authority or approved scope.
+
+## Design records
+
+[Dryad design](dryad-design.md) records why the second skill prepares seats
+and launches no agent, and what it deliberately leaves to launchers and
+orchestrators. Current behavior is owned by the skill and `infra/lib/dryad.mjs`;
+the record is not operating authority.
 
 ## Reproducible examples and evidence
 
