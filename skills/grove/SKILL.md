@@ -22,6 +22,27 @@ belong in `.agents/runtime-profile.yml`. Read it before acting; do not invent
 missing commands. Schema: [runtime-profile.md](references/runtime-profile.md).
 Human diagram and CLI onboarding: [README.md](README.md).
 
+## First actions
+
+Run these in order before changing anything. Each one counts what it saw.
+
+1. `de-novo skills validate <project-root>` — configuration invariants only.
+   It does not acquire ownership, probe health, or verify routing.
+2. `de-novo skills urls <project-root>` — the names this project uses. Grove
+   prints them; the project's listener routes them.
+3. If `runtime.commands.status` exists, run that project command from the
+   designated runtime location. `de-novo skills status` is the machine engine
+   report, not the project's status.
+4. If `runtime.commands.overlay` exists, `de-novo skills overlay status`.
+
+Planting Grove on a project that has no profile: [README.md](README.md#apply-to-a-project).
+
+Machine engines (`/grove infra`): `de-novo skills infra status` reads. `infra
+up`, `infra provision`, `setup`, and `infra k3d connect` mutate the shared
+engine set and need the machine owner's authorization. Their effects and
+execution conditions live in the CLI checkout's `infra/README.md`, not here.
+There is no down command.
+
 ## Addressing and isolation
 
 Use the profile's names and port registry. Named URLs do not prove DNS,
@@ -64,17 +85,15 @@ command. Attach only changed services permitted by the profile; shared-only
 services always remain on baseline. The project owns image builds, workloads,
 and fallthrough routing. Use exact revisions and verify runtime identity.
 
-Operate through Grove's lifecycle gate, never by invoking the project overlay
-command directly. Plans, application, readiness checks, pending-operation
-recovery, leases, and cleanup have one authority:
+Operate through `de-novo skills overlay`, never the project overlay command.
+Why, and every lifecycle rule (plans, application, readiness, pending-operation
+recovery, leases, cleanup, concurrency) have one authority:
 [overlay-contract.md](references/overlay-contract.md).
 
 Renew the lease during long work. Detach unused overrides and destroy the
 environment when the task ends. Stale cleanup is an explicit backstop, not the
-normal completion path. Lifecycle commands for different overlays can overlap;
-commands targeting the same overlay remain exclusive. These locks do not
-establish baseline writer ownership. The overlay contract owns concurrency and
-recovery details.
+normal completion path. Overlay locks do not establish baseline writer
+ownership.
 
 ## Verification
 

@@ -175,18 +175,12 @@ if the project will pay that cost.
 ### overlay lifecycle
 
 `runtime.commands.overlay` must implement the Grove command/JSON contract:
-[overlay-contract.md](overlay-contract.md). Call it through
-`de-novo skills overlay`, never directly, so create/attach/detach/destroy are
-recorded in the machine-local lease registry.
-
-`overlay.stale_after` is optional and has no default. It is a positive duration
-using `s`, `m`, `h`, `d`, or `w`. Staleness is measured from the last successful
-lifecycle mutation or `overlay touch`. When the field is omitted, cleanup must
-receive an explicit `--stale-after`; Grove does not invent a retention policy.
-
-`overlay.plan_first` defaults to `true`. See the contract for how `--apply` is
-forwarded. `overlay.image_tag` is omitted=`full-git-sha`; no mutable tag mode is
-supported.
+[overlay-contract.md](overlay-contract.md). That file owns how the command is
+invoked, what `--apply` and `plan_first` do, and how `stale_after` leases are
+measured and cleaned. This file only fixes value syntax: `stale_after` is an
+optional positive duration (`s` `m` `h` `d` `w`) with no default; `plan_first`
+omitted is `true`; `image_tag` omitted is `full-git-sha` and no mutable tag mode
+is supported.
 
 ### ports.blocks
 
@@ -255,7 +249,9 @@ After writing or editing a profile:
    After init there is no `commands.status` — do not invent it.
 2. `de-novo skills urls` prints at least one hostname. Routing is the
    project's listener, not Grove.
-3. When `runtime.commands.status` exists, it runs and matches the service
-   list. Request every health path and get the expected response (checking
-   0 of 0 is not a check — count how many of how many answered).
+3. When `runtime.commands.status` exists, run that project command yourself
+   from the designated runtime location and match its output to the service
+   list. `de-novo skills status` is the machine engine report, not this step.
+   Request every health path and get the expected response (checking 0 of 0
+   is not a check — count how many of how many answered).
 4. The port registry (`ports.registry`) agrees with this file.

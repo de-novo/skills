@@ -42,10 +42,10 @@ idempotent for the same arguments so a command can be retried after a process
 interruption. A valid success receipt says that the command was accepted; it
 does not by itself prove the runtime result.
 
-For every applied mutation, Grove writes a pending operation for that environment
-to the registry
-before dispatch. It then polls project `status <env>` and finalizes the registry
-only after observing the postcondition:
+For every applied mutation, Grove writes a pending operation for that
+environment to the registry before dispatch. It then polls project
+`status <env>` and finalizes the registry only after observing the
+postcondition:
 
 | Mutation | Required status postcondition |
 | --- | --- |
@@ -58,13 +58,13 @@ If dispatch is interrupted, its receipt is invalid, status cannot measure the
 postcondition, or the postcondition times out, the pending operation remains.
 `status` reports pending operations in its selected scope and returns non-zero
 but never completes them. A pending operation in one environment does not make
-another environment's scoped status fail. Rerun the same
-mutation with `--apply`; Grove redispatches the idempotent project command,
-checks status again, and finalizes only after observation. A different mutation
-or different project-specific passthrough arguments and `touch` for that same
-environment are blocked until recovery. Other environments can continue.
-Internal `status <env>` receives the same passthrough arguments
-so it measures the same project context.
+another environment's scoped status fail. Rerun the same mutation with
+`--apply`; Grove redispatches the idempotent project command, checks status
+again, and finalizes only after observation. Until that recovery succeeds, the
+same environment rejects any other mutation, the same mutation with different
+project-specific passthrough arguments, and `touch`. Other environments can
+continue. Internal `status <env>` receives the same passthrough arguments so it
+measures the same project context.
 
 ## Leases and stale environments
 
@@ -130,14 +130,16 @@ timeout = 120000ms
 argv    = configured command + verb + lifecycle arguments
 ```
 
-`GROVE_OVERLAY_TIMEOUT_MS` may set a positive timeout in milliseconds.
-Postcondition polling also defaults to 120000ms;
+`GROVE_OVERLAY_TIMEOUT_MS` may set a positive timeout in milliseconds
+(`DEVINFRA_OVERLAY_TIMEOUT_MS` is a legacy alias read only when the Grove name
+is unset). Postcondition polling also defaults to 120000ms;
 `GROVE_OVERLAY_VERIFY_TIMEOUT_MS` may set that deadline. Each internal status
 call is bounded by the remaining verification time.
 
 The last non-empty stdout line must be one JSON object. Exit code zero without
 `ok: true` is a failure. Identity fields must match the request; otherwise
-tracked environments remain unchanged and an applied operation retains its pending journal.
+tracked environments remain unchanged and an applied operation retains its
+pending journal.
 
 ```json
 {
@@ -165,8 +167,8 @@ Grove still does not start a hostname listener; that proxy value is declared
 intent.
 
 `status` must add runtime inventory to report a clean runtime. With no
-environment argument it is the complete inventory; with `status <env>` it contains that environment or an
-empty list when absent:
+environment argument it is the complete inventory; with `status <env>` it
+contains that environment or an empty list when absent:
 
 ```json
 {
@@ -209,8 +211,9 @@ environment are actually absent.
 
 If `environments` is omitted, an operator-requested status report says
 `drift notMeasured` and returns non-zero. Applied mutations cannot finalize
-without this inventory; their pending operation remains. `project-status 1/1` means only that the
-command returned a valid receipt; it is not presented as a clean runtime.
+without this inventory; their pending operation remains. `project-status 1/1`
+means only that the command returned a valid receipt; it is not presented as a
+clean runtime.
 
 ## Registry and concurrency
 
@@ -242,8 +245,8 @@ relied on project-wide dispatch serialization before using the parallel CLI.
 
 The registry contains lifecycle metadata, image references, optional upstreams,
 the creating agent/worktree, and at most one pending mutation per environment
-in `pending_by_env`. The pending
-record is the crash-recovery journal and is written before project dispatch. It
+in `pending_by_env`. The pending record is the crash-recovery journal and is
+written before project dispatch. It
 contains no credentials or raw project-specific passthrough arguments; only a
 SHA-256 digest is retained to reject recovery in a different context. The
 registry is not a second workload controller: runtime drift is reported, not

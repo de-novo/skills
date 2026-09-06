@@ -105,10 +105,11 @@ once per machine — not in the consuming app. The app gets a profile, not an
    `create` / `attach`; use `touch` for long work and `destroy` at task end.
    `prune` lists stale leases and destroys them only with `--apply`. Contract:
    [references/overlay-contract.md](references/overlay-contract.md).
-7. Install the skill into the agent's skill dir (`~/.claude/skills/` and similar),
-   or the tool's share channel. In a project, keep the canonical copy under
-   `.agents/skills/` and put only symlinks in tool-specific dirs — do not copy
-   the body.
+7. Make the skill loadable: in the project, keep one canonical copy under
+   `.agents/skills/grove` and put only symlinks in tool-specific dirs
+   (`.claude/skills/`, `.cursor/skills/`, …). For a user-wide install, symlink
+   from `~/.claude/skills/grove` to the catalog checkout. Never copy the body;
+   a copy stops receiving contract updates.
 
 Agent procedure (what exists after init, what not to invent): [SKILL.md](SKILL.md).
 
