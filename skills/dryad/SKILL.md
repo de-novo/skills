@@ -28,17 +28,19 @@ from Grove's profile and keeps none of its own. Schema and CLI reference:
 `DRYAD_ID` is set in your environment. Then:
 
 ```bash
-de-novo skills dryad seat "$DRYAD_ID" --json
+cat "$DRYAD_SKILL"                              # this file, wherever the catalog lives
+de-novo skills dryad seat "$DRYAD_ID" --json    # your worktree, branch, env, task
+de-novo skills dryad seat "$DRYAD_ID" --task    # the task text alone
 ```
 
-prints your worktree, branch, overlay env, and task. `DRYAD_PROJECT` is the
-baseline checkout; every Dryad command you run from the worktree resolves
-the project through it. If `DRYAD_ID` is unset, this section does not apply.
+`DRYAD_PROJECT` is the baseline checkout; every Dryad command you run from
+the worktree resolves the project through it. `DRYAD_ENV` is empty when the
+project has no overlays. If `DRYAD_ID` is unset, this section does not apply.
 
 ## Rules for a seated worker
 
-1. Change nothing outside your worktree. The baseline checkout and other
-   seats' worktrees are not yours.
+1. Change nothing outside your worktree. Reading elsewhere is fine; writing
+   to the baseline checkout, other seats' worktrees, or machine state is not.
 2. Verify through the Grove procedure. Your env already exists; you `attach`
    your changed services, and `finish` destroys the env later. Shared-only
    services stay on baseline.
@@ -47,8 +49,10 @@ the project through it. If `DRYAD_ID` is unset, this section does not apply.
    else tells the human what happened.
 4. When done: commit on your branch, run `report --status done`, and stop.
    Do not push, merge, or call `finish`. Those belong to the human.
-5. If your tool exposes a session id or transcript path, add it once with
-   `report --session <ref>` so a person can open the native log later.
+5. Before `report --status done`, check whether your tool exposes a session
+   id or transcript path (Claude Code and Codex both do). If it does, include
+   `--session <ref>` so a person can open the native log later. `report done`
+   without one prints a reminder; it is not an error.
 
 Completion is your report, not your process exit. A seat with no `done`
 report is not done.
@@ -69,7 +73,8 @@ For the human or an orchestrator, in order:
 4. After the branch is reviewed and merged by a person:
    `de-novo skills dryad finish <id> --apply` destroys the env and removes
    only a clean, Dryad-created worktree. Adopted worktrees and all branches
-   are kept. There is no `--force`.
+   are kept. There is no `--force`. The seat's journal moves to the finished
+   archive; `status --finished [<id>]` reads it for a later audit.
 
 A failed `overlay create` leaves the seat with `env: pending`; rerun the same
 `plan --apply` to retry. Dryad never repairs runtime state silently.

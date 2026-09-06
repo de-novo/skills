@@ -8,11 +8,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse, stringify } from 'yaml';
 
-import { parseDryadCliArgs, parseDryadProfile, readDryadState } from '../lib/dryad.mjs';
+import { parseDryadCliArgs, parseDryadProfile, readDryadFinished, readDryadState } from '../lib/dryad.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CLI = path.join(HERE, 'cli.mjs');
 const BACKEND = path.join(HERE, 'fixtures/process-overlay.mjs');
+const SKILL = path.resolve(HERE, '../../skills/dryad/SKILL.md');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function gitIn(cwd, args) {
@@ -154,6 +155,9 @@ test('dryad cli args enforce verb shapes', () => {
   assert.throws(() => parseDryadCliArgs(['plan', 'w1', '--task', 'a', '--task-file', 'b']), /exactly one/);
   assert.throws(() => parseDryadCliArgs(['plan', 'W1', '--task', 'a']), /DNS label/);
   assert.throws(() => parseDryadCliArgs(['seat', 'w1', '--json', '--env']), /at most one/);
+  assert.equal(parseDryadCliArgs(['seat', 'w1', '--task']).format, 'task');
+  assert.equal(parseDryadCliArgs(['status', '--finished']).finished, true);
+  assert.throws(() => parseDryadCliArgs(['finish', 'w1', '--finished']), /not valid for finish/);
   assert.throws(() => parseDryadCliArgs(['report', 'w1']), /requires --status/);
   assert.throws(() => parseDryadCliArgs(['report', 'w1', '--status', 'planned']), /--status must be one of/);
   assert.throws(() => parseDryadCliArgs(['finish', 'w1', '--force']), /not valid for finish/);
@@ -185,10 +189,12 @@ test('plan without --apply creates nothing; with --apply it creates a worktree s
 
   const json = JSON.parse(f.good(['seat', 'w1', '--json']).stdout);
   assert.equal(json.worktree, f.seatPath('w1'));
-  assert.deepEqual(json.env_vars, { DRYAD_ID: 'w1', DRYAD_ENV: '', DRYAD_BRANCH: 'dryad/w1', DRYAD_PROJECT: f.baseline });
+  assert.deepEqual(json.env_vars, { DRYAD_ID: 'w1', DRYAD_ENV: '', DRYAD_BRANCH: 'dryad/w1', DRYAD_PROJECT: f.baseline, DRYAD_SKILL: SKILL });
   assert.equal(json.task, 'add refund endpoint');
+  assert.equal(existsSync(json.skill), true, 'the seat points at a skill file that exists');
+  assert.equal(f.good(['seat', 'w1', '--task']).stdout, 'add refund endpoint\n');
   const envLines = f.good(['seat', 'w1', '--env']).stdout.trim().split('\n');
-  assert.equal(envLines.length, 4);
+  assert.equal(envLines.length, 5);
   assert.ok(envLines.includes('DRYAD_ID=w1'));
 
   // The launcher boundary: the --shell line, executed by a real shell, lands
@@ -198,7 +204,7 @@ test('plan without --apply creates nothing; with --apply it creates a worktree s
   assert.equal(probe.status, 0, probe.stderr);
   const probeLines = probe.stdout.trim().split('\n');
   assert.equal(realpathSync(probeLines[0]), f.seatPath('w1'));
-  assert.deepEqual(probeLines.slice(1), ['DRYAD_BRANCH=dryad/w1', 'DRYAD_ENV=', 'DRYAD_ID=w1', `DRYAD_PROJECT=${f.baseline}`]);
+  assert.deepEqual(probeLines.slice(1), ['DRYAD_BRANCH=dryad/w1', 'DRYAD_ENV=', 'DRYAD_ID=w1', `DRYAD_PROJECT=${f.baseline}`, `DRYAD_SKILL=${SKILL}`]);
 
   // A worker inside the worktree resolves the baseline through DRYAD_PROJECT
   // (the worktree carries its own copy of .agents/).
@@ -214,10 +220,12 @@ test('plan without --apply creates nothing; with --apply it creates a worktree s
   assert.match(blocked.stdout, /seats 1/);
   assert.match(blocked.stdout, /worktrees  1\/1 present/);
   assert.match(blocked.stdout, /problem  w1: blocked/);
+  const doneWithoutSession = f.good(['report', 'w1', '--status', 'working']);
+  assert.doesNotMatch(doneWithoutSession.stderr, /session/);
   f.good(['report', 'w1', '--status', 'done']);
   const clean = f.good(['status', 'w1']);
   assert.match(clean.stdout, /reported   done 1/);
-  assert.equal((clean.stdout.match(/\n  \d{4}-\d{2}-\d{2}T/g) ?? []).length, 4, 'status <id> prints the journal');
+  assert.equal((clean.stdout.match(/\n  \d{4}-\d{2}-\d{2}T/g) ?? []).length, 5, 'status <id> prints the journal');
   const statusJson = JSON.parse(f.good(['status', '--json']).stdout);
   assert.deepEqual(statusJson.problems, []);
   assert.equal(statusJson.seats[0].ahead, 0);
@@ -239,7 +247,17 @@ test('plan without --apply creates nothing; with --apply it creates a worktree s
   assert.equal(existsSync(f.seatPath('w1')), false);
   assert.equal(existsSync(f.stateFile), false);
   assert.equal(gitIn(f.baseline, ['rev-parse', '--verify', 'dryad/w1']).length, 40, 'branch survives finish');
-  t.diagnostic('seat formats 3/3; reports 3/3; dirty finish refused 1/1; clean finish removed 1/1; branch kept 1/1');
+
+  // The journal outlives the seat: finish archives it for a later audit.
+  const archived = readDryadFinished('dryad-test', f.environment).seats;
+  assert.equal(archived.length, 1);
+  assert.equal(archived[0].id, 'w1');
+  assert.equal(archived[0].journal.at(-1).event, 'finish');
+  const finishedReport = f.good(['status', 'w1', '--finished']);
+  assert.match(finishedReport.stdout, /finished seats 1/);
+  assert.match(finishedReport.stdout, /report +blocked: mock schema differs/);
+  assert.equal(JSON.parse(f.good(['status', '--finished', '--json']).stdout).finished.length, 1);
+  t.diagnostic('seat formats 4/4; reports 4/4; dirty finish refused 1/1; clean finish removed 1/1; branch kept 1/1; archived journals 1/1');
 });
 
 test('plan adopts a worktree another launcher created and finish leaves it in place', (t) => {
@@ -254,6 +272,10 @@ test('plan adopts a worktree another launcher created and finish leaves it in pl
   f.bad(['plan', 'w2', '--task', 'x', '--worktree', foreign, '--apply']);
 
   f.good(['plan', 'w2', '--task', 'x', '--worktree', adopted, '--by', 'codex', '--apply']);
+  const noSession = f.good(['report', 'w2', '--status', 'done']);
+  assert.match(noSession.stderr, /no session reference/);
+  const withSession = f.good(['report', 'w2', '--status', 'done', '--session', 'codex-thread-1']);
+  assert.doesNotMatch(withSession.stderr, /no session reference/);
   const seat = f.state().seats.w2;
   assert.equal(seat.owned, false);
   assert.equal(seat.branch, 'feature/x');

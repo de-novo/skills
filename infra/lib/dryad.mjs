@@ -29,8 +29,11 @@ const PROFILE_VERSION = 1;
 const STATE_VERSION = 1;
 const STATUS_VALUES = Object.freeze(['planned', 'working', 'blocked', 'done']);
 const REPORT_VALUES = Object.freeze(['working', 'blocked', 'done']);
-const SEAT_FORMATS = Object.freeze(['json', 'env', 'shell']);
+const SEAT_FORMATS = Object.freeze(['json', 'env', 'shell', 'task']);
 const CLI_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../bin/cli.mjs');
+// The seat carries the path to this skill so a worker can read it without the
+// project vendoring or symlinking the catalog.
+const SKILL_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../skills/dryad/SKILL.md');
 const LOCK_WAIT_MS = 2000;
 
 function isMap(value) {
@@ -152,6 +155,28 @@ function blankState(slug) {
   return { version: STATE_VERSION, project: slug, seats: {} };
 }
 
+export function dryadFinishedPath(slug, environment = process.env) {
+  return path.join(dryadStateDirectory(environment), `${slug}.finished.yml`);
+}
+
+export function readDryadFinished(slug, environment = process.env) {
+  const file = dryadFinishedPath(slug, environment);
+  if (!existsSync(file)) return { file, seats: [] };
+  const doc = parse(readFileSync(file, 'utf8'));
+  if (!isMap(doc) || doc.version !== STATE_VERSION || doc.project !== slug || !Array.isArray(doc.seats)) {
+    fail(`${file}: finished archive must have version ${STATE_VERSION}, project ${JSON.stringify(slug)}, and a seats list.`);
+  }
+  return { file, seats: doc.seats };
+}
+
+// finish drops the seat from the live registry; the record and its journal
+// are appended here so a later audit can still read what happened.
+function archiveFinishedSeat(slug, environment, id, seat) {
+  const { file, seats } = readDryadFinished(slug, environment);
+  seats.push({ id, finished_at: now(), ...seat });
+  atomicWriteFile(file, stringify({ version: STATE_VERSION, project: slug, seats }));
+}
+
 function validateState(state, slug, file) {
   if (!isMap(state) || state.version !== STATE_VERSION || state.project !== slug) {
     fail(`${file}: registry must have version ${STATE_VERSION} and project ${JSON.stringify(slug)}.`);
@@ -183,20 +208,24 @@ export function readDryadState(slug, environment = process.env) {
   return { file, state: validateState(state, slug, file) };
 }
 
+function atomicWriteFile(file, text) {
+  const directory = path.dirname(file);
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  const temporary = path.join(directory, `.${path.basename(file)}.${process.pid}.${randomUUID()}.tmp`);
+  try {
+    writeFileSync(temporary, text, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+    renameSync(temporary, file);
+  } finally {
+    if (existsSync(temporary)) unlinkSync(temporary);
+  }
+}
+
 function atomicWriteState(file, state) {
   if (Object.keys(state.seats).length === 0) {
     if (existsSync(file)) unlinkSync(file);
     return;
   }
-  const directory = path.dirname(file);
-  mkdirSync(directory, { recursive: true, mode: 0o700 });
-  const temporary = path.join(directory, `.${path.basename(file)}.${process.pid}.${randomUUID()}.tmp`);
-  try {
-    writeFileSync(temporary, stringify(state), { encoding: 'utf8', flag: 'wx', mode: 0o600 });
-    renameSync(temporary, file);
-  } finally {
-    if (existsSync(temporary)) unlinkSync(temporary);
-  }
+  atomicWriteFile(file, stringify(state));
 }
 
 function processIsAlive(pid) {
@@ -384,9 +413,9 @@ function overlayProblems(probe) {
 
 const VERBS = Object.freeze({
   plan: { positionals: [1, 1], options: ['task', 'task-file', 'worktree', 'by', 'project'], flags: ['apply'] },
-  seat: { positionals: [1, 1], options: ['project'], flags: ['json', 'env', 'shell'] },
+  seat: { positionals: [1, 1], options: ['project'], flags: ['json', 'env', 'shell', 'task'] },
   report: { positionals: [1, 1], options: ['status', 'note', 'session', 'project'], flags: [] },
-  status: { positionals: [0, 1], options: ['project'], flags: ['json'] },
+  status: { positionals: [0, 1], options: ['project'], flags: ['json', 'finished'] },
   finish: { positionals: [1, 1], options: ['project'], flags: ['apply'] },
 });
 
@@ -434,7 +463,7 @@ export function parseDryadCliArgs(args) {
   }
   if (verb === 'seat') {
     const chosen = SEAT_FORMATS.filter((name) => options[name]);
-    if (chosen.length > 1) fail('seat takes at most one of --json, --env, --shell.');
+    if (chosen.length > 1) fail('seat takes at most one of --json, --env, --shell, --task.');
     options.format = chosen[0] ?? 'text';
   }
   if (verb === 'report') {
@@ -592,6 +621,7 @@ function seatEnvironment(seat, id, project) {
     DRYAD_ENV: seat.env == null || seat.env === 'pending' ? '' : seat.env,
     DRYAD_BRANCH: seat.branch,
     DRYAD_PROJECT: project.root,
+    DRYAD_SKILL: SKILL_PATH,
   };
 }
 
@@ -622,11 +652,15 @@ function runSeat({ options, project, environment }) {
             session: seat.session,
             status: seat.status,
             env_vars: envVars,
+            skill: SKILL_PATH,
           },
           null,
           2
         )
       );
+      break;
+    case 'task':
+      process.stdout.write(seat.task.endsWith('\n') ? seat.task : `${seat.task}\n`);
       break;
     case 'env':
       console.log(Object.entries(envVars).map(([key, value]) => `${key}=${value}`).join('\n'));
@@ -664,10 +698,33 @@ function runReport({ options, project, environment }) {
   console.log(
     [`■ ${project.slug} — seat ${options.id}`, `  status    ${seat.status}`, `  journal   ${seat.journal.length}`].join('\n')
   );
+  if (options.status === 'done' && seat.session == null) {
+    console.error(`dryad: seat ${options.id} has no session reference; if your tool exposes a session id or transcript path, run report --session <ref>.`);
+  }
+  return 0;
+}
+
+function runFinishedStatus({ options, project, environment }) {
+  const { seats } = readDryadFinished(project.slug, environment);
+  const selected = seats.filter((seat) => options.id == null || seat.id === options.id);
+  if (options.id != null && selected.length === 0) fail(`seat ${options.id} is not in the finished archive for ${project.slug}.`);
+  if (options.json) {
+    console.log(JSON.stringify({ project: project.slug, finished: selected }, null, 2));
+    return 0;
+  }
+  const lines = [`■ ${project.slug} — finished seats ${selected.length}`];
+  for (const seat of selected) {
+    lines.push(`  ${seat.id}  ${seat.branch}  ${seat.status}${seat.by ? '  by ' + seat.by : ''}  finished ${seat.finished_at}  journal ${seat.journal.length}`);
+    if (options.id != null) {
+      for (const entry of seat.journal) lines.push(`  ${entry.at}  ${entry.actor.padEnd(5)}  ${entry.event.padEnd(14)}  ${entry.detail}`);
+    }
+  }
+  console.log(lines.join('\n'));
   return 0;
 }
 
 function runStatus({ options, project, environment }) {
+  if (options.finished) return runFinishedStatus({ options, project, environment });
   const { state } = readDryadState(project.slug, environment);
   const entries = Object.entries(state.seats)
     .filter(([id]) => options.id == null || id === options.id)
@@ -825,6 +882,9 @@ function runFinish({ options, project, environment }) {
   }
 
   updateState(project.slug, environment, (current) => {
+    const record = seatOf(current, options.id);
+    journal(record, 'dryad', 'finish', `env ${envResult}; worktree ${worktreeResult}; branch kept ${seat.branch}`);
+    archiveFinishedSeat(project.slug, environment, options.id, record);
     delete current.seats[options.id];
   });
   console.log(
@@ -833,7 +893,7 @@ function runFinish({ options, project, environment }) {
       `  env       ${envResult}`,
       `  worktree  ${worktreeResult}`,
       `  branch    kept ${seat.branch}`,
-      '  seat      removed',
+      '  seat      removed (journal kept in the finished archive; status --finished)',
     ].join('\n')
   );
   return 0;
@@ -863,14 +923,16 @@ export function dryadHelp(cli = 'de-novo skills') {
 
 usage:
   ${cli} dryad plan   ID (--task TEXT | --task-file PATH) [--worktree PATH] [--by LABEL] [--project ROOT] [--apply]
-  ${cli} dryad seat   ID [--json | --env | --shell] [--project ROOT]
+  ${cli} dryad seat   ID [--json | --env | --shell | --task] [--project ROOT]
   ${cli} dryad report ID --status working|blocked|done [--note TEXT] [--session REF] [--project ROOT]
-  ${cli} dryad status [ID] [--json] [--project ROOT]
+  ${cli} dryad status [ID] [--json] [--finished] [--project ROOT]
   ${cli} dryad finish ID [--project ROOT] [--apply]
 
 plan creates a worktree (or adopts --worktree) and, when the runtime profile
 has overlays, calls \`overlay create\`. seat prints the seat for any launcher.
-Workers report their own status. finish destroys the env and removes only a
-clean, Dryad-created worktree; branches are always kept. ROOT defaults to
+Workers report their own status. finish destroys the env, removes only a
+clean, Dryad-created worktree, and keeps the seat's journal in the finished
+archive; branches are always kept. The seat carries DRYAD_SKILL, the path to
+this skill, so a worker can read it from any launcher. ROOT defaults to
 DRYAD_PROJECT, then the nearest .agents/dryad-profile.yml above the cwd.`;
 }

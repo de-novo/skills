@@ -41,15 +41,17 @@ is set). One record per seat: worktree, `owned` (created by Dryad or
 adopted), branch, base commit, task, env (`null`, `pending`, or the env
 name), `by`, `session`, `status`, and an append-only `journal` of what Dryad
 did and what the worker reported. The registry mirrors state; it does not
-repair it.
+repair it. `finish` moves the record to `<slug>.finished.yml` next to it;
+`status --finished` reads that archive. It grows without bound; trim it by
+hand when it stops being useful.
 
 ## CLI
 
 ```text
 de-novo skills dryad plan   ID (--task TEXT | --task-file PATH) [--worktree PATH] [--by LABEL] [--apply]
-de-novo skills dryad seat   ID [--json | --env | --shell]
+de-novo skills dryad seat   ID [--json | --env | --shell | --task]
 de-novo skills dryad report ID --status working|blocked|done [--note TEXT] [--session REF]
-de-novo skills dryad status [ID] [--json]
+de-novo skills dryad status [ID] [--json] [--finished]
 de-novo skills dryad finish ID [--apply]
 ```
 
@@ -59,7 +61,7 @@ de-novo skills dryad finish ID [--apply]
 | seat | always read-only: the seat for a launcher | — |
 | report | always writes the worker's status and a journal line | — |
 | status | always read-only: counts and problems; non-zero on any problem. Another seat's in-flight overlay mutation is shown as `in-flight`, not counted as a problem; a stalled one is | — |
-| finish | prints what would be destroyed or removed | `overlay destroy`, remove a clean Dryad-created worktree, drop the seat; branches kept |
+| finish | prints what would be destroyed or removed | `overlay destroy`, remove a clean Dryad-created worktree, move the seat and its journal to `<slug>.finished.yml`; branches kept |
 
 `--project ROOT` names the baseline checkout. Omitted, Dryad uses
 `DRYAD_PROJECT`, then the nearest `.agents/dryad-profile.yml` above the cwd.
@@ -67,8 +69,10 @@ A worker inside a worktree must rely on `DRYAD_PROJECT`, because the worktree
 carries its own copy of `.agents/`.
 
 Seat environment: `DRYAD_ID`, `DRYAD_ENV` (empty without overlays),
-`DRYAD_BRANCH`, `DRYAD_PROJECT`. The task text is not an environment
-variable; launchers read it from `seat --json`.
+`DRYAD_BRANCH`, `DRYAD_PROJECT`, and `DRYAD_SKILL` (the path to this skill's
+SKILL.md inside the installed catalog, so the project need not vendor or
+symlink it). The task text is not an environment variable; launchers read it
+from `seat --json` or `seat --task`.
 
 ## Handing a seat to a launcher
 
@@ -81,7 +85,14 @@ de-novo skills dryad plan w2 --worktree <path-the-launcher-made> --task-file tas
 
 # a script
 de-novo skills dryad seat w3 --json | my-launcher --stdin
+
+# an agent CLI that takes the first prompt as an argument
+eval "$(de-novo skills dryad seat w1 --shell)" && <agent> "$(de-novo skills dryad seat w1 --task)"
 ```
+
+First-run prompts belong to the launcher. Claude Code and Codex both ask
+whether to trust a directory the first time they open it; a person or the
+launcher answers that, not Dryad.
 
 ## Apply to a project
 

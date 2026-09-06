@@ -357,9 +357,29 @@ attach하는 검증은 Grove의 병렬 overlay가 이미 잰 경로 위에 있�
 각 단계가 PR 하나다. PR 설명에 후보 SHA, 실행한 명령, 센 결과, 빨개진 테스트
 수를 적는다.
 
+## 첫 실전(2026-09-06)에서 나온 개선
+
+두 실제 프로젝트 시험(임시 저장소, 그리고 브랜드 사이트 저장소의 자리 다섯 개)
+뒤에 넣은 것. 근거는 [증거 기록](evidence/2026-09-06-dryad.md)에 있다.
+
+- `seat`가 `DRYAD_SKILL`(카탈로그 안 SKILL.md 경로)을 내준다. 심링크를 뺀 워크트리에서
+  작업자가 스킬에 닿을 길이 없었다.
+- `seat --task`. 런처 명령이 `$(cat 파일)` 없이 한 줄이 된다.
+- finish가 저널을 `<slug>.finished.yml`로 옮기고 `status --finished`가 읽는다. 감사
+  시점에 이미 finish한 자리의 저널이 없어 대화 기록에 의존해야 했다.
+- `report done`에 session이 없으면 한 줄 알림. 자리 다섯 중 다섯이 남기지 않았다.
+- 규칙 1은 "읽기는 되고 쓰기는 안 된다", 규칙 5는 "done 전에 확인"으로 고쳤다.
+
+철회한 후보: 자리별 포트 배정. overlay 없는 프로젝트에서 자리마다 dev 서버 포트를
+손으로 나눠야 했지만, 답은 포트가 아니라 overlay 어댑터와 이름이다.
+
 ## 두 번째 판에서 고려할 것
 
 seat 계약이 굳은 뒤에만 본다. 첫 판에는 없다.
+
+- **완료 대기.** 오케스트레이터는 `status --json`을 폴링해 `done`을 기다린다.
+  `dryad wait <id> --for done|blocked --timeout`이 편하지만 "Dryad는 감독하지
+  않는다"는 경계에 닿는다. 폴링이 실제로 불편해지면 그때 본다.
 
 - **ACP 클라이언트 내장.** 문서화된 공통 기계 인터페이스는 ACP뿐이다. 내장
   런처가 필요해지면 `session/new`, `session/prompt`, `session/request_permission`을
