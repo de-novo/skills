@@ -32,6 +32,9 @@ the record is not operating authority.
   observed behavior, failed attempts, commands, and measurement boundaries.
 - [Parallel worktree experiment](evaluation/2026-09-05-worktree-evaluation.md):
   source changes and lifecycle operations from separate Git worktrees.
+- [Dryad and status extensions](evidence/2026-09-06-dryad.md): seats on real
+  worktrees, concurrent attach through the process backend, in-flight and
+  stalled labels, `status --json`, and the guard-reversal counts.
 
 Published evidence uses repository-owned synthetic applications. Private project
 identities, configuration, source fingerprints, and adoption history do not

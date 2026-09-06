@@ -152,7 +152,7 @@ and lease registry. An overlay-enabled project declares
 `runtime.commands.overlay`; operate it only through the CLI:
 
 ```bash
-de-novo skills overlay status --project <project-root>
+de-novo skills overlay status --project <project-root>          # add --json for tools
 de-novo skills overlay touch <env> --project <project-root>
 de-novo skills overlay prune --project <project-root>           # plan
 de-novo skills overlay prune --project <project-root> --apply   # destroy stale leases
