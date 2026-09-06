@@ -58,7 +58,7 @@ de-novo skills dryad finish ID [--apply]
 | plan | prints worktree, branch, base, env; creates nothing | `git worktree add` (or adopt `--worktree`), `overlay create` when the profile has overlays, register the seat |
 | seat | always read-only: the seat for a launcher | — |
 | report | always writes the worker's status and a journal line | — |
-| status | always read-only: counts and problems; non-zero on any problem | — |
+| status | always read-only: counts and problems; non-zero on any problem. Another seat's in-flight overlay mutation is shown as `in-flight`, not counted as a problem; a stalled one is | — |
 | finish | prints what would be destroyed or removed | `overlay destroy`, remove a clean Dryad-created worktree, drop the seat; branches kept |
 
 `--project ROOT` names the baseline checkout. Omitted, Dryad uses

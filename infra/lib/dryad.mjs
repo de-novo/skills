@@ -32,6 +32,11 @@ const REPORT_VALUES = Object.freeze(['working', 'blocked', 'done']);
 const SEAT_FORMATS = Object.freeze(['json', 'env', 'shell']);
 const CLI_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../bin/cli.mjs');
 const OVERLAY_ENV_LINE = /^  ([a-z0-9-]+)  (?:active|stale)  idle /;
+const OVERLAY_PENDING_LINE = /^  pending-item  (\S+ ([a-z0-9-]+)(?:\/\S+)?)  (in-flight|stalled|unknown)/;
+const OVERLAY_DRIFT_LINE = /^  drift-item  (([a-z0-9-]+)(?:\/[^:]+)?: .+)$/;
+const OVERLAY_STALE_LINE = /^  stale\s+(\d+)/;
+const OVERLAY_PROJECT_STATUS_LINE = /^  project-status  (\d)\/1/;
+const OVERLAY_DRIFT_COUNT_LINE = /^  drift\s+(\d+|notMeasured)/;
 const LOCK_WAIT_MS = 2000;
 
 function isMap(value) {
@@ -334,14 +339,43 @@ function relayFailure(label, result) {
   console.error(`dryad: ${label} exited ${result.status}.`);
 }
 
-function trackedOverlayEnvs(project, environment) {
-  const result = grove(['status'], project, environment);
-  const envs = new Set();
-  for (const line of result.stdout.split('\n')) {
-    const match = OVERLAY_ENV_LINE.exec(line);
-    if (match) envs.add(match[1]);
+// Reads Grove's text report. Dryad does not open Grove's registry; the
+// public CLI output is the seam, and these lines are the contract's.
+export function parseOverlayStatus(stdout) {
+  const probe = { envs: new Set(), pending: [], drift: [], stale: 0, projectStatusOk: false, driftNotMeasured: true };
+  for (const line of stdout.split('\n')) {
+    let match;
+    if ((match = OVERLAY_ENV_LINE.exec(line))) probe.envs.add(match[1]);
+    else if ((match = OVERLAY_PENDING_LINE.exec(line))) probe.pending.push({ target: match[1], env: match[2], state: match[3] });
+    else if ((match = OVERLAY_DRIFT_LINE.exec(line))) probe.drift.push({ text: match[1], env: match[2] });
+    else if ((match = OVERLAY_STALE_LINE.exec(line))) probe.stale = Number(match[1]);
+    else if ((match = OVERLAY_PROJECT_STATUS_LINE.exec(line))) probe.projectStatusOk = match[1] === '1';
+    else if ((match = OVERLAY_DRIFT_COUNT_LINE.exec(line))) probe.driftNotMeasured = match[1] === 'notMeasured';
   }
-  return { ok: result.status === 0, envs, result };
+  return probe;
+}
+
+function probeOverlay(project, environment) {
+  const result = grove(['status'], project, environment);
+  return { ok: result.status === 0, ...parseOverlayStatus(result.stdout), result };
+}
+
+// Grove returns non-zero for any pending journal. An in-flight one is another
+// seat's work in progress, not a problem for the person counting seats; drift
+// on that same environment is the mutation mid-way. Everything else stands.
+function overlayProblems(probe) {
+  if (probe.ok) return [];
+  const problems = [];
+  const busy = new Set(probe.pending.filter((item) => item.state === 'in-flight').map((item) => item.env));
+  if (!probe.projectStatusOk) problems.push('overlay project status failed');
+  if (probe.driftNotMeasured) problems.push('overlay drift notMeasured');
+  if (probe.stale > 0) problems.push(`overlay stale envs ${probe.stale}`);
+  for (const item of probe.pending) {
+    if (item.state !== 'in-flight') problems.push(`overlay pending ${item.state}: ${item.target}; rerun it with --apply`);
+  }
+  for (const item of probe.drift) if (!busy.has(item.env)) problems.push(`overlay drift: ${item.text}`);
+  if (problems.length === 0 && busy.size === 0) problems.push('overlay status returned non-zero');
+  return problems;
 }
 
 // --------------------------------------------------------------- cli args
@@ -641,12 +675,12 @@ function runStatus({ options, project, environment }) {
   const problems = [];
   const wantsEnv = entries.filter(([, seat]) => seat.env != null);
   let tracked = null;
-  let groveOk = true;
+  let busy = new Set();
   if (project.overlayActive && (wantsEnv.length > 0 || options.id == null)) {
-    const probe = trackedOverlayEnvs(project, environment);
+    const probe = probeOverlay(project, environment);
     tracked = probe.envs;
-    groveOk = probe.ok;
-    if (!groveOk) problems.push('overlay status returned non-zero');
+    busy = new Set(probe.pending.filter((item) => item.state === 'in-flight').map((item) => item.env));
+    problems.push(...overlayProblems(probe));
   }
 
   const rows = entries.map(([id, seat]) => {
@@ -654,7 +688,10 @@ function runStatus({ options, project, environment }) {
     const ahead = present ? gitAhead(seat.base, seat.worktree) : null;
     let envState = 'none';
     if (seat.env === 'pending') envState = 'pending';
-    else if (seat.env != null) envState = tracked == null ? 'notMeasured' : tracked.has(seat.env) ? 'tracked' : 'missing';
+    else if (seat.env != null) {
+      envState = tracked == null ? 'notMeasured' : tracked.has(seat.env) ? 'tracked' : 'missing';
+      if (busy.has(seat.env)) envState = 'in-flight';
+    }
     if (!present) problems.push(`${id}: worktree missing ${seat.worktree}`);
     if (envState === 'missing') problems.push(`${id}: env ${seat.env} not tracked by overlay status`);
     if (envState === 'pending') problems.push(`${id}: env pending; rerun plan --apply`);
@@ -670,7 +707,8 @@ function runStatus({ options, project, environment }) {
     seats: rows.length,
     worktrees_present: rows.filter((row) => row.present).length,
     envs_wanted: wantsEnv.length,
-    envs_tracked: rows.filter((row) => row.envState === 'tracked').length,
+    envs_tracked: rows.filter((row) => row.envState === 'tracked' || row.envState === 'in-flight').length,
+    envs_in_flight: rows.filter((row) => row.envState === 'in-flight').length,
     reported: Object.fromEntries(STATUS_VALUES.map((value) => [value, rows.filter((row) => row.seat.status === value).length])),
   };
 
@@ -711,7 +749,7 @@ function runStatus({ options, project, environment }) {
     `■ ${project.slug} — seats ${counts.seats}`,
     `  worktrees  ${counts.worktrees_present}/${counts.seats} present`,
     project.overlayActive
-      ? `  envs       ${counts.envs_tracked}/${counts.envs_wanted} tracked${tracked == null ? ' (notMeasured)' : ''}`
+      ? `  envs       ${counts.envs_tracked}/${counts.envs_wanted} tracked${tracked == null ? ' (notMeasured)' : ''}${counts.envs_in_flight > 0 ? `, ${counts.envs_in_flight} in-flight` : ''}`
       : '  envs       none (overlay inactive)',
     `  reported   ${reported || 'none'}`,
   ];

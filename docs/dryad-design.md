@@ -298,14 +298,24 @@ plan → 런처로 넘김 → status로 셈 → finish. 각 명령 한 줄과 �
 - 병합, 푸시, 리뷰를 하지 않는다.
 - 성공은 센 것이다. `seats n`, `worktrees n/n`, `envs n/n`, `reported …`.
 
-## Grove 쪽 선행 조건
+## Grove 쪽 상태 (2026-09-06 확인, 정정)
 
-2026-09-05 [워크트리 실험](evaluation/2026-09-05-worktree-evaluation.md)이 짚은
-문제가 그대로 남아 있다. 다른 자리가 정상 진행 중인 overlay 작업과, 중단되어
-복구가 필요한 작업이 호출자에게 같은 복구 요구로 보인다. 두 자리가 동시에
-attach하는 순간 이 문제를 만난다. Dryad는 이 구분을 Grove가 제공한다고
-전제하고 설계한다. Grove 집에서 먼저 고치고 재야 두 자리 동시 검증이 잰 것이 된다.
-plan/seat/report/status/finish는 이 문제와 무관하게 잴 수 있다.
+이 문서의 첫 판은 2026-09-05 [워크트리 실험](evaluation/2026-09-05-worktree-evaluation.md)이
+짚은 "진행 중과 중단을 구분 못 함" 문제가 남아 있다고 적었다. 틀렸다. 그 실험은
+수정 전 진단이고, 수정은 [병렬 실행 변경 증거](evidence/2026-09-05-overlay-parallel.md)와
+`infra/bin/overlay-parallel.test.mjs`로 이미 잰 뒤 `b794a82`에 들어갔다. 현재
+Grove는 pending을 env별로 기록하고 env별 락을 잡으므로, 서로 다른 env는 서로를
+막지 않는다. Dryad는 자리 id를 env 이름으로 쓰므로 두 자리가 같은 env를 건드릴
+일이 없다. **두 자리의 동시 attach는 Grove 쪽 선행 조건 없이 잴 수 있다.**
+
+남은 것은 차단이 아니라 보고다. Grove는 정상 진행 중인 applied mutation에서도
+dispatch 전에 pending을 쓰고 관측 후에 지운다. 전체 `overlay status`는 그동안
+`pending 1`과 종료 코드 1을 돌려주며, pending이 살아 있는 프로세스의 것인지
+중단된 것인지 말하지 않는다. Dryad `status`는 이것을 "overlay status returned
+non-zero" 문제로 센다. 자리 하나가 attach 중인 동안 다른 자리를 세는 사람에게는
+거짓 경보다. 고치는 자리는 Grove 집이다. env 락 파일의 소유 pid가 살아 있으면
+`pending-item … in-flight`, 아니면 `stalled`로 표시하면 Dryad는 in-flight를 문제로
+세지 않을 수 있다. 종료 코드 계약은 그대로 둔다.
 
 ## 측정 계획
 
@@ -327,8 +337,9 @@ plan/seat/report/status/finish는 이 문제와 무관하게 잴 수 있다.
 | 두 자리 동시 plan `--apply` | 워크트리 2/2, env 2/2, 레지스트리에 둘 다 |
 
 "런처에 넘긴다"는 경계는 `--shell` 검사가 잰다. 실제 도구(claude, codex 등)를
-띄우는 것은 Dryad 밖이므로 `notMeasured`가 아니라 범위 밖이다. 워크트리 실험
-하네스를 자리 두 개로 확장해 동시 검증을 재는 것은 Grove 선행 조건이 풀린 뒤다.
+띄우는 것은 Dryad 밖이므로 `notMeasured`가 아니라 범위 밖이다. 두 자리가 동시에
+attach하는 검증은 Grove의 병렬 overlay가 이미 잰 경로 위에 있으므로 지금 잴 수
+있고, 아직 안 쟀다.
 
 새 가드마다 프로덕션 변경을 되돌려 테스트가 빨개지는 것을 보고 복구한다.
 빨개진 수를 PR에 적는다.
@@ -340,7 +351,8 @@ plan/seat/report/status/finish는 이 문제와 무관하게 잴 수 있다.
 3. `finish`. 테스트.
 4. `skills/dryad/SKILL.md`, `README.md`, `examples/`, `.agents/skills/dryad`
    심링크, 루트 README 행. catalog 절차대로.
-5. Grove 선행 조건 해결 후 동시 검증 하네스.
+5. 두 자리 동시 attach 하네스. Grove `overlay status`의 in-flight/stalled 표시는
+   별도 Grove PR.
 
 각 단계가 PR 하나다. PR 설명에 후보 SHA, 실행한 명령, 센 결과, 빨개진 테스트
 수를 적는다.

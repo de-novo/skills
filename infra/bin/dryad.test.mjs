@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -12,6 +13,7 @@ import { parseDryadCliArgs, parseDryadProfile, readDryadState } from '../lib/dry
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CLI = path.join(HERE, 'cli.mjs');
 const BACKEND = path.join(HERE, 'fixtures/process-overlay.mjs');
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function gitIn(cwd, args) {
   const result = spawnSync(
@@ -69,13 +71,54 @@ function fixture(t, { overlay = false, worktrees = true } = {}) {
     assert.notEqual(result.status, 0, `${args.join(' ')} unexpectedly succeeded\n${result.stdout}`);
     return result;
   };
+  const images = [];
+  if (overlay) {
+    const artifacts = {};
+    for (const revision of ['a', 'b']) {
+      const source = `// ${revision}\n` + readFileSync(path.join(HERE, 'fixtures/process-workload.mjs'), 'utf8');
+      const image = `process/api@sha256:${createHash('sha256').update(source).digest('hex')}`;
+      const file = path.join(root, `${revision}.mjs`);
+      writeFileSync(file, source);
+      artifacts[image] = file;
+      images.push(image);
+    }
+    writeFileSync(path.join(root, 'artifacts.json'), JSON.stringify(artifacts));
+  }
+  const children = new Set();
+  const gate = (verb, env) => path.join(root, `gate-${verb}-${env}`);
+  const enter = async (verb, env) => {
+    const deadline = Date.now() + 5000;
+    while (!existsSync(gate(verb, env) + '.entered') && Date.now() < deadline) await sleep(10);
+    assert.ok(existsSync(gate(verb, env) + '.entered'), `${verb} ${env} reached the backend`);
+  };
+  const launchOverlay = (args, cwd) =>
+    new Promise((resolve) => {
+      const child = spawn(process.execPath, [CLI, 'overlay', ...args, '--project', baseline], { cwd, env: environment, stdio: ['ignore', 'pipe', 'pipe'] });
+      children.add(child);
+      let stdout = ''; let stderr = '';
+      child.stdout.on('data', (value) => { stdout += value; });
+      child.stderr.on('data', (value) => { stderr += value; });
+      child.once('exit', (status) => { children.delete(child); resolve({ status, stdout, stderr }); });
+    });
   const state = () => readDryadState('dryad-test', environment).state;
   const stateFile = path.join(stateDir, 'dryads', 'dryad-test.yml');
   const groveStateFile = path.join(stateDir, 'dryad-test.yml');
   const seatPath = (id) => path.join(root, 'seats', id);
 
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  return { root, baseline, head, environment, run, good, bad, state, stateFile, groveStateFile, seatPath };
+  t.after(async () => {
+    for (const verb of ['create', 'attach', 'destroy']) for (const env of ['w1', 'w2', 'w3']) rmSync(gate(verb, env), { force: true });
+    for (const child of children) child.kill('SIGTERM');
+    for (const env of ['w1', 'w2', 'w3']) {
+      const endpoint = path.join(root, env, 'endpoint.json');
+      if (existsSync(endpoint)) {
+        const { pid, url } = JSON.parse(readFileSync(endpoint, 'utf8'));
+        try { await fetch(url + '/shutdown', { method: 'POST', signal: AbortSignal.timeout(1000) }); }
+        catch { try { process.kill(pid, 'SIGTERM'); } catch {} }
+      }
+    }
+    rmSync(root, { recursive: true, force: true });
+  });
+  return { root, baseline, head, environment, run, good, bad, state, stateFile, groveStateFile, seatPath, images, gate, enter, launchOverlay };
 }
 
 test('dryad profile parser accepts the documented shape and rejects unknown keys and placeholders', () => {
@@ -264,7 +307,6 @@ test('with overlays, plan creates the env through Grove, a failed create stays p
 
 test('two seats plan concurrently without clobbering each other', async (t) => {
   const f = fixture(t);
-  const { spawn } = await import('node:child_process');
   const launch = (id) =>
     new Promise((resolve) => {
       const child = spawn(process.execPath, [CLI, 'dryad', 'plan', id, '--task', id, '--apply'], { cwd: f.baseline, env: f.environment, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -280,4 +322,45 @@ test('two seats plan concurrently without clobbering each other', async (t) => {
   assert.match(status.stdout, /seats 2/);
   assert.match(status.stdout, /worktrees  2\/2 present/);
   t.diagnostic('concurrent plans 2/2; seats registered 2/2');
+});
+
+test('two seats attach concurrently; an in-flight attach is not a problem for status, a stalled one is', async (t) => {
+  const f = fixture(t, { overlay: true });
+  for (const id of ['w1', 'w2']) f.good(['plan', id, '--task', id, '--apply']);
+  const worker = (id) => ({ cwd: f.seatPath(id), env: { DRYAD_PROJECT: f.baseline } });
+
+  writeFileSync(f.gate('attach', 'w1'), 'hold w1 mid-attach');
+  const held = f.launchOverlay(['attach', 'w1', 'api', '--image', f.images[0], '--apply'], f.seatPath('w1'));
+  await f.enter('attach', 'w1');
+  const other = await f.launchOverlay(['attach', 'w2', 'api', '--image', f.images[1], '--apply'], f.seatPath('w2'));
+  assert.equal(other.status, 0, other.stderr);
+  const during = f.good(['status'], worker('w2'));
+  assert.match(during.stdout, /envs       2\/2 tracked, 1 in-flight/);
+  assert.match(during.stdout, /env w1 in-flight/);
+  assert.match(during.stdout, /env w2 tracked/);
+  const duringJson = JSON.parse(f.good(['status', '--json'], worker('w2')).stdout);
+  assert.deepEqual(duringJson.problems, []);
+  rmSync(f.gate('attach', 'w1'));
+  const released = await held;
+  assert.equal(released.status, 0, released.stderr);
+  const after = f.good(['status']);
+  assert.match(after.stdout, /envs       2\/2 tracked$/m);
+  const grove = parse(readFileSync(f.groveStateFile, 'utf8'));
+  assert.equal(grove.envs.w1.services.api.image, f.images[0]);
+  assert.equal(grove.envs.w2.services.api.image, f.images[1]);
+
+  const fault = path.join(f.root, 'fail-attach-w2');
+  writeFileSync(fault, 'interrupt after mutation');
+  const broken = await f.launchOverlay(['attach', 'w2', 'api', '--image', f.images[0], '--apply'], f.seatPath('w2'));
+  assert.notEqual(broken.status, 0);
+  const stalled = f.bad(['status']);
+  assert.match(stalled.stdout, /problem  overlay pending stalled: attach w2\/api; rerun it with --apply/);
+  rmSync(fault);
+  const recovered = await f.launchOverlay(['attach', 'w2', 'api', '--image', f.images[0], '--apply'], f.seatPath('w2'));
+  assert.equal(recovered.status, 0, recovered.stderr);
+  f.good(['status']);
+
+  for (const id of ['w1', 'w2']) f.good(['finish', id, '--apply']);
+  assert.equal(existsSync(f.stateFile), false);
+  t.diagnostic('concurrent attaches 2/2; in-flight tolerated 1/1; stalled flagged 1/1; recovered 1/1; finished 2/2');
 });
