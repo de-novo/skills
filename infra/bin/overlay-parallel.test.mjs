@@ -186,6 +186,10 @@ test('status labels a pending operation in-flight while its lock owner lives and
   const inFlight = f.run(['status']);
   assert.notEqual(inFlight.status, 0, 'exit code contract unchanged while pending');
   assert.match(inFlight.stdout, /pending-item  attach w1\/api  in-flight pid \d+/);
+  const inFlightJson = JSON.parse(f.run(['status', '--json']).stdout);
+  assert.equal(inFlightJson.ok, false);
+  assert.equal(inFlightJson.pending[0].liveness, 'in-flight');
+  assert.ok(Number.isInteger(inFlightJson.pending[0].pid) && inFlightJson.pending[0].pid > 0);
   rmSync(f.gate('attach', 'w1'));
   const finished = await job; assert.equal(finished.status, 0, finished.stderr);
   f.good(['status']);

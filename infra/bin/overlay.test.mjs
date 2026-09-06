@@ -18,6 +18,7 @@ import { parse, stringify } from 'yaml';
 
 import {
   parseDuration,
+  parseOverlayCliArgs,
   splitOverlayCommand,
   staleOverlayEnvironments,
 } from '../lib/overlay.mjs';
@@ -601,4 +602,34 @@ test('status without runtime inventory is non-zero', (t) => {
   const result = run(fixture, ['status'], { GROVE_OVERLAY_STUB_OMIT_INVENTORY: 'true' });
   assert.notEqual(result.status, 0);
   assert.match(result.stdout, /drift {9}notMeasured/);
+});
+
+test('status --json reports environments, pending liveness and drift as data with the text verdict', (t) => {
+  const fixture = projectFixture(t);
+  assert.throws(() => parseOverlayCliArgs(['create', 'w1', '--json']), /--json is valid only for status/);
+  assert.equal(run(fixture, ['create', 'w1', '--apply']).status, 0);
+  const clean = run(fixture, ['status', '--json']);
+  assert.equal(clean.status, 0, clean.stderr);
+  const report = JSON.parse(clean.stdout);
+  assert.equal(report.ok, true);
+  assert.equal(report.scope, null);
+  assert.deepEqual(report.environments.map((entry) => entry.env), ['w1']);
+  assert.equal(report.environments[0].stale, false);
+  assert.deepEqual(report.environments[0].services, []);
+  assert.deepEqual(report.pending, []);
+  assert.deepEqual(report.drift, []);
+  assert.equal(report.project_status.ok, true);
+  assert.equal(report.counts.environments, 1);
+
+  const interrupted = run(fixture, ['create', 'w2', '--apply'], { GROVE_OVERLAY_STUB_FAIL_AFTER_MUTATION: 'true' });
+  assert.notEqual(interrupted.status, 0);
+  const pending = run(fixture, ['status', '--json']);
+  assert.notEqual(pending.status, 0);
+  const stalled = JSON.parse(pending.stdout);
+  assert.equal(stalled.ok, false);
+  assert.equal(stalled.counts.pending, 1);
+  assert.deepEqual([stalled.pending[0].verb, stalled.pending[0].env, stalled.pending[0].liveness, stalled.pending[0].pid], ['create', 'w2', 'stalled', null]);
+  const text = run(fixture, ['status']);
+  assert.equal(text.status, pending.status, 'json and text share the exit code');
+  t.diagnostic('json reports 2/2; verdict parity 1/1; --json rejected off status 1/1');
 });

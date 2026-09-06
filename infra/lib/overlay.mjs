@@ -152,6 +152,7 @@ export function parseOverlayCliArgs(args) {
   let image = null;
   let staleAfter = null;
   let apply = false;
+  let json = false;
   let afterSeparator = false;
   const remaining = [];
   const explicitPassthrough = [];
@@ -189,6 +190,11 @@ export function parseOverlayCliArgs(args) {
       apply = true;
       continue;
     }
+    if (arg === '--json') {
+      if (json) fail('--json may be passed only once.');
+      json = true;
+      continue;
+    }
     remaining.push(arg);
   }
 
@@ -212,6 +218,7 @@ export function parseOverlayCliArgs(args) {
   if (['status', 'touch'].includes(verb) && apply) {
     fail(`--apply is not valid for ${verb}.`);
   }
+  if (json && verb !== 'status') fail('--json is valid only for status.');
   if (verb === 'touch' && passthrough.length > 0) {
     fail('touch does not dispatch project-specific arguments.');
   }
@@ -226,6 +233,7 @@ export function parseOverlayCliArgs(args) {
     image,
     staleAfter,
     apply,
+    json,
     passthrough,
   };
 }
@@ -975,31 +983,37 @@ function compareInventory(state, runtime, onlyEnv = null) {
     const local = registry.get(env);
     const remote = runtime.get(env);
     if (!local) {
-      drift.push(`${env}: runtime environment is untracked`);
+      drift.push({ env, service: null, message: 'runtime environment is untracked' });
       continue;
     }
     if (!remote) {
-      drift.push(`${env}: registry entry is missing at runtime`);
+      drift.push({ env, service: null, message: 'registry entry is missing at runtime' });
       continue;
     }
     const localNames = [...local.keys()].sort();
     const remoteNames = [...remote.keys()].sort();
     if (JSON.stringify(localNames) !== JSON.stringify(remoteNames)) {
-      drift.push(
-        `${env}: services differ (registry ${localNames.join(',') || '-'}; runtime ${remoteNames.join(',') || '-'})`
-      );
+      drift.push({
+        env,
+        service: null,
+        message: `services differ (registry ${localNames.join(',') || '-'}; runtime ${remoteNames.join(',') || '-'})`,
+      });
     }
     for (const name of localNames) {
       if (!remote.has(name)) continue;
       const observed = remote.get(name);
       if (observed == null) {
-        drift.push(`${env}/${name}: runtime image and readiness notMeasured`);
+        drift.push({ env, service: name, message: 'runtime image and readiness notMeasured' });
       } else if (observed.image !== local.get(name).image || !observed.ready) {
-        drift.push(`${env}/${name}: runtime image differs or service is not ready`);
+        drift.push({ env, service: name, message: 'runtime image differs or service is not ready' });
       }
     }
   }
   return drift;
+}
+
+function formatDrift(item) {
+  return `${item.env}${item.service ? `/${item.service}` : ''}: ${item.message}`;
 }
 
 function resolveStalePolicy(options, profile, required) {
@@ -1022,10 +1036,18 @@ function pendingLiveness(file, env) {
   try {
     owner = JSON.parse(readFileSync(lock, 'utf8'));
   } catch {
-    return 'stalled';
+    return { liveness: 'stalled', pid: null };
   }
-  if (owner?.host !== hostname() || !Number.isInteger(owner.pid) || owner.pid <= 0) return 'unknown';
-  return processIsAlive(owner.pid) ? `in-flight pid ${owner.pid}` : 'stalled';
+  if (owner?.host !== hostname() || !Number.isInteger(owner.pid) || owner.pid <= 0) {
+    return { liveness: 'unknown', pid: null };
+  }
+  return processIsAlive(owner.pid)
+    ? { liveness: 'in-flight', pid: owner.pid }
+    : { liveness: 'stalled', pid: null };
+}
+
+function formatLiveness({ liveness, pid }) {
+  return pid == null ? liveness : `${liveness} pid ${pid}`;
 }
 
 function runStatus({ options, profile, projectRoot, environment }) {
@@ -1042,6 +1064,8 @@ function runStatus({ options, profile, projectRoot, environment }) {
       apply: false,
       expected: {},
       environment,
+      // JSON mode owns stdout; the project receipt is folded into the report.
+      relay: !options.json,
     });
   } catch (error) {
     runtimeError = error;
@@ -1072,6 +1096,58 @@ function runStatus({ options, profile, projectRoot, environment }) {
   const drift = compareInventory(state, runtimeInventory, options.env);
   const pending = Object.values(state.pending_by_env).filter(item => options.env == null || item.env === options.env);
 
+  const exitCode =
+    pending.length === 0 && runtimeError == null && stale.length === 0 && drift != null && drift.length === 0 ? 0 : 1;
+  const staleEnvs = new Set(stale.map((entry) => entry.env));
+  const sortedEntries = selectedEntries.sort(([left], [right]) => left.localeCompare(right));
+  const pendingReport = pending.map((item) => ({ item, ...pendingLiveness(file, item.env) }));
+
+  if (options.json) {
+    const report = {
+      ok: exitCode === 0,
+      project: profile.project.slug,
+      scope: options.env ?? null,
+      stale_after: policy ? policy.value : null,
+      project_status: { ok: runtimeError == null, error: runtimeError == null ? null : runtimeError.message },
+      counts: {
+        environments: sortedEntries.length,
+        attachments,
+        pending: pending.length,
+        stale: stale.length,
+        drift: drift == null ? null : drift.length,
+      },
+      environments: sortedEntries.map(([env, record]) => ({
+        env,
+        stale: staleEnvs.has(env),
+        created_at: record.created_at ?? null,
+        last_used_at: record.last_used_at,
+        idle_ms: Math.max(0, now - Date.parse(record.last_used_at)),
+        owner: record.agent ?? null,
+        worktree: record.worktree ?? null,
+        services: Object.entries(record.services).map(([service, spec]) => ({
+          service,
+          image: spec.image,
+          upstream: spec.upstream ?? null,
+          attached_at: spec.attached_at ?? null,
+        })),
+      })),
+      pending: pendingReport.map(({ item, liveness, pid }) => ({
+        verb: item.verb,
+        env: item.env,
+        service: item.service ?? null,
+        image: item.image ?? null,
+        started_at: item.started_at,
+        worktree: item.worktree ?? null,
+        agent: item.agent ?? null,
+        liveness,
+        pid,
+      })),
+      drift,
+    };
+    console.log(JSON.stringify(report, null, 2));
+    return exitCode;
+  }
+
   const lines = [
     `■ ${profile.project.slug} — overlay lifecycle`,
     `  environments  ${selectedEntries.length}`,
@@ -1083,21 +1159,16 @@ function runStatus({ options, profile, projectRoot, environment }) {
     runtimeError == null ? '  project-status  1/1' : '  project-status  0/1',
     drift == null ? '  drift         notMeasured' : `  drift         ${drift.length}`,
   ];
-  for (const [env, record] of selectedEntries.sort(([left], [right]) => left.localeCompare(right))) {
-    const staleLabel = stale.some((entry) => entry.env === env) ? 'stale' : 'active';
+  for (const [env, record] of sortedEntries) {
+    const staleLabel = staleEnvs.has(env) ? 'stale' : 'active';
     lines.push(
       `  ${env}  ${staleLabel}  idle ${formatAge(record.last_used_at, now)}  services ${Object.keys(record.services).length}  owner ${record.agent ?? 'unknown'}`
     );
   }
-  for (const item of pending) lines.push(`  pending-item  ${operationTarget(item)}  ${pendingLiveness(file, item.env)}`);
-  for (const item of drift ?? []) lines.push(`  drift-item  ${item}`);
+  for (const entry of pendingReport) lines.push(`  pending-item  ${operationTarget(entry.item)}  ${formatLiveness(entry)}`);
+  for (const item of drift ?? []) lines.push(`  drift-item  ${formatDrift(item)}`);
   console.log(lines.join('\n'));
-  return pending.length === 0 &&
-    runtimeError == null &&
-    stale.length === 0 &&
-    drift != null && drift.length === 0
-    ? 0
-    : 1;
+  return exitCode;
 }
 
 function runTouch({ options, profile, environment }) {
@@ -1189,7 +1260,7 @@ export function overlayHelp(cli = 'de-novo skills') {
   return `project overlay lifecycle (project workload command + Grove lease registry)
 
 usage:
-  ${cli} overlay status [ENV] [--project ROOT] [--stale-after 12h]
+  ${cli} overlay status [ENV] [--project ROOT] [--stale-after 12h] [--json]
   ${cli} overlay create ENV [--project ROOT] [--apply]
   ${cli} overlay attach ENV SERVICE --image FULL_SHA [--project ROOT] [--apply]
   ${cli} overlay detach ENV SERVICE [--project ROOT] [--apply]

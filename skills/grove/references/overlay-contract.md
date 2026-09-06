@@ -20,7 +20,7 @@ registry --write pending--> project mutation --status postcondition--> finalize 
 Use only the Grove front door:
 
 ```bash
-de-novo skills overlay status [env] [--project <root>]
+de-novo skills overlay status [env] [--project <root>] [--json]
 de-novo skills overlay create <env> [--project <root>] [--apply]
 de-novo skills overlay attach <env> <service> --image <full-sha> [--project <root>] [--apply]
 de-novo skills overlay detach <env> <service> [--project <root>] [--apply]
@@ -70,6 +70,22 @@ same environment rejects any other mutation, the same mutation with different
 project-specific passthrough arguments, and `touch`. Other environments can
 continue. Internal `status <env>` receives the same passthrough arguments so it
 measures the same project context.
+
+### Machine-readable status
+
+`status --json` prints one JSON object with the same verdict and the same
+exit code as the text report. Tools built on Grove read this, not the text.
+
+| Field | Content |
+| --- | --- |
+| `ok` | `true` exactly when the exit code is zero |
+| `project`, `scope` | slug; the environment argument or `null` |
+| `stale_after` | the policy in effect or `null` |
+| `project_status` | `{ ok, error }` for the project `status` dispatch |
+| `counts` | `environments`, `attachments`, `pending`, `stale`, `drift` (`null` when not measured) |
+| `environments[]` | `env`, `stale`, `created_at`, `last_used_at`, `idle_ms`, `owner`, `worktree`, `services[] { service, image, upstream, attached_at }` |
+| `pending[]` | `verb`, `env`, `service`, `image`, `started_at`, `worktree`, `agent`, `liveness` (`in-flight`, `stalled`, `unknown`), `pid` |
+| `drift` | `null` when not measured, else `[{ env, service, message }]` |
 
 ## Leases and stale environments
 
