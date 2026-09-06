@@ -6,8 +6,8 @@
 검사는 `infra/lib/dryad.mjs`가 소유한다. 이 문서는 결정의 이유만 남긴다.
 구현이 설계와 다른 점: 레지스트리는 `GROVE_STATE_DIR` 아래에서도 `dryads/`
 하위로 들어가 Grove 파일과 겹치지 않는다. `report`의 `--session`은 자리의
-값을 덮어쓴다. `status`는 Grove `overlay status`의 env 줄을 읽어 추적 여부를
-센다.
+값을 덮어쓴다. `status`는 Grove `overlay status --json`을 읽어 추적 여부와 진행 중
+작업을 센다.
 
 ## 한 문장
 

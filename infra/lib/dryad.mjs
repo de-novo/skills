@@ -31,12 +31,6 @@ const STATUS_VALUES = Object.freeze(['planned', 'working', 'blocked', 'done']);
 const REPORT_VALUES = Object.freeze(['working', 'blocked', 'done']);
 const SEAT_FORMATS = Object.freeze(['json', 'env', 'shell']);
 const CLI_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../bin/cli.mjs');
-const OVERLAY_ENV_LINE = /^  ([a-z0-9-]+)  (?:active|stale)  idle /;
-const OVERLAY_PENDING_LINE = /^  pending-item  (\S+ ([a-z0-9-]+)(?:\/\S+)?)  (in-flight|stalled|unknown)/;
-const OVERLAY_DRIFT_LINE = /^  drift-item  (([a-z0-9-]+)(?:\/[^:]+)?: .+)$/;
-const OVERLAY_STALE_LINE = /^  stale\s+(\d+)/;
-const OVERLAY_PROJECT_STATUS_LINE = /^  project-status  (\d)\/1/;
-const OVERLAY_DRIFT_COUNT_LINE = /^  drift\s+(\d+|notMeasured)/;
 const LOCK_WAIT_MS = 2000;
 
 function isMap(value) {
@@ -339,25 +333,33 @@ function relayFailure(label, result) {
   console.error(`dryad: ${label} exited ${result.status}.`);
 }
 
-// Reads Grove's text report. Dryad does not open Grove's registry; the
-// public CLI output is the seam, and these lines are the contract's.
-export function parseOverlayStatus(stdout) {
-  const probe = { envs: new Set(), pending: [], drift: [], stale: 0, projectStatusOk: false, driftNotMeasured: true };
-  for (const line of stdout.split('\n')) {
-    let match;
-    if ((match = OVERLAY_ENV_LINE.exec(line))) probe.envs.add(match[1]);
-    else if ((match = OVERLAY_PENDING_LINE.exec(line))) probe.pending.push({ target: match[1], env: match[2], state: match[3] });
-    else if ((match = OVERLAY_DRIFT_LINE.exec(line))) probe.drift.push({ text: match[1], env: match[2] });
-    else if ((match = OVERLAY_STALE_LINE.exec(line))) probe.stale = Number(match[1]);
-    else if ((match = OVERLAY_PROJECT_STATUS_LINE.exec(line))) probe.projectStatusOk = match[1] === '1';
-    else if ((match = OVERLAY_DRIFT_COUNT_LINE.exec(line))) probe.driftNotMeasured = match[1] === 'notMeasured';
-  }
-  return probe;
-}
-
+// Reads Grove's machine-readable report. Dryad does not open Grove's
+// registry; `overlay status --json` is the seam and the contract owns it.
 function probeOverlay(project, environment) {
-  const result = grove(['status'], project, environment);
-  return { ok: result.status === 0, ...parseOverlayStatus(result.stdout), result };
+  const result = grove(['status', '--json'], project, environment);
+  let report;
+  try {
+    report = JSON.parse(result.stdout);
+  } catch {
+    fail(`overlay status --json returned no JSON (exit ${result.status}): ${lastLine(result.stderr) || lastLine(result.stdout)}`);
+  }
+  return {
+    ok: result.status === 0 && report.ok === true,
+    envs: new Set(report.environments.map((entry) => entry.env)),
+    pending: report.pending.map((item) => ({
+      target: `${item.verb} ${item.env}${item.service ? `/${item.service}` : ''}`,
+      env: item.env,
+      state: item.liveness,
+    })),
+    drift: (report.drift ?? []).map((item) => ({
+      env: item.env,
+      text: `${item.env}${item.service ? `/${item.service}` : ''}: ${item.message}`,
+    })),
+    stale: report.counts.stale,
+    projectStatusOk: report.project_status.ok,
+    driftNotMeasured: report.drift == null,
+    result,
+  };
 }
 
 // Grove returns non-zero for any pending journal. An in-flight one is another
