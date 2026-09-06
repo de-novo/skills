@@ -33,6 +33,7 @@ import {
   runOverlayLifecycle,
 } from '../lib/overlay.mjs';
 import { dryadHelp, parseDryadCliArgs, runDryad } from '../lib/dryad.mjs';
+import { runCanopy } from '../lib/canopy.mjs';
 import {
   COMPOSE_FILE,
   COMPOSE_UP_FLAGS,
@@ -404,6 +405,9 @@ project:
   ${CLI} overlay <verb> ...            create/attach/detach/destroy/status/touch/prune
   ${CLI} dryad <verb> ...              plan/seat/report/status/finish/projects — seats for workers, no agent launch
 
+local overview:
+  ${CLI} canopy [--port N] [--once]    read-only dashboard at 127.0.0.1:7420; --once prints JSON
+
 up, status, provision are aliases of infra up|status|provision.
 there is no down command — several projects live on machine infra.`);
 }
@@ -440,6 +444,8 @@ function main() {
       return cmdOverlay(rest);
     case 'dryad':
       return cmdDryad(rest);
+    case 'canopy':
+      return runCanopy(rest);
     case 'infra':
       return cmdInfra(rest);
     case 'up':
@@ -474,7 +480,7 @@ function isMain() {
 
 if (isMain()) {
   try {
-    process.exit(main());
+    process.exitCode = await main();
   } catch (error) {
     console.error(`${CLI}: ${error.message}`);
     process.exit(1);

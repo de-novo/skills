@@ -1,0 +1,188 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { spawn, spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { once } from 'node:events';
+import { stringify } from 'yaml';
+import { cliJson, collectState, renderPage, startCanopy } from '../lib/canopy.mjs';
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const CLI = path.join(HERE, 'cli.mjs');
+const PROJECTS = path.join(HERE, 'fixtures/canopy-projects.mjs');
+const RUNNER = path.join(HERE, 'fixtures/canopy-runner.mjs');
+const BACKEND = path.join(HERE, 'fixtures/process-overlay.mjs');
+
+function fixture(t) {
+  const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'canopy-')));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const environment = { ...process.env, GROVE_STATE_DIR: path.join(root, 'state'), GROVE_PROCESS_TEST_ROOT: root };
+  delete environment.DRYAD_PROJECT;
+  writeFileSync(path.join(root, 'process-test-marker'), 'owned fixture');
+  const run = (args) => {
+    const result = spawnSync(process.execPath, [CLI, ...args], { env: environment, encoding: 'utf8', timeout: 20000 });
+    assert.equal(result.status, 0, `${args.join(' ')}\n${result.stderr}\n${result.stdout}`);
+    return result.stdout;
+  };
+  const projects = [false, true].map((overlay, index) => {
+    const slug = `canopy-${index}`;
+    const baseline = path.join(root, slug);
+    mkdirSync(path.join(baseline, '.agents'), { recursive: true });
+    const dryad = { version: 1, worktrees: { root: `../seats-${index}`, branch: 'dryad/{id}' } };
+    if (overlay) {
+      writeFileSync(path.join(baseline, '.agents/runtime-profile.yml'), stringify({
+        project: { slug }, services: { api: {} }, data: { infra: 'project' },
+        addressing: { scheme: { overlay: '{service}--{env}.{project}.{tld}' } },
+        runtime: { commands: { overlay: `${JSON.stringify(process.execPath)} ${JSON.stringify(BACKEND)}` } },
+        overlay: { attachable: ['api'], stale_after: '1h' },
+      }));
+    } else dryad.project = { slug };
+    writeFileSync(path.join(baseline, '.agents/dryad-profile.yml'), stringify(dryad));
+    for (const args of [['init', '-b', 'main'], ['add', '.'], ['commit', '-m', 'baseline']]) {
+      const result = spawnSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgSign=false', '-c', 'user.name=Canopy Test', '-c', 'user.email=test@example.invalid', ...args], { cwd: baseline, encoding: 'utf8' });
+      assert.equal(result.status, 0, result.stderr);
+    }
+    run(['dryad', 'plan', 'w1', '--task', 'Read-only overview', '--by', 'worker', '--apply', '--project', baseline]);
+    run(['dryad', 'report', 'w1', '--status', 'blocked', '--note', 'Waiting <script>alert(1)</script>', '--session', 'session-fixture', '--project', baseline]);
+    // Exercise the public finished archive with a disposable no-overlay seat.
+    if (!overlay) {
+      run(['dryad', 'plan', 'w2', '--task', 'Archived task', '--apply', '--project', baseline]);
+      run(['dryad', 'report', 'w2', '--status', 'done', '--note', 'Archive journal proof', '--session', 'archive-session', '--project', baseline]);
+      run(['dryad', 'finish', 'w2', '--apply', '--project', baseline]);
+    }
+    return { slug, root: baseline, root_present: true, seats: 1, finished: overlay ? 0 : 1, overlay, updated_at: new Date().toISOString() };
+  });
+  environment.CANOPY_TEST_PROJECTS = JSON.stringify(projects);
+  return { root, projects, environment, projectsCli: PROJECTS, run };
+}
+
+async function closeServer(server) {
+  await new Promise((resolve, reject) => { server.close(error => error ? reject(error) : resolve()); server.closeAllConnections(); });
+}
+
+test('--once aggregates real seated projects, Grove, problems and finished journals', async (t) => {
+  const f = fixture(t);
+  const result = spawnSync(process.execPath, [RUNNER, '--once'], { env: f.environment, encoding: 'utf8', timeout: 30000 });
+  assert.equal(result.status, 0, result.stderr);
+  const state = JSON.parse(result.stdout);
+  assert.equal(state.projects.length, 2);
+  assert.equal(state.projects.reduce((n, p) => n + p.seats.length, 0), 2);
+  assert.equal(state.projects[0].counts.worktrees_present, 1);
+  assert.deepEqual(state.projects.map(p => p.problems), [['w1: blocked'], ['w1: blocked']]);
+  assert.equal(state.projects[0].finished.length, 1);
+  assert.ok(state.projects[0].finished[0].journal.some(entry => entry.detail.includes('Archive journal proof')));
+  assert.equal(state.projects[1].grove.counts.environments, 1);
+  assert.equal(state.projects[1].grove.project_status.ok, true);
+  assert.equal(state.projects[1].seats[0].env_state, 'tracked');
+  // Compare rendered counts to the public status values, without registry access.
+  assert.equal(state.projects[1].counts.envs_tracked, 1);
+  t.diagnostic('projects 2/2; live seats 2/2; finished seats 1/1; propagated problems 2/2; process overlay environments 1/1');
+});
+
+test('GET / and /api/state serve real CLI reports over an ephemeral loopback socket', async (t) => {
+  const f = fixture(t);
+  const server = await startCanopy({ ...f, port: 0 });
+  t.after(() => closeServer(server));
+  assert.equal(server.address().address, '127.0.0.1');
+  const url = `http://127.0.0.1:${server.address().port}`;
+  const response = await fetch(url);
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('content-type'), /text\/html/);
+  const html = await response.text();
+  const firstRender = html.split('<script>')[0];
+  assert.match(firstRender, /seats 1 · worktrees 1\/1 present · envs 1\/1 tracked · reported blocked 1/);
+  assert.match(firstRender, /Waiting &lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+  assert.match(firstRender, /Archive journal proof/);
+  assert.match(firstRender, /<summary>finished 1<\/summary>/);
+  assert.doesNotMatch(firstRender, /<details[^>]* open/);
+  assert.match(firstRender, /session-fixture/);
+  const stateResponse = await fetch(url + '/api/state');
+  assert.equal(stateResponse.status, 200);
+  assert.equal((await stateResponse.json()).projects.length, 2);
+  assert.equal((await fetch(url, { method: 'POST' })).status, 405);
+  assert.equal((await fetch(url + '/missing')).status, 404);
+  t.diagnostic('real socket: HTML + JSON 2/2; server-rendered project sections 2/2; write/unknown routes refused 2/2');
+});
+
+test('canopy CLI keeps its server alive, prints its URL and shuts down on SIGTERM', async (t) => {
+  const child = spawn(process.execPath, [CLI, 'canopy', '--port', '0'], { stdio: ['ignore', 'pipe', 'pipe'] });
+  t.after(() => child.kill('SIGKILL'));
+  let output = '';
+  const url = await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('URL not printed')), 5000);
+    child.once('error', reject);
+    child.stdout.on('data', chunk => {
+      output += chunk;
+      const match = output.match(/http:\/\/127\.0\.0\.1:\d+\//);
+      if (match) { clearTimeout(timer); resolve(match[0]); }
+    });
+  });
+  assert.equal((await fetch(url)).status, 200);
+  const exited = once(child, 'exit');
+  child.kill('SIGTERM');
+  assert.deepEqual(await exited, [0, null]);
+});
+
+test('canopy refuses --host including non-loopback and equals syntax', () => {
+  for (const args of [['--host', '0.0.0.0'], ['--host=192.0.2.1'], ['--host', '127.0.0.1']]) {
+    const result = spawnSync(process.execPath, [CLI, 'canopy', ...args, '--once'], { encoding: 'utf8', timeout: 5000 });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /--host is refused.*127\.0\.0\.1/);
+  }
+});
+
+test('canopy validates ports and unknown arguments at the CLI boundary', () => {
+  for (const args of [['--port'], ['--port', '-1'], ['--port', '65536'], ['--port', '1.5'], ['--port', 'abc'], ['unexpected']]) {
+    const result = spawnSync(process.execPath, [CLI, 'canopy', ...args, '--once'], { encoding: 'utf8', timeout: 5000 });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /canopy:/);
+  }
+});
+
+test('CLI failures, malformed JSON, timeouts and excess output become error documents', async (t) => {
+  const root = mkdtempSync(path.join(tmpdir(), 'canopy-errors-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const script = path.join(root, 'cli.mjs');
+  for (const [source, pattern, timeoutMs] of [
+    ['console.log("not JSON"); process.exitCode = 1;', /invalid JSON/, 2000],
+    ['console.log("null")', /invalid JSON/, 2000],
+    ['setInterval(() => {}, 1000)', /timed out/, 100],
+    ['console.log("x".repeat(5 * 1024 * 1024))', /output limit/, 2000],
+  ]) {
+    writeFileSync(script, source);
+    const started = Date.now();
+    assert.match((await cliJson(['status'], { cli: script, timeoutMs })).error, pattern);
+    assert.ok(Date.now() - started < timeoutMs + 1500, 'subprocess timeout is bounded');
+  }
+  const result = await collectState({ projectsCli: '/missing/canopy-cli.mjs' });
+  assert.equal(result.projects.length, 0);
+  assert.match(result.error, /invalid JSON/);
+  // Valid discovery + missing root must isolate the failure to that project.
+  const environment = { ...process.env, CANOPY_TEST_PROJECTS: JSON.stringify([{ slug: 'missing', root: path.join(root, 'absent'), root_present: false, seats: 0, finished: 0, overlay: true, updated_at: null }]) };
+  const state = await collectState({ projectsCli: PROJECTS, environment });
+  assert.equal(state.projects.length, 1);
+  assert.ok(state.projects[0].error);
+  assert.ok(state.projects[0].grove.error);
+  assert.ok(state.projects[0].finished_error);
+});
+
+test('renderer preserves pending liveness, hostnames and null measurements without active markup', () => {
+  const state = { updated_at: '2026-01-01T00:00:00Z', projects: [{
+    slug: 'example', root: '/example', overlay: true,
+    counts: { seats: 1, worktrees_present: 1, envs_tracked: 1, envs_wanted: 1, envs_in_flight: 1, reported: { working: 1 } },
+    seats: [{ id: 'w1', branch: 'task', ahead: 2, env: 'w1', env_state: 'in-flight', status: 'working', by: 'worker', session: '<session>', journal: [], hostnames: ['api--w1.example.localhost', 'https://example.invalid/path', 'javascript://example.invalid', 'http://user:pass@example.invalid'] }],
+    finished: [], problems: ['<unsafe>'], grove: { counts: { environments: 1, attachments: 1, pending: 2, stale: null, drift: null }, pending: [{ env: 'w1', verb: 'attach', liveness: 'in-flight' }, { env: 'w2', verb: 'create', liveness: 'stalled' }] },
+  }] };
+  const html = renderPage(state).split('<script>')[0];
+  assert.match(html, /envs 1\/1 tracked, 1 in-flight/);
+  assert.match(html, /w1 attach in-flight/);
+  assert.match(html, /w2 create stalled/);
+  assert.match(html, /stale notMeasured · drift notMeasured/);
+  assert.match(html, /href="http:\/\/api--w1.example.localhost\/"/);
+  assert.match(html, /href="https:\/\/example.invalid\/path"/);
+  assert.doesNotMatch(html, /href="javascript:|href="http:\/\/user:pass/);
+  assert.match(html, /&lt;session&gt;/);
+  assert.match(html, /problem · &lt;unsafe&gt;/);
+});
