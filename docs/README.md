@@ -18,6 +18,11 @@ measurements. It is an analysis, not operating authority or approved scope.
 
 ## Design records
 
+[Canopy design](canopy-design.md) proposes the second round of the read-only
+page: per-worktree cards with the skill verbs actually run, the files each
+seat changed, unseated worktrees, and file overlaps between seats. The seams
+are defined as `dryad status --json` fields first. Not implemented.
+
 [Dryad design](dryad-design.md) records why the second skill prepares seats
 and launches no agent, and what it deliberately leaves to launchers and
 orchestrators. Current behavior is owned by the skill and `infra/lib/dryad.mjs`;
