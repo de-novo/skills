@@ -28,7 +28,7 @@ function gitIn(cwd, args) {
 
 // A disposable baseline repo with Grove + Dryad profiles. overlay: true wires
 // the isolated process backend so `overlay create` really runs.
-function fixture(t, { overlay = false, worktrees = true } = {}) {
+function fixture(t, { overlay = false, worktrees = true, createOn = null } = {}) {
   const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'dryad-')));
   const baseline = path.join(root, 'baseline');
   mkdirSync(path.join(baseline, '.agents'), { recursive: true });
@@ -47,7 +47,7 @@ function fixture(t, { overlay = false, worktrees = true } = {}) {
     // tld pinned so the rendered hostnames do not depend on this machine's addressing.local.yml.
     runtime.addressing = { tld: 'localhost', scheme: { overlay: '{service}--{env}.{project}.{tld}' } };
     runtime.runtime = { commands: { overlay: `${JSON.stringify(process.execPath)} ${JSON.stringify(BACKEND)}` } };
-    runtime.overlay = { attachable: ['api'], stale_after: '1h' };
+    runtime.overlay = { attachable: ['api'], stale_after: '1h', ...(createOn ? { create_on: createOn } : {}) };
   } else {
     runtime.overlay = 'none';
   }
@@ -522,4 +522,24 @@ test('a scripted worker seated through --shell reads seat, skill and task, commi
   assert.match(status.stdout, /reported   done 1/);
   assert.match(status.stdout, /\+1/);
   t.diagnostic('scripted worker: seat+skill+task read 3/3; commit on own branch 1/1; baseline untouched 1/1; done with session 1/1');
+});
+
+test('with create_on: attach, plan creates no env, status shows unattached without a problem, and the seat attach creates it', (t) => {
+  const f = fixture(t, { overlay: true, createOn: 'attach' });
+  const groveRegistry = () => (existsSync(f.groveStateFile) ? parse(readFileSync(f.groveStateFile, 'utf8')) : null);
+  const planned = f.good(['plan', 'w1', '--task', 'deferred env', '--apply']);
+  assert.match(planned.stdout, /env       1\/1 w1/);
+  assert.equal(groveRegistry(), null, 'no overlay create at plan');
+  assert.match(f.state().seats.w1.journal[0].detail, /create_on: attach/);
+  const before = f.good(['status']);
+  assert.match(before.stdout, /env w1 unattached/);
+  assert.doesNotMatch(before.stdout, /problem/);
+  const attach = spawnSync(process.execPath, [CLI, 'overlay', 'attach', 'w1', 'api', '--image', f.images[0], '--apply', '--project', f.baseline], { cwd: f.seatPath('w1'), env: f.environment, encoding: 'utf8' });
+  assert.equal(attach.status, 0, attach.stderr);
+  assert.match(attach.stdout, /create_on: attach/);
+  assert.equal(groveRegistry().envs.w1.worktree, f.seatPath('w1'), 'the env is owned by the seat worktree, not the baseline');
+  const after = f.good(['status']);
+  assert.match(after.stdout, /env w1 tracked/);
+  f.good(['finish', 'w1', '--apply']);
+  t.diagnostic('deferred create: plan 0 creates, unattached tolerated 1/1, first attach created 1/1 from the seat worktree');
 });

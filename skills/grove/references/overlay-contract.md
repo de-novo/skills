@@ -130,6 +130,15 @@ automatically. Inspect it, then clean it explicitly with
 
 ## Plan and apply
 
+`overlay.create_on` says when an environment comes into being. `plan` (default):
+whoever seats a worker creates it first (`create --apply`), before any attach.
+`attach`: the first applied `attach` for an untracked environment runs the
+project `create` as its own journaled mutation, from the caller's directory,
+immediately before the attach. Use `attach` for backends that bind an
+environment to the worktree and revision that created it, so the environment
+is born from the worktree whose image is being attached. `detach` and
+`destroy` never create.
+
 `overlay.plan_first` tells Grove how the project command behaves:
 
 | Profile value | Grove command without `--apply` | Grove command with `--apply` |

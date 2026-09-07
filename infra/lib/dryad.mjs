@@ -148,6 +148,7 @@ export function loadDryadProject(location) {
     dryad,
     slug: runtime.project.slug,
     overlayActive: runtime.overlay?.mode === 'on',
+    overlayCreateOn: runtime.overlay?.createOn ?? 'plan',
   };
 }
 
@@ -655,7 +656,9 @@ function runPlan({ options, project, environment, cwd }) {
 
   let env = envWanted;
   let envFailure = null;
-  if (envWanted != null) {
+  if (envWanted != null && project.overlayCreateOn === 'attach') {
+    journalLines.push(`overlay env ${envWanted} will be created by the seat's first attach (create_on: attach)`);
+  } else if (envWanted != null) {
     const result = grove(['create', envWanted, '--apply'], project, environment);
     if (result.status === 0) {
       journalLines.push(`overlay.create ok ${lastLine(result.stdout)}`);
@@ -843,6 +846,7 @@ function runStatus({ options, project, environment }) {
     if (seat.env === 'pending') envState = 'pending';
     else if (seat.env != null) {
       envState = tracked == null ? 'notMeasured' : tracked.has(seat.env) ? 'tracked' : 'missing';
+      if (envState === 'missing' && project.overlayCreateOn === 'attach') envState = 'unattached';
       if (busy.has(seat.env)) envState = 'in-flight';
     }
     if (!present) problems.push(`${id}: worktree missing ${seat.worktree}`);

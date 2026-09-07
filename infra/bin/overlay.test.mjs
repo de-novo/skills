@@ -53,13 +53,13 @@ test('stale lease boundary is exact and duration units are counted', () => {
   );
 });
 
-function projectFixture(t, { planFirst = true, staleAfter = '1h' } = {}) {
+function projectFixture(t, { planFirst = true, staleAfter = '1h', createOn = null } = {}) {
   const root = mkdtempSync(path.join(tmpdir(), 'grove-overlay-'));
   const stateDir = path.join(root, 'state');
   const log = path.join(root, 'overlay-calls.jsonl');
   const runtimeState = path.join(root, 'overlay-runtime.json');
   mkdirSync(path.join(root, '.agents'), { recursive: true });
-  const staleLine = staleAfter == null ? '' : `  stale_after: ${staleAfter}\n`;
+  const staleLine = (staleAfter == null ? '' : `  stale_after: ${staleAfter}\n`) + (createOn == null ? '' : `  create_on: ${createOn}\n`);
   writeFileSync(
     path.join(root, '.agents', 'runtime-profile.yml'),
     `version: 1
@@ -672,4 +672,30 @@ test('a refusal receipt before mutation withdraws the pending journal; a refused
   assert.notEqual(refusedRetry.status, 0);
   assert.equal(readState(fixture).pending_by_env.w2.verb, 'attach', 'an older journal survives a refused retry');
   t.diagnostic('clean refusal withdrew 1/1 journals; refused retry kept 1/1');
+});
+
+test('create_on: attach lets the first applied attach create the environment from the caller directory', (t) => {
+  const byPlan = projectFixture(t);
+  const refused = run(byPlan, ['attach', 'w1', 'api', '--image', FULL_IMAGE, '--apply']);
+  assert.notEqual(refused.status, 0);
+  assert.match(refused.stderr, /create it first/);
+
+  const byAttach = projectFixture(t, { createOn: 'attach' });
+  const elsewhere = mkdtempSync(path.join(tmpdir(), 'create-on-attach-'));
+  t.after(() => rmSync(elsewhere, { recursive: true, force: true }));
+  const attached = spawnSync(process.execPath, [CLI, 'overlay', 'attach', 'w1', 'api', '--image', FULL_IMAGE, '--apply', '--project', byAttach.root], {
+    cwd: elsewhere, encoding: 'utf8',
+    env: { ...process.env, GROVE_STATE_DIR: byAttach.stateDir, GROVE_OVERLAY_STUB_LOG: byAttach.log, GROVE_OVERLAY_STUB_RUNTIME_STATE: byAttach.runtimeState, GROVE_OVERLAY_STUB_PLAN_FIRST: 'true' },
+  });
+  assert.equal(attached.status, 0, attached.stderr);
+  assert.match(attached.stdout, /overlay create 1\/1: w1 \(create_on: attach\)/);
+  const verbs = calls(byAttach).filter((c) => c.verb !== 'status').map((c) => c.verb);
+  assert.deepEqual(verbs, ['create', 'attach'], 'create is dispatched once, before attach');
+  for (const call of calls(byAttach)) assert.equal(call.callerCwd, realpathSync(elsewhere));
+  const state = readState(byAttach);
+  assert.equal(state.envs.w1.services.api.image, FULL_IMAGE);
+  assert.deepEqual(state.pending_by_env, {});
+  assert.equal(run(byAttach, ['attach', 'w1', 'api', '--image', FULL_IMAGE, '--apply']).status, 0, 'a second attach does not create again');
+  assert.equal(calls(byAttach).filter((c) => c.verb === 'create').length, 1);
+  t.diagnostic('create_on plan refused 1/1; create_on attach created+attached 1/1; caller cwd on all dispatches');
 });

@@ -78,7 +78,7 @@ de-novo skills dryad projects [--json]
 | plan | prints worktree, branch, base, env; creates nothing | `git worktree add` (or adopt `--worktree`), `overlay create` when the profile has overlays, register the seat |
 | seat | always read-only: the seat for a launcher | — |
 | report | always writes the worker's status and a journal line | — |
-| status | always read-only: counts and problems; non-zero on any problem. Another seat's in-flight overlay mutation is shown as `in-flight`, not counted as a problem; a stalled one is | — |
+| status | always read-only: counts and problems; non-zero on any problem. With `overlay.create_on: attach` a seat's env shows `unattached` until its first attach and is not a problem. Another seat's in-flight overlay mutation is shown as `in-flight`, not counted as a problem; a stalled one is | — |
 | finish | prints what would be destroyed or removed | `overlay destroy`, remove a clean Dryad-created worktree, move the seat and its journal to `<slug>.finished.yml`; branches kept |
 | projects | always read-only, machine-wide (no project needed): one counted line per indexed project — root, present or missing, `seats n`, `finished n`, `overlay on|off`; `--json` prints `{ projects: [ { slug, root, root_present, seats, finished, overlay, updated_at } ] }`; a missing index prints `projects 0` | — |
 

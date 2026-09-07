@@ -233,7 +233,7 @@ function parseOverlay(doc, serviceNames, source) {
   }
   assertOnlyKeys(
     raw,
-    ['attachable', 'shared_only', 'plan_first', 'image_tag', 'stale_after'],
+    ['attachable', 'shared_only', 'plan_first', 'image_tag', 'stale_after', 'create_on'],
     'overlay',
     source
   );
@@ -280,6 +280,13 @@ function parseOverlay(doc, serviceNames, source) {
   if (staleAfter != null && !/^[1-9][0-9]*(?:s|m|h|d|w)$/.test(staleAfter)) {
     fail(source, 'overlay.stale_after must be a positive duration such as 12h or 7d.');
   }
+  // create_on: plan (default) creates the environment when a seat is planned;
+  // attach defers creation to the first applied attach, run from the caller's
+  // worktree, for backends that bind an environment to a worktree revision.
+  const createOn = raw.create_on ?? 'plan';
+  if (createOn !== 'plan' && createOn !== 'attach') {
+    fail(source, 'overlay.create_on must be plan or attach.');
+  }
   return {
     mode: 'on',
     explicitNone: false,
@@ -289,6 +296,7 @@ function parseOverlay(doc, serviceNames, source) {
     planFirst,
     imageTag,
     staleAfter,
+    createOn,
   };
 }
 

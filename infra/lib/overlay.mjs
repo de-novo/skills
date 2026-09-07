@@ -668,6 +668,7 @@ function assertMutationInputs(options, profile, state) {
     assertOverlayImage(options.image);
   }
   if (['attach', 'detach'].includes(options.verb) && !state.envs[options.env]) {
+    if (options.verb === 'attach' && profile.overlay.createOn === 'attach') return;
     fail(`environment ${JSON.stringify(options.env)} is not tracked; create it first.`);
   }
 }
@@ -928,16 +929,34 @@ function runMutation({ options, profile, projectRoot, environment, cwd }) {
   }
 
   return withEnvironmentLock(firstRead.file, options.env, () => {
+    const owner = {
+      worktree: safeRealpath(cwd),
+      agent: environment.DEVINFRA_AGENT ?? environment.USER ?? 'unknown',
+    };
+    // create_on: attach — the environment is created by the first applied
+    // attach, from the caller's directory, as its own journaled mutation.
+    if (
+      options.verb === 'attach' &&
+      profile.overlay.createOn === 'attach' &&
+      !readOverlayState(profile.project.slug, environment).state.envs[options.env]
+    ) {
+      executeAppliedMutation({
+        options: { ...options, verb: 'create', service: null, image: null },
+        profile,
+        projectRoot,
+        environment,
+        source: 'mutation',
+        owner,
+      });
+      console.log(`overlay create 1/1: ${options.env} (create_on: attach)`);
+    }
     executeAppliedMutation({
       options,
       profile,
       projectRoot,
       environment,
       source: 'mutation',
-      owner: {
-        worktree: safeRealpath(cwd),
-        agent: environment.DEVINFRA_AGENT ?? environment.USER ?? 'unknown',
-      },
+      owner,
     });
     console.log(`overlay ${options.verb} 1/1: ${options.env}${options.service ? `/${options.service}` : ''}`);
     return 0;

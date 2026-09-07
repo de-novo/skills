@@ -74,6 +74,7 @@ overlay:                        # single-service projects: `overlay: none`
   shared_only: [auth-api]       # auth, schedulers, consumers — never attach
   image_tag: full-git-sha
   plan_first: true              # omitted = true
+  # create_on: plan             # omitted = plan. attach = the first applied attach creates the env
   # stale_after: 1d             # optional; no default. s|m|h|d|w
 
 data:
@@ -180,7 +181,8 @@ invoked, what `--apply` and `plan_first` do, and how `stale_after` leases are
 measured and cleaned. This file only fixes value syntax: `stale_after` is an
 optional positive duration (`s` `m` `h` `d` `w`) with no default; `plan_first`
 omitted is `true`; `image_tag` omitted is `full-git-sha` and no mutable tag mode
-is supported.
+is supported; `create_on` is `plan` (omitted default) or `attach`, and the
+contract says what each means.
 
 ### ports.blocks
 
