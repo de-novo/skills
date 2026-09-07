@@ -24,8 +24,11 @@ into a sandbox that lives outside the repository tree.
    counts what is left.
 2. **The machine registry is never touched.** `GROVE_STATE_DIR` points inside
    the sandbox. If the playground ever appears in the machine's
-   `dryad projects` or overlay registry, isolation has failed. Every CLI call
-   carries that variable, and a call without it is refused.
+   `dryad projects` or overlay registry, isolation has failed. Every ordinary
+   catalog verb aimed at the sandbox carries that variable, and a call without
+   it is refused. The `playground` verbs are given the sandbox path itself, so
+   they derive the state directory and refuse one naming a different sandbox.
+   The rule governs which state directory is used, not who types it.
 3. **No port number is chosen in advance.** Every listener binds port 0 and
    records what the kernel gave it. No port constant may appear in the source.
    This rule comes from the collision earlier in this work, where two projects
@@ -34,8 +37,15 @@ into a sandbox that lives outside the repository tree.
    file inside the sandbox. The whole arc runs on a machine without Docker.
 5. **The sandbox has its own git repository.** It runs `git init`, so seats'
    branches and worktrees never reach the catalog's git.
-6. **Every process started is recorded.** `status` counts whether they are
-   alive; `down` stops them and confirms the ports are free.
+6. **Every process started is recorded**, including its exit status, so a tool
+   that ran and ended is not read as a service that died. The record can only
+   say whether a process ended on its own terms, so that is the only
+   distinction it makes: `finished` recorded its exit, whatever the code, and
+   `stopped` is gone having recorded nothing. A non-zero exit is not a failure,
+   because the overlay contract requires an adapter to refuse some calls.
+   `status` counts the three and prints any non-zero code; `down` stops them and
+   confirms the ports are free. Records are staged outside the process directory
+   and renamed in, so a reader listing it never sees a partial name.
 7. **Nothing binds beyond loopback.** A request to bind any address other than
    127.0.0.1 is refused.
 
@@ -92,7 +102,8 @@ The two meet only at the sandbox layout. p2 copies `playground/app` and
                       .agents/runtime-profile.yml and .agents/dryad-profile.yml
   state/              GROVE_STATE_DIR; overlays/ and dryads/ appear here
   seats/              the seats' worktrees
-  run/                sandbox.json (ports, PIDs, names), logs, build artifacts
+  run/                sandbox.json (ports, PIDs, names), processes/ receipts,
+                      staging/ for the writes that become them, logs, artifacts
 ```
 
 `up` writes `sandbox.json` and `status` reads it; the adapter records its own

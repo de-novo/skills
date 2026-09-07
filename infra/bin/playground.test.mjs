@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync, existsSync, symlinkSync, readdirSync, chmodSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -155,4 +155,95 @@ test('isolation 7: non-loopback and implicit wildcard binds are refused', async 
     assert.match(result.stderr, /only 127.0.0.1 may bind/);
   }
   await assert.rejects(up(path.join(f.root, 'wide'), { source: f.source, host: '0.0.0.0' }), /only 127.0.0.1/);
+});
+
+test('a sandbox verb derives its own state directory and refuses a conflicting one', async t => {
+  const f = fixture(t);
+  const data = await f.start();
+  const bare = { ...environment };
+  delete bare.GROVE_STATE_DIR;
+  const play = (args, extra = {}) => spawnSync(process.execPath, [cli, 'playground', ...args, '--dir', data.sandbox], { env: { ...bare, ...extra }, cwd: catalog, encoding: 'utf8' });
+  // The sandbox is the argument, so the caller does not restate it.
+  const derived = play(['status', '--json']);
+  assert.equal(derived.status, 0, derived.stderr);
+  assert.equal(JSON.parse(derived.stdout).state, data.state);
+  // A state directory belonging to another sandbox is still refused.
+  const conflict = play(['status'], { GROVE_STATE_DIR: path.join(f.root, 'elsewhere/state') });
+  assert.notEqual(conflict.status, 0);
+  assert.match(conflict.stderr, /does not belong to/);
+  // An ordinary catalog verb keeps requiring the variable.
+  const ordinary = spawnSync(process.execPath, [cli, 'validate', data.project], { env: bare, cwd: catalog, encoding: 'utf8' });
+  assert.notEqual(ordinary.status, 0);
+  assert.match(ordinary.stderr, /GROVE_STATE_DIR must be/);
+  const removed = play(['down']);
+  assert.equal(removed.status, 0, removed.stderr);
+  assert.equal(existsSync(data.sandbox), false);
+});
+
+test('a process that finishes is not reported as one that died', async t => {
+  const f = fixture(t);
+  const data = await f.start();
+  const before = status(data.sandbox, f.env(data.sandbox));
+  // The launcher started the service and exited 0. It finished; it did not stop.
+  assert.equal(before.counts.alive, 1);
+  assert.equal(before.counts.finished, 1);
+  assert.equal(before.counts.stopped, 0);
+  assert.deepEqual([...new Set(before.processes.map(p => p.state))].sort(), ['alive', 'finished']);
+  // A tool that refuses on purpose exits non-zero. It finished; it did not die.
+  const refused = probe(data, 'process.exit(3);');
+  assert.equal(refused.status, 3);
+  const refusal = status(data.sandbox, f.env(data.sandbox));
+  assert.equal(refusal.counts.stopped, 0);
+  assert.equal(refusal.counts.finished, 2);
+  // A process that dies without recording anything keeps the word for that.
+  // It binds a listener first, so the port it held is on the record when it dies.
+  const killed = probe(data, `const net = require('node:net'); const fs = require('node:fs');
+    net.createServer().listen({ port: 0, host: '127.0.0.1' }).once('listening', function () {
+      fs.writeFileSync(process.env.PLAYGROUND_SANDBOX + '/run/pid', process.pid + ' ' + this.address().port);
+      setTimeout(() => process.kill(process.pid, 'SIGKILL'), 50);
+    });`);
+  assert.notEqual(killed.status, 0);
+  const after = status(data.sandbox, f.env(data.sandbox));
+  const [victim, held] = readFileSync(path.join(data.run, 'pid'), 'utf8').split(' ').map(Number);
+  const record = after.processes.find(p => p.pid === victim);
+  assert.equal(record.state, 'stopped');
+  assert.deepEqual(record.ports, [held]);
+  assert.equal(after.counts.stopped, 1);
+  // Ports name what is listening now, so a port whose process is gone is not one.
+  assert.equal(after.ports.includes(held), false);
+  assert.equal(after.ports.length, 1);
+});
+
+test('the process directory only ever contains complete records', async t => {
+  const f = fixture(t);
+  const data = await f.start();
+  const directory = path.join(data.run, 'processes');
+  const env = { ...environment, PLAYGROUND_SANDBOX: data.sandbox, GROVE_STATE_DIR: data.state };
+  // Each guarded process writes twice, at start and at exit. They run at the
+  // same time as the reader, which is when a half-written name would be listed.
+  const writers = Array.from({ length: 60 }, (unused, i) => new Promise(resolve => {
+    const child = spawn(process.execPath, ['--require', path.join(data.run, 'guard.cjs'), '-e', `setTimeout(() => {}, ${i * 4})`], { env, stdio: 'pipe' });
+    let stderr = '';
+    child.stderr.on('data', chunk => { stderr += chunk; });
+    child.on('exit', code => resolve({ code, stderr }));
+  }));
+  const stray = [];
+  let reads = 0;
+  const done = Promise.all(writers);
+  let finished = false;
+  done.then(() => { finished = true; });
+  while (!finished) {
+    for (const name of readdirSync(directory)) {
+      if (!name.endsWith('.json')) { stray.push(name); continue; }
+      // A reader that lists the directory can always read what it listed.
+      try { JSON.parse(readFileSync(path.join(directory, name), 'utf8')); reads += 1; }
+      catch (error) { stray.push(`${name}: ${error.code || error.message}`); }
+    }
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  const results = await done;
+  assert.equal(stray.length, 0, stray.slice(0, 3).join(' | '));
+  assert.equal(reads > 1000, true, `only ${reads} reads raced the writers`);
+  assert.equal(results.filter(r => r.code !== 0).length, 0, results.find(r => r.code !== 0)?.stderr);
+  assert.equal(status(data.sandbox, f.env(data.sandbox)).counts.finished >= 60, true);
 });

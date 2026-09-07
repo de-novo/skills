@@ -46,6 +46,9 @@ the record is not operating authority.
 - [Dryad and status extensions](evidence/2026-09-06-dryad.md): seats on real
   worktrees, concurrent attach through the process backend, in-flight and
   stalled labels, `status --json`, and the guard-reversal counts.
+- [Playground arc](evidence/2026-09-08-playground.md): the sample project's
+  whole arc in a sandbox with no Docker, the three defects that running it
+  found, and the guard-reversal counts.
 
 Published evidence uses repository-owned synthetic applications. Private project
 identities, configuration, source fingerprints, and adoption history do not

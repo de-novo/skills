@@ -65,16 +65,34 @@ Before startup, `run/sandbox.json` contains:
 - `verify_image`: the attachable service at that full revision, used in the printed verify command.
 - `names`: shared service hostname records rendered from the profile.
 - `processes` and `ports`: initially empty, refreshed after startup and by status.
+- `counts`: how many recorded processes are alive, finished and stopped.
 
 The adapter may read this receipt and keep its own files under `run/`. Node
 children inherit a sandbox preload through `NODE_OPTIONS`; it records their
 PID and start time in `run/processes/<pid>.json` before application code runs,
-then records ports on the listener's `listening` event. Those receipts include
-completed adapter invocations as well as live services. The preload permits
+then records ports on the listener's `listening` event, and records the exit
+status when the process ends. Those receipts include completed adapter
+invocations as well as live services, and the exit status is what tells them
+apart: a process that recorded its own exit is `finished`, whatever the code,
+and one that is gone having recorded nothing is `stopped`. A non-zero exit is
+not a failure here, because the overlay contract requires an adapter to refuse
+some calls and a refusal is a tool exiting non-zero on purpose. `status` prints
+the code beside any non-zero exit rather than counting it as a death. Records
+are written to `run/staging/` and
+renamed into `run/processes/`, so anything listing the process directory sees
+complete receipts and never a partial name. The preload permits
 Node, Git and process inspection commands, rejects shells and other commands,
 and enforces loopback and port-zero binding. Keep its environment when
 launching a child. `status` combines those receipts into `sandbox.json` and
 checks process start times so an unrelated process reusing a PID is not stopped.
+It reports `alive`, `finished` and `stopped` counts, and `ports` names what is
+listening now rather than every port the sandbox has ever held. Its exit code
+answers one question, whether isolation held; the counts carry health.
+
+The `playground` verbs take the sandbox as an argument, so `status` and `down`
+derive their own `GROVE_STATE_DIR` instead of asking for it again. A variable
+naming a different sandbox is refused. Every other catalog verb still requires
+it, which is what keeps a sandbox call away from the machine registry.
 
 This is a disposable development environment for the supplied sample, not an
 operating-system security boundary for untrusted code.

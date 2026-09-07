@@ -51,8 +51,16 @@ export function processGuard() {
   if (!root || process.env.GROVE_STATE_DIR !== path.join(root, 'state')) throw Error('playground: GROVE_STATE_DIR must be inside the sandbox');
   const record = { pid: process.pid, name: path.basename(process.argv[1] || 'node'), ports: [], host: '127.0.0.1', started: cp.spawnSync('ps', ['-p', String(process.pid), '-o', 'lstart='], { encoding: 'utf8' }).stdout.trim() };
   const file = path.join(root, 'run/processes', `${process.pid}.json`);
-  const write = () => { fs.writeFileSync(file + '.tmp', JSON.stringify(record)); fs.renameSync(file + '.tmp', file); };
+  // Anything reading the process directory must see only finished records, so
+  // the staging file lives outside it. Same filesystem, so the rename is atomic
+  // and a reader never lists a name that is about to disappear.
+  const staging = path.join(root, 'run/staging', `${process.pid}.json`);
+  const write = () => { fs.writeFileSync(staging, JSON.stringify(record)); fs.renameSync(staging, file); };
   write(); // guard: recording
+  // An orderly exit is recorded so a tool that ran and finished is not read as
+  // a service that died. Rule 6 keeps the record either way; this only tells
+  // the two apart.
+  process.on('exit', code => { record.exit = code; try { write(); } catch { /* the sandbox may already be gone */ } });
   const originalListen = net.Server.prototype.listen;
   net.Server.prototype.listen = function (...args) {
     const options = typeof args[0] === 'object' ? args[0] : { port: args[0], host: typeof args[1] === 'string' ? args[1] : undefined };
@@ -72,6 +80,19 @@ export function processGuard() {
   }
   cp.exec = cp.execSync = () => { throw Error('playground: shell commands are not allowed'); };
   require('node:module').syncBuiltinESMExports();
+}
+
+// `playground` verbs take the sandbox as an argument, so they derive their own
+// state directory rather than asking the caller to restate what they were just
+// given. A GROVE_STATE_DIR naming a different sandbox is still a conflict and is
+// refused: isolation rule 2 governs which state directory is used, not who types
+// it. Ordinary catalog verbs are unchanged and still require the variable.
+export function environmentForSandbox(sandbox, source = process.env) {
+  const expected = path.join(sandbox, 'state');
+  if (source.GROVE_STATE_DIR && path.resolve(source.GROVE_STATE_DIR) !== expected) {
+    fail(`GROVE_STATE_DIR ${source.GROVE_STATE_DIR} does not belong to ${sandbox}`); // guard: state
+  }
+  return environmentFor(sandbox, source);
 }
 
 function environmentFor(sandbox, source = process.env) {
@@ -137,9 +158,21 @@ function signature(pid) {
 export function alive(record) {
   return Number.isSafeInteger(record.pid) && record.pid > 1 && signature(record.pid) === record.started;
 }
+// alive: still running. finished: it recorded its own exit, whatever the code.
+// stopped: it is gone and recorded nothing, so it was killed or died hard.
+// A non-zero exit is not a failure here. The overlay contract requires an
+// adapter to refuse some calls, and a refusal is a tool exiting non-zero on
+// purpose. The record can only tell whether a process ended on its own terms,
+// so that is the distinction it is allowed to make; the code is kept beside it.
+export function processState(record) {
+  if (alive(record)) return 'alive';
+  return Number.isInteger(record.exit) ? 'finished' : 'stopped';
+}
 function records(sandbox) {
   const directory = path.join(sandbox, 'run/processes');
-  return readdirSync(directory).filter(name => name.endsWith('.json')).map(name => json(path.join(directory, name)));
+  return readdirSync(directory).filter(name => name.endsWith('.json')).flatMap(name => {
+    return [json(path.join(directory, name))];
+  });
 }
 function manifest(sandbox) {
   const data = json(path.join(sandbox, 'run/sandbox.json'));
@@ -151,8 +184,10 @@ export function status(sandbox, environment = process.env) {
   assertState(sandbox, environment);
   assertTree(sandbox);
   const data = manifest(sandbox);
-  data.processes = records(sandbox).map(record => ({ ...record, alive: alive(record) }));
-  data.ports = [...new Set(data.processes.flatMap(record => record.ports))];
+  data.processes = records(sandbox).map(record => ({ ...record, alive: alive(record), state: processState(record) }));
+  data.ports = [...new Set(data.processes.filter(record => record.alive).flatMap(record => record.ports))];
+  data.counts = { alive: 0, finished: 0, stopped: 0 };
+  for (const record of data.processes) data.counts[record.state] += 1;
   data.machine = machineMentions(sandbox);
   save(path.join(sandbox, 'run/sandbox.json'), data);
   return data;
@@ -203,7 +238,7 @@ export async function up(sandbox, { source = path.join(CATALOG, 'playground'), p
   }
   mkdirSync(path.dirname(sandbox), { recursive: true });
   mkdirSync(sandbox);
-  for (const name of ['project/.agents', 'state', 'seats', 'run/processes']) mkdirSync(path.join(sandbox, name), { recursive: true });
+  for (const name of ['project/.agents', 'state', 'seats', 'run/processes', 'run/staging']) mkdirSync(path.join(sandbox, name), { recursive: true });
   const data = { version: 1, sandbox, project: path.join(sandbox, 'project'), state: path.join(sandbox, 'state'), seats: path.join(sandbox, 'seats'), run: path.join(sandbox, 'run'), host, processes: [], ports: [], names: [] };
   save(path.join(data.run, 'sandbox.json'), data);
   writeFileSync(path.join(data.run, 'guard.cjs'), `(${processGuard.toString()})();\n`);
@@ -261,17 +296,31 @@ export async function runPlayground(args) {
   }
   if (verb === 'up') {
     const data = await up(sandbox, { host });
-    console.log(`sandbox ${data.sandbox}\nprocesses ${data.processes.filter(p => p.alive).length}/${data.processes.length} alive\nports ${data.ports.join(', ')}`);
+    console.log(`sandbox ${data.sandbox}\nservices ${data.counts.alive} alive, ${data.counts.finished} finished, ${data.counts.stopped} stopped\nports ${data.ports.join(', ')}`);
     console.log(nextCommands(data));
     return 0;
   }
   if (verb === 'status') {
-    const data = status(sandbox);
-    console.log(jsonOutput ? JSON.stringify(data, null, 2) : `sandbox ${data.sandbox}\n${data.processes.map(p => `process ${p.pid} ${p.name} ${p.alive ? 'alive' : 'stopped'}`).join('\n')}\nports ${data.ports.join(', ')}\nnames ${JSON.stringify(data.names)}\nmachine dryad ${data.machine.dryad.length}, overlays ${data.machine.overlays.length}`);
+    const data = status(sandbox, environmentForSandbox(sandbox));
+    if (jsonOutput) console.log(JSON.stringify(data, null, 2));
+    else {
+      // Every process stays in the record (rule 6). Only the ones that are
+      // still running, or died without finishing, are worth a line each.
+      const lines = data.processes
+        .filter(p => p.state !== 'finished' || p.exit !== 0)
+        .map(p => `process ${p.pid} ${p.name} ${p.state}${p.state === 'finished' ? ` (exit ${p.exit})` : ''}`);
+      console.log([`sandbox ${data.sandbox}`, ...lines,
+        `processes ${data.counts.alive} alive, ${data.counts.finished} finished, ${data.counts.stopped} stopped`,
+        `ports ${data.ports.join(', ')}`, `names ${JSON.stringify(data.names)}`,
+        `machine dryad ${data.machine.dryad.length}, overlays ${data.machine.overlays.length}`].join('\n'));
+    }
+    // The exit code answers one question: did isolation hold. The counts line
+    // carries health, so a service that crashed earlier does not make an
+    // isolation check read as an isolation failure.
     return data.machine.dryad.length || data.machine.overlays.length ? 1 : 0;
   }
   if (verb === 'down') {
-    const data = await down(sandbox);
+    const data = await down(sandbox, environmentForSandbox(sandbox));
     console.log(`sandbox ${sandbox}\nprocesses still alive ${data.processes}\nports still listening ${data.ports}\nmachine dryad mentions ${data.machine.dryad.length}\nmachine overlay mentions ${data.machine.overlays.length}\ndirectories remaining ${data.removed ? 0 : 1}`);
     return data.ok ? 0 : 1;
   }
