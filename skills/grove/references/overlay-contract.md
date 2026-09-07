@@ -7,7 +7,9 @@ cleanup command.
 
 Profile fields and value syntax live in
 [`runtime-profile.md`](runtime-profile.md). This file owns the command and
-receipt contract.
+receipt contract. How to write a conforming command for a project, and how to
+check the one you wrote with `de-novo skills overlay verify`, live in
+[`adapter.md`](adapter.md).
 
 ## Lifecycle
 

@@ -88,7 +88,9 @@ and fallthrough routing. Use exact revisions and verify runtime identity.
 Operate through `de-novo skills overlay`, never the project overlay command.
 Why, and every lifecycle rule (plans, application, readiness, pending-operation
 recovery, leases, cleanup, concurrency) have one authority:
-[overlay-contract.md](references/overlay-contract.md).
+[overlay-contract.md](references/overlay-contract.md). Writing that project
+command, and checking it with `de-novo skills overlay verify`:
+[adapter.md](references/adapter.md).
 
 Renew the lease during long work. Detach unused overrides and destroy the
 environment when the task ends. Stale cleanup is an explicit backstop, not the

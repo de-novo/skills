@@ -96,3 +96,56 @@ test('real process overlay verifies artifact replacement, readiness, recovery, a
   assert.equal(existsSync(endpointFile), false);
   t.diagnostic('process artifacts 2/2; rejected transitions 2/2; detached endpoints 1/1; destroyed environments 1/1');
 });
+
+test('overlay verify passes against the process backend that really starts a workload', (t) => {
+  const root = mkdtempSync(path.join(tmpdir(), 'grove-verify-process-'));
+  const endpointFile = path.join(root, 'w1', 'endpoint.json');
+  t.after(() => {
+    if (existsSync(endpointFile)) {
+      const { pid } = JSON.parse(readFileSync(endpointFile, 'utf8'));
+      try { process.kill(pid, 'SIGTERM'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+    }
+    rmSync(root, { recursive: true, force: true });
+  });
+  mkdirSync(path.join(root, '.agents'));
+  writeFileSync(path.join(root, 'process-test-marker'), 'isolated');
+  const source = `// verify artifact\n${WORKLOAD}`;
+  const artifact = path.join(root, 'artifact-verify.mjs');
+  writeFileSync(artifact, source);
+  const image = `process/api@sha256:${createHash('sha256').update(source).digest('hex')}`;
+  writeFileSync(path.join(root, 'artifacts.json'), JSON.stringify({ [image]: artifact }));
+  writeFileSync(path.join(root, '.agents/runtime-profile.yml'), stringify({
+    project: { slug: 'process-verify' },
+    addressing: { scheme: { overlay: '{service}--{env}.{project}.{tld}' } },
+    runtime: { commands: { overlay: `${JSON.stringify(process.execPath)} ${JSON.stringify(BACKEND)}` } },
+    services: { api: {} },
+    overlay: { attachable: ['api'] },
+    data: { infra: 'project' },
+  }));
+
+  const result = spawnSync(
+    process.execPath,
+    [CLI, 'overlay', 'verify', '--project', root, '--env', 'w1', '--image', image, '--json'],
+    {
+      encoding: 'utf8',
+      timeout: 60000,
+      env: {
+        ...process.env,
+        GROVE_STATE_DIR: path.join(root, 'state'),
+        GROVE_PROCESS_TEST_ROOT: root,
+        GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '5000',
+      },
+    }
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.ok, true);
+  assert.equal(report.counts.failed, 0);
+  // One service, no shared-only service to refuse: that case is counted skipped.
+  assert.equal(report.counts.skipped, 1);
+  assert.equal(report.counts.passed, report.counts.cases - 1);
+  assert.equal(report.cleanup.ok, true);
+  assert.equal(existsSync(endpointFile), false, 'the workload verify started is stopped again');
+  assert.equal(existsSync(path.join(root, 'state', 'process-verify.yml')), false, 'no lease survives verify');
+  t.diagnostic(`verify against a real backend: ${report.counts.passed}/${report.counts.cases - 1} cases, skipped 1, cleanup 1/1`);
+});

@@ -16,6 +16,7 @@ import {
 import { createHash, randomUUID } from 'node:crypto';
 import { homedir, hostname } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parse, stringify } from 'yaml';
 
 const ENV_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
@@ -41,6 +42,7 @@ const POSITIONAL_COUNTS = Object.freeze({
   status: [0, 1],
   touch: [1, 1],
   prune: [0, 0],
+  verify: [0, 0],
 });
 
 function isMap(value) {
@@ -150,6 +152,7 @@ export function parseOverlayCliArgs(args) {
 
   let project = null;
   let image = null;
+  let envOption = null;
   let staleAfter = null;
   let apply = false;
   let json = false;
@@ -175,6 +178,12 @@ export function parseOverlayCliArgs(args) {
     if (arg === '--image') {
       if (image != null) fail('--image may be passed only once.');
       image = takeOption(input, index, '--image');
+      index += 1;
+      continue;
+    }
+    if (arg === '--env') {
+      if (envOption != null) fail('--env may be passed only once.');
+      envOption = takeOption(input, index, '--env');
       index += 1;
       continue;
     }
@@ -211,19 +220,25 @@ export function parseOverlayCliArgs(args) {
     fail('--apply must be a Grove option before --, not a project passthrough flag.');
   }
   if (verb === 'attach' && image == null) fail('attach requires --image.');
-  if (verb !== 'attach' && image != null) fail(`--image is not valid for ${verb}.`);
+  if (!['attach', 'verify'].includes(verb) && image != null) {
+    fail(`--image is not valid for ${verb}.`);
+  }
+  if (envOption != null && verb !== 'verify') fail(`--env is not valid for ${verb}.`);
   if (!['status', 'prune'].includes(verb) && staleAfter != null) {
     fail(`--stale-after is not valid for ${verb}.`);
   }
-  if (['status', 'touch'].includes(verb) && apply) {
+  if (['status', 'touch', 'verify'].includes(verb) && apply) {
     fail(`--apply is not valid for ${verb}.`);
   }
-  if (json && verb !== 'status') fail('--json is valid only for status.');
+  if (json && !['status', 'verify'].includes(verb)) {
+    fail('--json is valid only for status and verify.');
+  }
   if (verb === 'touch' && passthrough.length > 0) {
     fail('touch does not dispatch project-specific arguments.');
   }
 
-  const env = positionals[0] == null ? null : assertOverlayEnv(positionals[0]);
+  const named = verb === 'verify' ? envOption : positionals[0];
+  const env = named == null ? null : assertOverlayEnv(named);
   return {
     help: false,
     verb,
@@ -1281,6 +1296,406 @@ function runPrune({ options, profile, projectRoot, environment, cwd }) {
   return destroyed === attempted ? 0 : 1;
 }
 
+// ------------------------------------------------------------------ verify
+// `overlay verify` drives the project's own adapter through the contract in a
+// throwaway environment and counts what it observed. Grove's front door runs
+// as a subprocess so the report owns stdout; observations dispatch the
+// adapter's own status directly, because a case is only true when the runtime
+// says so. Writing an adapter: skills/grove/references/adapter.md.
+const VERIFY_CLI = fileURLToPath(new URL('../bin/cli.mjs', import.meta.url));
+const VERIFY_MUTABLE_TAG = 'overlay-verify-mutable-tag';
+
+function verifyEnvironmentName(options) {
+  if (options.env != null) return assertOverlayEnv(options.env);
+  return `verify-${randomUUID().replace(/-/g, '').slice(0, 8)}`;
+}
+
+// A tag that cannot be immutable, pointing at the repository the caller named.
+// Never an invented reference: it is derived from --image and is only ever
+// used to see the request refused.
+function mutableTagFrom(image) {
+  return `${image.replace(/(?:@sha256:[0-9a-f]{64}|:[0-9a-f]{40})$/, '')}:${VERIFY_MUTABLE_TAG}`;
+}
+
+function lastLine(text) {
+  return String(text).split(/\r?\n/).map((line) => line.trim()).filter(Boolean).at(-1) ?? '';
+}
+
+function verifyFrontDoor(context, args) {
+  const result = spawnSync(
+    process.execPath,
+    [
+      VERIFY_CLI,
+      'overlay',
+      ...args,
+      '--project',
+      context.projectRoot,
+      ...(context.passthrough.length === 0 ? [] : ['--', ...context.passthrough]),
+    ],
+    {
+      cwd: context.cwd,
+      encoding: 'utf8',
+      // A verify run is a conformance probe, not seat work: it must not land
+      // in a seat journal.
+      env: { ...context.environment, DRYAD_ID: '' },
+    }
+  );
+  if (result.error) fail(`cannot run the Grove front door: ${result.error.message}`);
+  return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
+}
+
+// env null asks for the complete inventory, which is where an environment the
+// project invented next to ours becomes visible.
+function verifyObserve(context, env = null) {
+  const receipt = dispatchProjectCommand({
+    profile: context.profile,
+    projectRoot: context.projectRoot,
+    verb: 'status',
+    args: [...(env == null ? [] : [env]), ...context.passthrough],
+    apply: false,
+    expected: {},
+    environment: context.environment,
+    relay: false,
+  });
+  const inventory = inventoryFromReceipt(receipt);
+  if (inventory == null) fail('project status omitted environments; the runtime cannot be observed.');
+  return { receipt, inventory };
+}
+
+function verifyRegistry(context) {
+  return readOverlayState(context.profile.project.slug, context.environment).state;
+}
+
+// A probe the adapter must reject before touching the runtime. It is
+// dispatched without --apply so a permissive adapter cannot mutate anything.
+function verifyRefusalProbe(context, { service, image }) {
+  try {
+    const receipt = dispatchProjectCommand({
+      profile: context.profile,
+      projectRoot: context.projectRoot,
+      verb: 'attach',
+      args: [context.env, service, '--image', image, ...context.passthrough],
+      apply: false,
+      expected: {},
+      environment: context.environment,
+      relay: false,
+    });
+    return { refused: false, detail: `accepted the request (receipt ${JSON.stringify(receipt.verb)})` };
+  } catch (error) {
+    if (error.refused) return { refused: true, detail: error.message };
+    return { refused: false, detail: `did not answer with a refusal receipt — ${error.message}` };
+  }
+}
+
+const verifyPass = (evidence) => ({ status: 'pass', evidence });
+const verifySkip = (evidence) => ({ status: 'skip', evidence });
+const verifyFail = (evidence) => ({ status: 'fail', evidence });
+
+function verifyCases(context) {
+  const { env, image } = context;
+  const attachable = context.profile.overlay.attachable[0];
+  const declared = Object.keys(context.profile.services ?? {});
+  const notAttachable =
+    context.profile.overlay.sharedOnly[0] ??
+    declared.find((name) => !context.profile.overlay.attachable.includes(name)) ??
+    null;
+  const progress = { created: false, attached: null, refusalReceipt: null };
+
+  return [
+    {
+      name: 'plan-mutates-nothing',
+      run() {
+        if (!context.profile.overlay.planFirst) {
+          const refused = verifyFrontDoor(context, ['create', env]);
+          if (refused.status === 0) {
+            return verifyFail('overlay.plan_first is false but a create without --apply was accepted');
+          }
+          return verifyPass('plan_first: false — a mutation without --apply is refused without dispatch');
+        }
+        const plan = verifyFrontDoor(context, ['create', env]);
+        if (plan.status !== 0) {
+          return verifyFail(`create plan exited ${plan.status}: ${lastLine(plan.stderr)}`);
+        }
+        const state = verifyRegistry(context);
+        if (state.envs[env] || pendingFor(state, env)) {
+          return verifyFail('the plan wrote lifecycle state for the environment');
+        }
+        const { inventory } = verifyObserve(context, env);
+        if (inventory.has(env)) return verifyFail('the plan created the environment at runtime');
+        return verifyPass('receipt plan: true; registry and runtime unchanged');
+      },
+    },
+    {
+      name: 'create-observed',
+      run() {
+        const applied = verifyFrontDoor(context, ['create', env, '--apply']);
+        if (applied.status !== 0) {
+          return verifyFail(`create --apply exited ${applied.status}: ${lastLine(applied.stderr)}`);
+        }
+        const { inventory } = verifyObserve(context, env);
+        if (!inventory.has(env)) return verifyFail('status does not observe the environment after create');
+        const state = verifyRegistry(context);
+        if (!state.envs[env]) return verifyFail('create finished without a tracked lease');
+        if (pendingFor(state, env)) return verifyFail('create finished with a pending journal');
+        progress.created = true;
+        return verifyPass(`status observed ${env}; lease tracked, nothing pending`);
+      },
+    },
+    {
+      name: 'create-idempotent',
+      run() {
+        if (!progress.created) return verifySkip('the environment was never created');
+        const again = verifyFrontDoor(context, ['create', env, '--apply']);
+        if (again.status !== 0) {
+          return verifyFail(`the second create --apply exited ${again.status}: ${lastLine(again.stderr)}`);
+        }
+        const related = [...verifyObserve(context).inventory.keys()]
+          .filter((name) => name === env || name.startsWith(`${env}-`))
+          .sort();
+        if (related.length !== 1 || related[0] !== env) {
+          return verifyFail(`the second applied create left environments ${related.join(',') || 'none'}`);
+        }
+        return verifyPass(`two applied creates left 1 environment named ${env}`);
+      },
+    },
+    {
+      name: 'attach-refuses-unknown-service',
+      run() {
+        if (image == null) return verifySkip('--image is required for the attach cases');
+        if (notAttachable == null) {
+          return verifySkip('the profile declares no service outside overlay.attachable');
+        }
+        const front = verifyFrontDoor(context, ['attach', env, notAttachable, '--image', image, '--apply']);
+        if (front.status === 0) {
+          return verifyFail(`the front door attached ${notAttachable}, which is not in overlay.attachable`);
+        }
+        const probe = verifyRefusalProbe(context, { service: notAttachable, image });
+        if (!probe.refused) return verifyFail(`the adapter ${probe.detail}`);
+        progress.refusalReceipt ??= `attach ${notAttachable}`;
+        return verifyPass(`front door and adapter both refuse ${notAttachable}`);
+      },
+    },
+    {
+      name: 'attach-refuses-mutable-tag',
+      run() {
+        if (image == null) return verifySkip('--image is required for the attach cases');
+        const mutable = mutableTagFrom(image);
+        const front = verifyFrontDoor(context, ['attach', env, attachable, '--image', mutable, '--apply']);
+        if (front.status === 0) return verifyFail(`the front door accepted ${mutable}`);
+        const probe = verifyRefusalProbe(context, { service: attachable, image: mutable });
+        if (!probe.refused) return verifyFail(`the adapter ${probe.detail}`);
+        progress.refusalReceipt ??= `attach ${attachable} with a mutable tag`;
+        return verifyPass('front door and adapter both refuse a tag that is not a full sha or digest');
+      },
+    },
+    {
+      name: 'attach-observed',
+      run() {
+        if (image == null) return verifySkip('--image is required for the attach cases');
+        if (!progress.created) return verifySkip('the environment was never created');
+        const attached = verifyFrontDoor(context, ['attach', env, attachable, '--image', image, '--apply']);
+        // Even a failed attach may have reached the runtime; the inventory case
+        // wants whatever status now reports for that service.
+        const services = verifyObserve(context, env).inventory.get(env);
+        if (services?.has(attachable)) progress.attached = attachable;
+        if (attached.status !== 0) {
+          return verifyFail(`attach --apply exited ${attached.status}: ${lastLine(attached.stderr)}`);
+        }
+        const observed = services?.get(attachable);
+        if (observed == null) {
+          return verifyFail(`status does not observe ${attachable} as a service observation after attach`);
+        }
+        if (observed.image !== image || observed.ready !== true) {
+          return verifyFail(`status observes image ${observed.image} ready ${observed.ready}`);
+        }
+        return verifyPass(`status observes ${attachable} running the requested image, ready`);
+      },
+    },
+    {
+      name: 'status-inventory-shape',
+      run() {
+        if (progress.attached == null) {
+          return verifySkip('no service is attached, so per-service observations cannot be measured');
+        }
+        const { receipt } = verifyObserve(context, env);
+        const entry = receipt.environments.find((item) => item?.env === env);
+        if (!Array.isArray(entry?.services)) {
+          return verifyFail(`the environment entry has no services list (${JSON.stringify(entry?.services)})`);
+        }
+        const names = entry.services.filter((service) => typeof service === 'string');
+        if (names.length > 0) {
+          return verifyFail(`services are reported name-only (${names.join(',')}); attach cannot finalize`);
+        }
+        for (const service of entry.services) {
+          if (!isMap(service) || typeof service.service !== 'string') {
+            return verifyFail('a service entry is not an observation object');
+          }
+          if (typeof service.image !== 'string' || typeof service.ready !== 'boolean') {
+            return verifyFail(`${service.service} lacks an observed image or a boolean ready`);
+          }
+        }
+        return verifyPass(`${entry.services.length} service observation(s) carry service, image and ready`);
+      },
+    },
+    {
+      name: 'receipt-identity',
+      run() {
+        const receipt = dispatchProjectCommand({
+          profile: context.profile,
+          projectRoot: context.projectRoot,
+          verb: 'create',
+          args: [env, ...context.passthrough],
+          apply: false,
+          expected: { env },
+          environment: context.environment,
+          relay: false,
+        });
+        const other = `${env}-x`.slice(0, 63);
+        try {
+          validateReceipt(receipt, { verb: 'create', env: other });
+        } catch {
+          return verifyPass(`the receipt echoes env ${env}; one naming ${other} is rejected`);
+        }
+        return verifyFail('a receipt whose environment disagrees with the request was accepted');
+      },
+    },
+    {
+      name: 'refusal-leaves-no-journal',
+      run() {
+        if (!progress.created) return verifySkip('the environment was never created');
+        const blocked = pendingFor(verifyRegistry(context), env);
+        if (blocked != null) {
+          return verifySkip(`a pending ${operationTarget(blocked)} from an earlier case blocks this probe`);
+        }
+        // The image is rejected before any dispatch, so nothing can reach the
+        // runtime; what is measured is that the refusal locks nothing.
+        const refused = verifyFrontDoor(context, ['attach', env, attachable, '--image', VERIFY_MUTABLE_TAG, '--apply']);
+        if (refused.status === 0) return verifyFail('a refused attach reported success');
+        const state = verifyRegistry(context);
+        if (pendingFor(state, env)) {
+          return verifyFail(`the refusal left a pending ${operationTarget(pendingFor(state, env))} journal`);
+        }
+        const touched = verifyFrontDoor(context, ['touch', env]);
+        if (touched.status !== 0) {
+          return verifyFail(`the environment is locked after a refusal: ${lastLine(touched.stderr)}`);
+        }
+        const seen = progress.refusalReceipt == null
+          ? 'no adapter refusal receipt was probed'
+          : `adapter refusal receipt observed on ${progress.refusalReceipt}`;
+        return verifyPass(`nothing pending, lease still renewable; ${seen}`);
+      },
+    },
+    {
+      name: 'destroy-observed',
+      run() {
+        if (!progress.created) return verifySkip('the environment was never created');
+        const blocked = pendingFor(verifyRegistry(context), env);
+        if (blocked != null) {
+          return verifySkip(`a pending ${operationTarget(blocked)} from an earlier case blocks destroy`);
+        }
+        const destroyed = verifyFrontDoor(context, ['destroy', env, '--apply']);
+        if (destroyed.status !== 0) {
+          return verifyFail(`destroy --apply exited ${destroyed.status}: ${lastLine(destroyed.stderr)}`);
+        }
+        const { inventory } = verifyObserve(context, env);
+        if (inventory.has(env)) return verifyFail('status still observes the environment after destroy');
+        if (verifyRegistry(context).envs[env]) return verifyFail('destroy left the lease tracked');
+        return verifyPass(`status observes ${env} absent; lease released`);
+      },
+    },
+  ];
+}
+
+// Verify refused to start on a name that already existed, so this environment
+// and its journal belong to verify alone: it clears both, whatever failed.
+function verifyCleanup(context) {
+  const { env } = context;
+  try {
+    const state = verifyRegistry(context);
+    const tracked = Boolean(state.envs[env]) || pendingFor(state, env) != null;
+    if (!tracked && !verifyObserve(context, env).inventory.has(env)) {
+      return { ok: true, detail: `${env} is absent` };
+    }
+    if (pendingFor(state, env) != null) {
+      updateRegistry(context.profile, context.environment, (current) => {
+        delete current.pending_by_env[env];
+      });
+    }
+    const destroyed = verifyFrontDoor(context, ['destroy', env, '--apply']);
+    if (destroyed.status !== 0) {
+      return { ok: false, detail: `destroy ${env} failed: ${lastLine(destroyed.stderr)}` };
+    }
+    return { ok: true, detail: `destroyed ${env}` };
+  } catch (error) {
+    return { ok: false, detail: error.message };
+  }
+}
+
+function formatVerifyReport(report) {
+  const lines = [
+    `■ ${report.project} — overlay verify (env ${report.env})`,
+    `  cases         ${report.counts.passed}/${report.counts.cases - report.counts.skipped}`,
+    `  skipped       ${report.counts.skipped}`,
+    `  cleanup       ${report.cleanup.ok ? '1/1' : '0/1'}  ${report.cleanup.detail}`,
+  ];
+  for (const item of report.cases) {
+    lines.push(`  ${item.status.padEnd(4)}  ${item.name.padEnd(30)}  ${item.evidence}`);
+  }
+  return lines.join('\n');
+}
+
+function runOverlayVerify({ options, profile, projectRoot, environment, cwd }) {
+  if (options.image != null) assertOverlayImage(options.image);
+  const env = verifyEnvironmentName(options);
+  const context = {
+    profile,
+    projectRoot,
+    environment,
+    cwd,
+    env,
+    image: options.image ?? null,
+    passthrough: options.passthrough,
+  };
+
+  const state = verifyRegistry(context);
+  if (state.envs[env] || pendingFor(state, env)) {
+    fail(`environment ${JSON.stringify(env)} is already tracked; verify needs a name it can throw away.`);
+  }
+  if (verifyObserve(context, env).inventory.has(env)) {
+    fail(`environment ${JSON.stringify(env)} already exists at runtime; verify needs a name it can throw away.`);
+  }
+
+  const results = [];
+  for (const item of verifyCases(context)) {
+    let outcome;
+    try {
+      outcome = item.run();
+    } catch (error) {
+      outcome = verifyFail(error.message);
+    }
+    results.push({ name: item.name, ...outcome });
+  }
+  const cleanup = verifyCleanup(context);
+
+  const counts = {
+    cases: results.length,
+    passed: results.filter((item) => item.status === 'pass').length,
+    failed: results.filter((item) => item.status === 'fail').length,
+    skipped: results.filter((item) => item.status === 'skip').length,
+  };
+  const report = {
+    ok: counts.failed === 0 && cleanup.ok,
+    project: profile.project.slug,
+    env,
+    image: context.image,
+    counts,
+    cleanup,
+    cases: results,
+  };
+  console.log(options.json ? JSON.stringify(report, null, 2) : formatVerifyReport(report));
+  return report.ok ? 0 : 1;
+}
+
 export function runOverlayLifecycle({
   options,
   profile,
@@ -1297,6 +1712,8 @@ export function runOverlayLifecycle({
   switch (options.verb) {
     case 'status':
       return runStatus({ options, profile, projectRoot, environment });
+    case 'verify':
+      return runOverlayVerify({ options, profile, projectRoot, environment, cwd });
     case 'touch':
       return runTouch({ options, profile, environment });
     case 'prune':
@@ -1322,10 +1739,13 @@ usage:
   ${cli} overlay destroy ENV [--project ROOT] [--apply]
   ${cli} overlay touch ENV [--project ROOT]
   ${cli} overlay prune [--project ROOT] [--stale-after 12h] [--apply]
+  ${cli} overlay verify [--project ROOT] [--env NAME] [--image FULL_SHA] [--json]
 
 Workload mutations are plans unless --apply is present; touch only renews the
 lease. Applied mutations finalize only after status observes their runtime
 postcondition; rerun the same --apply command to recover a pending operation.
-prune never destroys without --apply. Project-specific arguments may follow
---. There is no infra down.`;
+prune never destroys without --apply. verify drives the project's own adapter
+through the contract in a throwaway environment and counts the result; pass
+--image to include the attach cases. Project-specific arguments may follow --.
+There is no infra down.`;
 }

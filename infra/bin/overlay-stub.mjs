@@ -48,6 +48,34 @@ if (process.env.GROVE_OVERLAY_STUB_REFUSE === 'true' && verb !== 'status') {
   process.exit(1);
 }
 
+// A conforming adapter refuses a request it will not honor before touching the
+// runtime. The switches let a test make this fixture non-conforming.
+const refuse = (error) => {
+  console.log(JSON.stringify({
+    ok: false, verb, env: positional[0], service: positional[1],
+    image: valueAfter('--image'), mutated: false, error,
+  }));
+  process.exit(1);
+};
+if (verb === 'attach') {
+  const image = valueAfter('--image') ?? '';
+  const attachable = (process.env.GROVE_OVERLAY_STUB_ATTACHABLE ?? '').split(',').filter(Boolean);
+  if (
+    attachable.length > 0 &&
+    !attachable.includes(positional[1]) &&
+    process.env.GROVE_OVERLAY_STUB_ACCEPT_ANY_SERVICE !== 'true'
+  ) {
+    refuse(`service ${positional[1]} is not overlaid here`);
+  }
+  if (
+    !/:[0-9a-f]{40}$/.test(image) &&
+    !/@sha256:[0-9a-f]{64}$/.test(image) &&
+    process.env.GROVE_OVERLAY_STUB_ACCEPT_ANY_IMAGE !== 'true'
+  ) {
+    refuse(`image ${image} is not a full sha or digest`);
+  }
+}
+
 const result = {
   ok:
     !args.includes('--fail') &&
@@ -68,8 +96,24 @@ const readRuntime = () => {
 const writeRuntime = (runtime) => {
   if (runtimeFile) writeFileSync(runtimeFile, JSON.stringify(runtime), 'utf8');
 };
+const observe = (services) => {
+  const sorted = [...services].sort((a, b) => a.service.localeCompare(b.service));
+  return process.env.GROVE_OVERLAY_STUB_NAME_ONLY === 'true'
+    ? sorted.map((item) => item.service)
+    : sorted;
+};
 const runtimeInventory = (runtime) => Object.entries(runtime.environments)
-  .map(([env, services]) => ({ env, services: [...services].sort((a, b) => a.service.localeCompare(b.service)) }))
+  .flatMap(([env, services]) => {
+    const entry = { env, services: observe(services) };
+    // A non-idempotent backend: every applied create leaves another environment
+    // next to the one that was asked for.
+    const copies = process.env.GROVE_OVERLAY_STUB_DUPLICATE_ENVS === 'true'
+      ? runtime.creates?.[env] ?? 1
+      : 1;
+    return Array.from({ length: copies }, (unused, index) => (
+      index === 0 ? entry : { env: `${env}-${index + 1}`, services: [] }
+    ));
+  })
   .sort((left, right) => left.env.localeCompare(right.env));
 
 function assertPendingIntent() {
@@ -92,7 +136,11 @@ function mutateRuntime() {
   const runtime = readRuntime();
   const environment = positional[0];
   const service = positional[1];
-  if (verb === 'create') runtime.environments[environment] ??= [];
+  if (verb === 'create') {
+    runtime.environments[environment] ??= [];
+    runtime.creates ??= {};
+    runtime.creates[environment] = (runtime.creates[environment] ?? 0) + 1;
+  }
   else if (verb === 'attach') {
     runtime.environments[environment] ??= [];
     runtime.environments[environment] = runtime.environments[environment]

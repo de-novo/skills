@@ -9,7 +9,19 @@ const [verb, env, service, ...args] = process.argv.slice(2);
 if (env && !/^w[1-3]$/.test(env)) throw new Error('unknown test environment');
 const workdir = join(root, env ?? 'status');
 if (env) mkdirSync(workdir, { recursive: true });
-if (verb === 'attach' && service !== 'api') throw new Error('test backend only owns api');
+// Refuse before touching the runtime, with the receipt shape the contract
+// gives a rejected request, so `overlay verify` can measure that path.
+const refuse = (error) => {
+  console.log(JSON.stringify({ ok: false, verb, env, service, mutated: false, error }));
+  process.exit(1);
+};
+if (verb === 'attach') {
+  if (service !== 'api') refuse('this backend overlays only api');
+  const requested = args.includes('--image') ? args[args.indexOf('--image') + 1] : null;
+  if (requested != null && !/(?::[0-9a-f]{40}|@sha256:[0-9a-f]{64})$/.test(requested)) {
+    refuse(`image ${requested} is not a full sha or digest`);
+  }
+}
 const marker = join(workdir, 'environment');
 const endpointFile = join(workdir, 'endpoint.json');
 const readEndpoint = file => existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
