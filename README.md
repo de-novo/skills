@@ -61,7 +61,7 @@ provisions a project's isolation units on that set. Without a link,
 `node infra/bin/cli.mjs …` works the same. There is no down command —
 stopping machine infra is a human decision because several projects live on it.
 
-`de-novo skills canopy [--port N] [--once]` shows the read-only [local Canopy overview](skills/dryad/README.md#canopy).
+`de-novo skills canopy [--port N] [--once]` shows read-only [Canopy worktree cards, skill activity, files and overlaps](skills/dryad/README.md#canopy).
 
 Engine table and ports: [`infra/README.md`](infra/README.md).
 Overlay lifecycle and cleanup contract:

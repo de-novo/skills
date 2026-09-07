@@ -107,8 +107,17 @@ to refresh its server-rendered first view.
 
 It reads only public CLI JSON: `dryad projects --json`, each project's
 `dryad status --json` and `dryad status --finished --json`, and
-`overlay status --json` for projects with overlays. The page shows counts,
-seats, journals, sessions, hostname links, Grove reports, and problems.
+`overlay status --json` for projects with overlays. Each project shows its
+counts, Grove report and problems, then one card per worktree: seats in
+most-recent-journal order, followed by unseated worktrees. Seat cards show
+the task's first line, status and last report, elapsed activity time, env
+state, hostname links (unattached hosts are marked and not linked), journal
+verb counts and last event, and committed/open file counts. Overlapping
+paths appear first and are marked; each card lists at most 12 paths with a
+remaining count. Project overlap lines name the seats sharing each path.
+Unseated cards show only path, branch and HEAD, with no file inspection.
+Older status JSON still renders the available seat cards and omits missing
+fields. Sessions remain plain text.
 Finished seats expand to show their journals. Failed or timed-out commands
 appear as errors while other projects remain visible.
 

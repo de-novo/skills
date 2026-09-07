@@ -107,7 +107,7 @@ export async function collectState(options = {}) {
         }
         if (grove.project_status?.error) problems.push(`Grove: ${grove.project_status.error}`);
         projects[index] = {
-          ...project, counts: live.counts ?? null, seats: live.seats ?? [],
+          ...live, ...project, counts: live.counts ?? null, seats: live.seats ?? [],
           finished: archive.finished ?? [], grove, problems,
           ...(live.error ? { error: live.error } : {}),
           ...(archive.error ? { finished_error: archive.error } : {}),
@@ -127,27 +127,70 @@ export function renderState(state) {
   const shown = value => value == null ? 'notMeasured' : esc(value);
   const journal = entry => entry ? `${entry.at ?? ''} ${entry.actor ?? ''} ${entry.event ?? ''} ${entry.detail ?? ''}`.trim() : '—';
   const link = hostname => {
-    const text = typeof hostname === 'string' ? hostname : hostname.url ?? hostname.hostname ?? '';
+    const text = hostname;
     try {
       const url = new URL(text.includes('://') ? text : `http://${text}`);
       if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return esc(text);
       return `<a href="${esc(url.href)}" rel="noreferrer">${esc(text)}</a>`;
     } catch { return esc(text); }
   };
-  const table = (seats, grove, fullJournal = false) => `<div class="table-wrap"><table><thead><tr>${['id', 'branch', '+n', 'env state', 'status', 'by', 'last journal line', 'hostnames', 'session'].map(label => `<th>${label}</th>`).join('')}</tr></thead><tbody>${seats.map(seat => {
+  // The only reader of the second-screen status fields. Keep the wire shape
+  // here so older producers and the server/browser renderer share one fallback.
+  const screen = project => {
+    const overlaps = project.overlaps ?? [];
+    const adaptSeat = seat => {
+      const entries = seat.journal ?? [];
+      const verbs = Object.create(null);
+      for (const entry of entries) verbs[entry.event] = (verbs[entry.event] ?? 0) + 1;
+      const changes = seat.changes;
+      const paths = new Map();
+      for (const [kind, files] of [['committed', changes?.committed], ['open', changes?.uncommitted]]) {
+        for (const file of files ?? []) {
+          const row = paths.get(file.path) ?? { path: file.path, labels: [], overlap: overlaps.some(item => item.path === file.path && item.seats.includes(seat.id)) };
+          row.labels.push(`${file.status} ${kind}`);
+          paths.set(file.path, row);
+        }
+      }
+      return { ...seat, entries, verbs, last: entries.at(-1), report: entries.findLast(entry => entry.event === 'report'),
+        hosts: (seat.hostnames ?? []).map(host => typeof host === 'string'
+          ? { text: host, attached: true } : { text: host.host ?? host.url ?? host.hostname ?? '', service: host.service, attached: host.attached !== false }),
+        files: changes ? { committed: changes.counts?.committed ?? changes.committed?.length ?? 0,
+          open: changes.counts?.uncommitted ?? changes.uncommitted?.length ?? 0,
+          truncated: changes.truncated, rows: [...paths.values()].sort((a, b) => Number(b.overlap) - Number(a.overlap) || a.path.localeCompare(b.path)) } : null };
+    };
+    const seats = (project.seats ?? []).map(adaptSeat).sort((a, b) => (Date.parse(b.last?.at) || 0) - (Date.parse(a.last?.at) || 0));
+    const worktrees = project.worktrees;
+    const unseated = (worktrees ?? []).filter(tree => !tree.seat);
+    return { seats, unseated, overlaps, overlapCount: project.overlaps?.length, total: worktrees?.length, finished: (project.finished ?? []).map(adaptSeat) };
+  };
+  const elapsed = at => {
+    const seconds = Math.max(0, Math.floor((Date.parse(state.updated_at) - Date.parse(at)) / 1000));
+    if (!Number.isFinite(seconds)) return '';
+    return seconds < 60 ? `${seconds}s ago` : seconds < 3600 ? `${Math.floor(seconds / 60)}m ago` : seconds < 86400 ? `${Math.floor(seconds / 3600)}h ago` : `${Math.floor(seconds / 86400)}d ago`;
+  };
+  const card = (seat, grove, archived = false) => {
     const pending = (grove?.pending ?? []).filter(item => item.env === seat.env).map(item => item.liveness ?? 'unknown');
     const envState = [...new Set([seat.env ?? 'none', seat.env_state, ...pending].filter(Boolean))].join(' ');
-    const values = [esc(seat.id), esc(seat.branch), seat.ahead == null ? '—' : `+${esc(seat.ahead)}`, esc(envState), esc(seat.status), esc(seat.by ?? '—'), esc(journal(seat.journal?.at(-1))), (seat.hostnames ?? []).map(link).join('<br>') || '—', esc(seat.session ?? '—')];
-    return `<tr>${values.map(value => `<td>${value}</td>`).join('')}</tr>${fullJournal ? `<tr><td colspan="9"><pre>${(seat.journal ?? []).map(entry => esc(journal(entry))).join('\n')}</pre></td></tr>` : ''}`;
-  }).join('')}</tbody></table></div>`;
+    const files = seat.files;
+    return `<article class="card ${archived ? 'archived' : 'seat'}" data-seat="${esc(seat.id)}">
+      <h3>${esc(seat.id)} · ${esc(seat.by ?? '—')}${seat.last ? ` · <time datetime="${esc(seat.last.at)}" title="${esc(seat.last.at)}">${esc(elapsed(seat.last.at))}</time>` : ''}</h3>
+      ${seat.task ? `<p class="task">${esc(seat.task.split(/\r?\n/)[0])}</p>` : ''}
+      <p class="status">${esc(seat.status)}${seat.report ? ` · ${esc(seat.report.detail)}` : ''}</p>
+      <p>env ${esc(envState)}${seat.hosts.length ? ' → ' + seat.hosts.map(host => `${host.attached ? link(host.text) : `${esc(host.text)} <span class="muted">(unattached)</span>`}${host.service ? ` <span class="muted">${esc(host.service)}</span>` : ''}`).join(' · ') : ''}</p>
+      ${seat.entries.length ? `<p class="skills">skills · ${Object.entries(seat.verbs).map(([verb, count]) => `${esc(verb)} ${count}`).join(' · ')}<br><span class="muted">last ${esc(seat.last.event)} · ${esc(seat.last.at)}${seat.last.detail ? ` · ${esc(seat.last.detail)}` : ''}</span></p>` : ''}
+      ${files ? `<div class="files"><p>files · +${esc(files.committed)} committed · ${esc(files.open)} open</p><ul>${files.rows.slice(0, 12).map(file => `<li${file.overlap ? ' class="shared"' : ''}>${file.overlap ? '<span title="Overlapping path">⚠</span> ' : ''}${esc(file.path)} <span class="muted">${esc(file.labels.join(' · '))}</span></li>`).join('')}</ul>${files.rows.length > 12 ? `<p class="muted">${files.rows.length - 12} more files</p>` : ''}${files.truncated ? `<p class="muted">Source file list truncated; counts include omitted entries.</p>` : ''}</div>` : ''}
+      <p class="meta">${esc(seat.worktree)}<br>${esc(seat.branch)}${seat.ahead == null ? '' : ` · +${esc(seat.ahead)}`}${seat.session ? `<br>session ${esc(seat.session)}` : ''}</p>
+      ${archived ? `<pre>${seat.entries.map(entry => esc(journal(entry))).join('\n')}</pre>` : ''}
+    </article>`;
+  };
   return `${state.error ? `<p class="problem">${esc(state.error)}</p>` : ''}${state.projects.length === 0 && !state.error ? '<p>No projects registered.</p>' : ''}${state.projects.map(project => {
+    const view = screen(project);
     const c = project.counts;
-    const reported = Object.entries(c?.reported ?? {}).filter(([, n]) => n > 0).map(([label, n]) => `${label} ${n}`).join(', ') || 'none';
-    const counts = c ? `seats ${c.seats} · worktrees ${c.worktrees_present}/${c.seats} present · ${project.overlay === true ? `envs ${c.envs_tracked}/${c.envs_wanted} tracked${c.envs_in_flight > 0 ? `, ${c.envs_in_flight} in-flight` : ''}` : 'envs none (overlay inactive)'} · reported ${reported}` : 'counts notMeasured';
+    const counts = c ? `seats ${c.seats}${view.total == null ? '' : ` · worktrees ${view.total} (${view.unseated.length} unseated)`} · envs ${c.envs_tracked}/${c.envs_wanted}${view.overlapCount == null ? '' : ` · overlaps ${view.overlapCount}`}` : 'counts notMeasured';
     const grove = project.grove;
     const gc = grove?.counts;
     const groveLine = grove?.inactive ? 'overlay inactive' : grove?.error ? esc(grove.error) : `environments ${shown(gc?.environments)} · attachments ${shown(gc?.attachments)} · pending ${shown(gc?.pending)}${(grove?.pending ?? []).map(item => ` · ${esc(item.env)} ${esc(item.verb)} ${esc(item.liveness ?? 'unknown')}`).join('')} · stale ${shown(gc?.stale)} · drift ${shown(gc?.drift)}`;
-    return `<section><h2>${esc(project.slug)} — ${esc(counts)}</h2><p class="root">${esc(project.root)}</p>${table(project.seats, grove)}<p class="grove">Grove · ${groveLine}</p>${(project.problems ?? []).map(problem => `<p class="problem">problem · ${esc(problem)}</p>`).join('')}<details data-project="${esc(project.root)}"><summary>finished ${project.finished.length}</summary>${table(project.finished, grove, true)}</details></section>`;
+    return `<section><h2>${esc(project.slug)} — ${esc(counts)}</h2><p class="grove">Grove · ${groveLine}</p>${(project.problems ?? []).map(problem => `<p class="problem">problem · ${esc(problem)}</p>`).join('')}<p class="root">${esc(project.root)}</p><div class="cards">${view.seats.map(seat => card(seat, grove)).join('')}${view.unseated.map(tree => `<article class="card unseated"><h3>${esc(tree.branch ?? 'detached HEAD')}</h3><p>Not a seat</p><p>${esc(tree.path)}</p><p>HEAD ${esc(tree.head)}</p></article>`).join('')}</div>${view.overlaps.map(item => `<p class="overlap">⚠ overlap · ${esc(item.path)} · ${item.seats.map(esc).join(' · ')}</p>`).join('')}<details data-project="${esc(project.root)}"><summary>finished ${view.finished.length}</summary><div class="cards">${view.finished.map(seat => card(seat, grove, true)).join('')}</div></details></section>`;
   }).join('')}`;
 }
 
