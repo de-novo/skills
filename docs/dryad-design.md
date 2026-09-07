@@ -400,6 +400,11 @@ seat 계약이 굳은 뒤에만 본다. 첫 판에는 없다.
   런처 argv는 그때 값이 된다.
 - **저널 보관.** finish가 저널을 지우는 것이 아까워지면 `finish --archive <dir>`
   로 파일을 남기는 것을 본다. 지금은 `status <id>` 리다이렉트로 충분하다.
+- **create 시점.** 실제 팀 overlay 도구 하나는 env를 워크트리·revision에 묶어 plan
+  시점의 create가 attach와 어긋났다. 어댑터가 attach 전에 다시 만드는 것으로 풀었지만,
+  프로파일에 "env는 첫 attach 때 만든다"를 둘 수 있는지는 Grove 쪽 후보다.
+- **hostnames 강조.** `status --json`의 hostnames는 env의 모든 이름이다. attach된
+  서비스만 표시하거나 attached 여부를 붙이는 것이 캐노피 2판의 몫이다.
 - **감독 우편함.** `worker_done`·`ask`·`escalation` 같은 것은 오케스트레이터의
   일이다. Dryad `report`는 그 축소판이 아니라 자리의 마지막 상태 한 줄이다.
 
