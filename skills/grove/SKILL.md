@@ -22,6 +22,12 @@ belong in `.agents/runtime-profile.yml`. Read it before acting; do not invent
 missing commands. Schema: [runtime-profile.md](references/runtime-profile.md).
 Human diagram and CLI onboarding: [README.md](README.md).
 
+## Plant it
+
+For a repository without a profile, follow
+[Apply to a project](README.md#apply-to-a-project): measure the existing
+project before writing its values. That procedure owns the planting steps.
+
 ## First actions
 
 Run these in order before changing anything. Each one counts what it saw.
@@ -34,8 +40,6 @@ Run these in order before changing anything. Each one counts what it saw.
    designated runtime location. `de-novo skills status` is the machine engine
    report, not the project's status.
 4. If `runtime.commands.overlay` exists, `de-novo skills overlay status`.
-
-Planting Grove on a project that has no profile: [README.md](README.md#apply-to-a-project).
 
 Machine engines (`/grove infra`): `de-novo skills infra status` reads. `infra
 up`, `infra provision`, `setup`, and `infra k3d connect` mutate the shared
