@@ -84,6 +84,15 @@ registry afterwards.
    exists returned 1. The check now reads registry fields whose whole value is
    a path inside the sandbox, and reports a record it cannot parse.
 
+   Whether the old check fired at all depended on YAML line wrapping, which is
+   the second reason it was the wrong question. A report note is written as a
+   quoted scalar and can be broken mid-token with a backslash, so the same
+   sandbox path was found in one archive and missed in another. Confirmed on
+   the live registry: for a seat that had reported its sandbox path, the raw
+   substring search returned 0 files and the same search on unwrapped text
+   returned 1. A path field is written as a plain scalar and did not wrap at
+   127 characters, so a real registration was not being missed.
+
 ## Measurement
 
 ```bash
@@ -102,6 +111,13 @@ Each new guard was reverted once and the test run again:
 | Staging outside the process directory | 1 |
 | A recorded exit means finished, whatever the code | 1 |
 | The registry check reads paths, not prose | 1 |
+
+The registry check was then run at the boundary it governs, a real machine
+seat: `dryad plan pgcheck --apply`, `playground up` inside that seat,
+`dryad report` quoting the sandbox path, then `playground down`, which reported
+0 for every count and exited 0. Against the live registry the check answers
+both directions correctly: the seat's own worktree, which is registered, is
+found in `de-novo-skills.yml`, and the sandbox path, which never was, is not.
 
 The ENOENT flake was reproduced three times out of eight before the fix, by
 running the playground tests against eight concurrent copies of the suite, and
