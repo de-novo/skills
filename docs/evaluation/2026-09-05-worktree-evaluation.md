@@ -1,107 +1,135 @@
-# 실제 Git 워크트리의 동시 변경 실험
+# A concurrent-change experiment on real Git worktrees
 
-이 문서는 병렬 실행 수정 전의 진단 기록이다. 수정된 동작과 재시도 없는 재실행은
-[병렬 실행 변경 증거](../evidence/2026-09-05-overlay-parallel.md)에 있다.
+This document is a diagnostic record from before the parallel-execution fix. The
+fixed behaviour and the re-run without retries are in
+[the parallel-execution change evidence](../evidence/2026-09-05-overlay-parallel.md).
 
-2026-09-05. 임시 Git 저장소에서 별도 브랜치의 실제 워크트리를 만들고,
-워크트리마다 독립 Node 작업 프로세스를 실행했다. 기존 프로젝트와 Orca 관리
-워크트리는 사용하지 않았다. 워크트리는 실제이고, 개발자의 판단은 정해진 작업을
-실행하는 프로세스로 대체했다. 사람이나 독립 AI 에이전트의 생산성 실험은 아니다.
+2026-09-05. Real worktrees on separate branches were created in a temporary Git
+repository, and an independent Node worker process ran in each worktree. No
+existing project and no worktree managed by an external worktree tool were used.
+The worktrees are real; a developer's judgment was replaced by a process that
+runs a fixed task. This is not a productivity experiment with people or with
+independent AI agents.
 
-## 이전 실험과 달라진 경계
+## What changed from the previous experiment's boundary
 
-[이전 합성 실험](2026-09-05-synthetic-evaluation.md)은 같은 임시 루트에서 생성한
-여러 실행 환경을 검증했다. 별도 Git 워크트리에서 동시에 수정·빌드하는 상황을
-확인하지 않았으므로 이 요구의 증거로는 부족했다.
+[The previous synthetic experiment](2026-09-05-synthetic-evaluation.md) verified
+several running environments created under the same temporary root. It did not
+check editing and building at the same time from separate Git worktrees, so it
+was not enough evidence for this requirement.
 
-이번에는 같은 기준 커밋에서 워크트리별 브랜치를 만들었다. 각 작업 프로세스는
-자신의 cwd에서 같은 상대 경로의 소스 파일을 서로 다른 내용으로 수정한다.
-실행 파일 조립과 실제 `node --check`를 거쳐 각 워크트리의 `.build/`에 산출물을
-만든다. 서로 다른 작업 PID, 브랜치, 소스, 산출물을 검사하고, 같은 머신의
-단조 시계로 수정·빌드 구간이 실제로 겹치는지 확인한다.
+This time a branch per worktree was created from the same base commit. Each
+worker process edits a source file at the same relative path inside its own cwd,
+with different content. It assembles an executable file, runs a real
+`node --check`, and produces an artifact in that worktree's `.build/`. Different
+worker PIDs, branches, sources, and artifacts are checked, and the monotonic
+clock of the same machine is used to confirm that the edit and build sections
+really overlap.
 
-프로파일은 두 워크트리에서 같은 프로젝트 이름을 사용한다. Grove 레지스트리와
-프로세스 백엔드는 공유하고 작업 환경 이름만 구분한다. 각 작업 프로세스가 자신의
-워크트리에서 직접 Grove CLI를 호출한다. 레지스트리가 실제 워크트리 경로와
-작업자 식별자를 구분해 기록하는지도 확인한다.
+The profile uses the same project name in both worktrees. The Grove registry and
+the process backend are shared, and only the work environment names differ. Each
+worker process calls the Grove CLI directly from its own worktree. Whether the
+registry records the real worktree path and the worker identifier separately is
+also checked.
 
-빌드 후 조정 프로세스가 두 산출물의 해시와 위치를 합성 백엔드에 등록한다.
-이 중앙 등록 단계는 실험용이며 독립적인 컨테이너 레지스트리 업로드가 아니다.
-이후 두 작업자가 동시에 생성·배포를 요청하고 자신의 HTTP 응답에서 실행 파일
-해시와 변경 내용을 대조한다. 준비 시간에는 수정 요청부터 양쪽의 독립 HTTP
-검증까지를 포함한다. 저장소·워크트리 생성과 기준 앱 기동은 별도 준비 시간이다.
+After the build, a coordinating process registers the two artifacts' hashes and
+locations with the synthetic backend. This central registration step is for the
+experiment; it is not an upload to an independent container registry. The two
+workers then request create and deploy at the same time and cross-check the
+executable-file hash and the changed content in their own HTTP responses. Setup
+time covers everything from the edit request to both sides' independent HTTP
+verification. Creating the repository and the worktrees and starting the
+baseline app are separate setup time.
 
-## 한쪽 작업이 다른 쪽에 미치는 영향
+## The effect of one side's work on the other
 
-두 실행 환경이 준비되면 한쪽 작업자는 자신의 앱과 기준 앱을 계속 조회한다.
-그동안 다른 작업자는 다음 변경을 수정·빌드·재배포한다. 이전 주소가 더 이상
-응답하지 않는지 확인하고, 자신의 실행 환경을 제거한 뒤 작업 프로세스를 종료하고
-실제 Git 워크트리까지 제거한다.
+Once both running environments are ready, one worker keeps querying its own app
+and the baseline app. Meanwhile the other worker edits, builds, and redeploys the
+next change. It confirms that the previous address no longer responds, removes
+its own running environment, ends the worker process, and removes the real Git
+worktree as well.
 
-남은 작업자의 HTTP 응답, 소스 해시, 산출물 해시와 브랜치가 유지되는지 확인한다.
-기준 체크아웃의 Git 상태와 기준 앱도 확인한다. 마지막 작업 환경과 워크트리까지
-정리하고, 실험 소유 프로세스와 HTTP 주소의 잔존 여부를 센다.
+Whether the remaining worker's HTTP response, source hash, artifact hash, and
+branch are kept is checked. The baseline checkout's Git status and the baseline
+app are checked too. The last work environment and worktree are then cleaned up,
+and the leftover experiment-owned processes and HTTP addresses are counted.
 
-## 동시 작업에서 드러난 문제
+## The problem the concurrent work exposed
 
-처음에는 Grove의 명시적인 잠금 충돌에만 호출부 재시도를 붙였다. 그런데 정상
-진행 중인 다른 작업을 보고 다음과 같이 응답해 비교가 중단됐다.
+At first, a call-site retry was attached only to Grove's explicit lock conflict.
+But Grove saw another operation that was proceeding normally and answered as
+follows, which stopped the comparison.
 
 ```text
 pending operation create w2 must be recovered first;
 rerun the pending create w2 operation with --apply.
 ```
 
-당시 후보의 `runMutation`은 잠금을 얻기 전에 미완료 작업의
-호환성을 검사한다. 따라서 다른 작업자가 아직 정상적으로 실행 중인 상태와,
-중단되어 복구가 필요한 상태가 호출자에게 같은 복구 요구로 보일 수 있다.
-이것은 워크트리 격리 실패의 증거가 아니라 **동시 변경의 대기·복구 안내 문제**다.
+In the candidate at the time, `runMutation` checks the compatibility of pending
+operations before it takes the lock. So a state where another worker is still
+running normally and a state that was aborted and needs recovery can look like
+the same demand for recovery to the caller. This is not evidence of a worktree
+isolation failure; it is **a problem in how a concurrent change guides waiting
+and recovery**.
 
-격리 검증을 끝내기 위해 실험 호출부에 제한된 대기 처리를 추가했다. 상대 작업이
-같은 실험의 다른 워크트리에 속하고 같은 머신의 잠금 소유 프로세스가 살아 있는
-동안만 기다린다. 미완료 기록이 이미 해소된 경우에도 자기 명령을 다시 시도한다.
-살아 있는 잠금 소유자가 없는 미완료 작업은 계속 실패로 처리한다. 상대 작업의
-명령을 대신 실행하거나 잠금을 삭제하지 않는다.
+To finish the isolation verification, a limited wait was added at the
+experiment's call site. It waits only while the competing operation belongs to
+another worktree of the same experiment and the lock-holding process on the same
+machine is alive. It also retries its own command when the pending record has
+already been resolved. A pending operation with no live lock holder is still
+treated as a failure. It does not run the competing operation's command on its
+behalf, and it does not delete the lock.
 
-**선택한 완료 실행은 이 호출부 보완을 포함한다. Grove 자체의 자동 대기 기능이
-아니다.** 성공한 재실행으로 처음의 중단을 지우지 않는다. 재시도를 거친 시간과
-잠금 충돌·진행 중 미완료 응답의 횟수를 결과에 따로 기록했다.
+**The completed run that was selected includes this call-site addition. It is
+not an automatic wait feature in Grove itself.** The successful re-run does not
+erase the original stop. The time spent going through retries and the counts of
+lock conflicts and in-progress pending responses are recorded separately in the
+results.
 
-## 판단과 남은 범위
+## The judgment, and what is still out of scope
 
-이번 범위에서 두 방식 모두 다른 워크트리의 소스·산출물·실행 환경과 기준 앱을
-유지했다. Grove는 공통 레지스트리에 작업자의 위치와 실행 상태를 남겼다.
-한편 동시 변경에는 직접 실행보다 추가 시간과 호출부 대기 처리가 필요했다.
+Within this scope both approaches kept the other worktree's source, artifacts,
+and running environment, and the baseline app. Grove left the worker's location
+and run state in the shared registry. At the same time, a concurrent change
+needed extra time and a call-site wait compared with direct execution.
 
-여러 워크트리에서 직접 작업하는 경험을 핵심 가치로 삼으려면 **진행 중인 작업을
-기다리는 상황과 실제 중단을 복구하는 상황을 구분하는 동작**을 우선 검토해야 한다.
-공통 복구 계약의 존재만으로 병렬 개발이 매끄럽다고 결론 내릴 수 없다.
+To make working directly across several worktrees the core value, the first
+thing to look at is **behaviour that distinguishes waiting for an operation in
+progress from recovering a real abort**. The existence of a shared recovery
+contract alone is not enough to conclude that parallel development is smooth.
 
-Git 병합 충돌의 해결, 실제 개발자의 판단과 작업 시간, 컨테이너 빌드·배포,
-공유 DB 격리, DNS 라우팅, 장기 유지보수 비용은 측정하지 않았다. 직접 실행도
-이번 실험의 분리된 프로세스 파일 구조에 맞춘 도구이므로 모든 백엔드의 동시
-변경이 안전하다는 증거로 일반화하지 않는다.
+Resolving Git merge conflicts, a real developer's judgment and working time,
+container build and deploy, shared DB isolation, DNS routing, and long-term
+maintenance cost were not measured. Direct execution is also a tool fitted to
+this experiment's separated process file layout, so do not generalize it as
+evidence that concurrent changes are safe on every backend.
 
-## 실행 증거
+## Execution evidence
 
-체크아웃 루트에서 실행한다. 임시 Git 저장소에 기준 커밋과 워크트리를 만들며,
-카탈로그를 커밋하거나 외부로 푸시하지 않는다. 기존 결과를 보존하려면 새 출력
-경로를 지정한다.
+Run it from the checkout root. It creates a base commit and worktrees in a
+temporary Git repository; it does not commit the catalog and does not push
+anywhere outside. Give a new output path to preserve existing results.
 
 ```bash
 node docs/evaluation/synthetic/worktrees.mjs /tmp/grove-worktree-result.json
 npm test
 ```
 
-- [선택한 실행 결과](synthetic/worktree-results.json): 후보 SHA, 도구 파일 해시,
-  머신 조건, 구간별 시간, 실제 겹친 수정·빌드 구간, 재시도와 관찰·정리 결과.
-- [조정 러너](synthetic/worktrees.mjs), [워크트리별 작업 프로세스](synthetic/worktree-worker.mjs).
-- [첫 시도](synthetic/worktree-attempt-01.json): macOS 임시 경로 별칭을 실경로와
-  직접 비교한 도구 오류. 실경로 정규화 후 재실행했다.
-- [동시 변경이 중단된 시도](synthetic/worktree-attempt-02.json): 잠금 응답에만
-  재시도한 호출부가 진행 중 미완료 작업 응답에서 중단됐다.
-- [대기 보완 후 이전 실행](synthetic/worktree-attempt-03.json): 격리 시나리오는
-  완료했다. 수정·빌드 구간의 실제 겹침을 수치로 추가 확인하기 전 기록이다.
+- [The selected run results](synthetic/worktree-results.json): candidate SHA,
+  tool file hashes, machine conditions, per-section times, the edit and build
+  sections that actually overlapped, and the retry, observation, and cleanup
+  results.
+- [The coordinating runner](synthetic/worktrees.mjs), [the per-worktree worker process](synthetic/worktree-worker.mjs).
+- [First attempt](synthetic/worktree-attempt-01.json): a tool error that compared
+  a macOS temporary path alias directly against the real path. It was re-run
+  after normalizing to the real path.
+- [The attempt where the concurrent change stopped](synthetic/worktree-attempt-02.json):
+  a call site that retried only on the lock response stopped on the response for
+  an in-progress pending operation.
+- [The previous run, after the wait was added](synthetic/worktree-attempt-03.json):
+  the isolation scenario completed. It is the record from before the real overlap
+  of the edit and build sections was additionally confirmed as a number.
 
-집계값은 러너 결과를 사용한다. 각 방식의 중앙값과 같은 쌍 안의 시간 차이를
-구분하며, 서로 다른 프로토콜의 실행을 합치거나 초기 실패를 성공률에서 숨기지 않는다.
+The aggregates use the runner's results. Each approach's median and the time
+difference within the same pair are kept separate; runs of different protocols
+are not merged, and the initial failures are not hidden inside a success rate.

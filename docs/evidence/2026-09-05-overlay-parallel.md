@@ -1,41 +1,52 @@
-# 오버레이별 병렬 실행 변경과 검증
+# Parallel execution per overlay: the change and its verification
 
-서로 다른 오버레이의 생성·반영·삭제까지 프로젝트 전체 잠금이 막던 문제를
-수정했다. 같은 오버레이의 변경은 계속 상호 배제한다. 실행과 준비 확인 동안에는
-오버레이별 잠금을 유지하며, 공통 레지스트리는 짧은 읽기·병합·쓰기 구간에만
-잠근다. 다른 오버레이의 기록을 오래된 스냅샷으로 덮어쓰지 않는다.
+A project-wide lock used to block create, apply, and delete across different
+overlays. That is fixed. Changes to the same overlay still exclude each other.
+A per-overlay lock is held during execution and the readiness check, and the
+shared registry is locked only for a short read, merge, and write section. One
+overlay's record is never overwritten by a stale snapshot of another.
 
-미완료 작업을 오버레이별로 기록한다. 한쪽 복구가 필요해도 다른 쪽의 변경,
-상태 확인, lease 갱신은 진행된다. 오래된 환경 정리도 대상별로 잠그고, 실패한
-대상은 남기면서 다른 대상의 정리를 계속한다. 정리 직전에 lease를 다시 확인한다.
+Unfinished work is recorded per overlay. A recovery needed on one side does not
+stop change, status checks, or lease renewal on the other. Cleanup of old
+environments also locks per target; a failed target is left in place while
+cleanup of the other targets continues. The lease is checked again immediately
+before cleanup.
 
-운영 계약과 상태 형식 이행의 정본은
-[overlay-contract.md](../../skills/grove/references/overlay-contract.md)다. 기존 어댑터가
-프로젝트 전체 직렬 실행을 전제로 공통 파일을 갱신했다면, 병렬 CLI 사용 전에
-그 파일의 동시 갱신을 어댑터에서 보호해야 한다. 기존 CLI와 새 레지스트리 형식을
-섞어 사용하는 대신 공유 레지스트리의 CLI 사용자를 함께 갱신한다.
+The authority for the operating contract and for the status format is
+[overlay-contract.md](../../skills/grove/references/overlay-contract.md). If an
+existing adapter updated a shared file on the assumption that a project runs
+serially, that file's concurrent update must be protected in the adapter before
+the parallel CLI is used. Update the shared registry's CLI users together,
+rather than mixing the old CLI with the new registry format.
 
-## 실행 대상과 결과
+## What was executed, and the result
 
-기존 소비 프로젝트는 사용하지 않았다. 임시 Git 저장소의 실제 워크트리와
-격리된 Node HTTP 프로세스에서 변경된 경로를 실행했다. 공유 엔진·DB·라우팅을
-조작하지 않았다. 공유 백엔드에서의 어댑터 동시 실행은 `notMeasured`다.
+No existing consuming project was used. The changed paths ran on a real
+worktree in a temporary Git repository and on isolated Node HTTP processes.
+Shared engines, DBs, and routing were not touched. Concurrent adapter execution
+on a shared backend is `notMeasured`.
 
-- [회귀 검사](../../infra/bin/overlay-parallel.test.mjs)는 실제 워크트리에서 두
-  생성·반영·삭제 명령이 모두 실행 중인 상태를 만든다. 같은 대상의 경쟁 명령은
-  거절되고, 완료 순서가 뒤바뀌어도 상대의 기록과 복구 요청이 보존되는지 확인한다.
-- 기존 단일 복구 기록을 읽고 보존해 새 형식으로 쓰는 경로, 복구와 무관한 환경의
-  상태·lease 갱신, 정리 중 갱신된 lease의 보존, 실패한 대상 이후의 정리를 실행했다.
-- [실제 워크트리 재실행](../evaluation/synthetic/worktree-parallel-results.json)은
-  실험 호출부의 대기·재시도를 제거했다. 작업자가 한 번씩 명령을 호출하며, 한쪽
-  재배포·삭제 중 다른 쪽 소스·산출물·응답과 기준 앱의 유지 여부를 확인했다.
-- [합성 실패 시나리오 재실행](../evaluation/synthetic/parallel-results.json)은
-  이전 이미지 잔존, 준비 실패, 실행 중단, 정리 실패를 유지한 채 다른 오버레이가
-  진행할 수 있는지 확인했다.
+- [The regression test](../../infra/bin/overlay-parallel.test.mjs) builds a
+  state on a real worktree in which two create, apply, and delete commands are
+  all running. It checks that a competing command on the same target is
+  rejected, and that each side's record and recovery request are preserved even
+  when the completion order is reversed.
+- These paths ran: reading an existing single recovery record, preserving it,
+  and writing it in the new format; status and lease renewal for an environment
+  unrelated to the recovery; preservation of a lease renewed during cleanup;
+  cleanup of targets after a failed one.
+- [The real-worktree re-run](../evaluation/synthetic/worktree-parallel-results.json)
+  removed the waits and retries in the experiment's call site. Each worker calls
+  each command once. It checks whether the other side's source, artifacts, and
+  response, and the baseline app, are kept while one side redeploys or deletes.
+- [The synthetic failure-scenario re-run](../evaluation/synthetic/parallel-results.json)
+  holds a leftover previous image, a readiness failure, an aborted run, and a
+  failed cleanup in place, and checks whether another overlay can still proceed.
 
-구체적인 후보 식별자, 실행 개수와 검사 결과는
-[검증 영수증](2026-09-05-overlay-parallel.json)에 기록한다. 후보는 기록된 기준
-커밋 위의 미커밋 변경이며 파일 해시로 구분한다. 커밋·푸시는 수행하지 않았다.
+The specific candidate identifiers, the number of runs, and the check results
+are recorded in the [verification receipt](2026-09-05-overlay-parallel.json). A
+candidate is the uncommitted change on top of the recorded base commit,
+distinguished by file hash. No commit or push was performed.
 
 ```bash
 node --test infra/bin/overlay-parallel.test.mjs
@@ -44,7 +55,9 @@ node docs/evaluation/synthetic/run.mjs docs/evaluation/synthetic/parallel-result
 npm test
 ```
 
-운영 코드를 변경 전으로 되돌린 실행과, 오버레이 잠금·복구 기록 키 검사·잠금
-회수 보호를 각각 제거한 실행에서 새 검사가 실패하는 것을 확인했다. 변형한
-JavaScript는 모두 구문 검사를 통과했다. 이후 운영 코드를 복원하고 전체 검사를
-실행했다. 변형 실행의 결과도 검증 영수증에 보존한다.
+The new checks were confirmed to fail in a run with the production code reverted
+to its state before the change, and in runs that removed the overlay lock, the
+recovery-record key check, and the lock-reclaim protection, each separately.
+Every mutated JavaScript passed a syntax check. The production code was then
+restored and the full check suite ran. The mutation runs' results are also
+preserved in the verification receipt.

@@ -1,208 +1,267 @@
-# Grove의 가치, 경쟁력, 제공하려는 경험
+# Grove's value, its competitive position, and the experience it intends to give
 
-작성: 2026-09-05. 상태: 제품 방향 분석과 검증 제안.
-구현 기준: `d7fa8c9988887b605512f3bb5d2f1fa9b6a48f54`.
-이 문서는 운영 명세나 구현 승인서가 아니다. 현재 동작은
-[스킬](../skills/grove/SKILL.md), [프로파일](../skills/grove/references/runtime-profile.md),
-[overlay 계약](../skills/grove/references/overlay-contract.md)이 소유한다.
+Written 2026-09-05. Status: product direction analysis and a verification
+proposal. Implementation base: `d7fa8c9988887b605512f3bb5d2f1fa9b6a48f54`.
+This document is not an operating specification and not an approval to
+implement. Current behaviour is owned by
+[the skill](../skills/grove/SKILL.md),
+[the profile](../skills/grove/references/runtime-profile.md), and
+[the overlay contract](../skills/grove/references/overlay-contract.md).
 
-## 판단
+## The judgment
 
-**Grove가 공개하는 가치는 여러 작업자가 공유 개발 환경에서 변경을 실행하고,
-실제 반영을 확인하며, 실패를 복구하는 공통 계약과 재현 가능한 검증 도구다.**
+**What Grove publishes is a shared contract, and a reproducible verification
+tool, for several workers to run a change in a shared development environment,
+confirm that it really took effect, and recover from a failure.**
 
-공개 저장소의 방문자는 특정 조직의 환경이나 도입 이력을 몰라도 예제를 실행하고,
-자신의 backend를 연결하며, 같은 실패 조건을 검증할 수 있어야 한다.
-[독립 Kubernetes 실험](evaluation/kubernetes/README.md)은 그 경험을 제공한다.
-독립 제품으로 크게 투자할 근거와 실제 생산성 효과는 별도로 검증해야 한다.
+A visitor to the public repository should be able to run the examples, connect
+their own backend, and verify the same failure conditions without knowing any
+particular organization's environment or adoption history.
+[The independent Kubernetes experiment](evaluation/kubernetes/README.md) gives
+that experience. The grounds for investing heavily in a standalone product, and
+the real productivity effect, have to be verified separately.
 
-현재 확보한 것은 잘못된 완료 판정을 줄이는 실행 계약과 회귀 검증이다.
-사용자의 시간 절감, 운영자 개입 감소, 실제 프로젝트 간 재사용성, 비용 절감,
-외부 도입 의향은 아직 `notMeasured`다. 구현 정확성과 제품 가치는 다른 질문이다.
+What has been secured so far is an execution contract that reduces false
+completion judgments, plus regression verification. A user's time saved, a
+reduction in operator intervention, reuse across real projects, cost saving, and
+outside adoption intent are still `notMeasured`. Implementation correctness and
+product value are different questions.
 
-Grove가 집중할 가치는 작업자가 바뀌어도 환경 사용 규칙을 다시 설명하지 않고,
-요청한 변경이 실제로 준비됐는지 확인하며, 중단된 작업과 남은 환경을 추적하는 것이다.
-환경의 준비부터 종료까지 사람이 대신 판단하던 일을 얼마나 줄이는지가 투자 기준이다.
+The value Grove should focus on is this: the rules for using the environment do
+not have to be explained again when the worker changes; the requested change can
+be confirmed as actually ready; and aborted operations and leftover environments
+are tracked. The investment criterion is how much it reduces the work a person
+used to judge by hand, from an environment's preparation through to its
+shutdown.
 
-## 누구의 어떤 문제인가
+## Whose problem, and which problem
 
-| 대상과 상황 | 반복되는 비용 | Grove가 줄이려는 것 | 적합도 판단 |
+| Who, and in what situation | The repeated cost | What Grove aims to reduce | Fit judgment |
 | --- | --- | --- | --- |
-| 같은 머신에서 여러 프로젝트를 오가는 개발자 | 주소·엔진·반영 방식·데이터 경계를 다시 파악 | 프로젝트별 값을 같은 형태로 발견 | 운영 방식이 자주 달라질수록 유리 |
-| 공유 baseline에서 동시에 변경을 확인하는 여러 에이전트 | 서로의 배포 덮어쓰기, 잘못된 버전 확인, 잔여 환경 | 변경 범위와 수명, 완료 판정의 공통 계약 | 핵심 대상. 프로젝트의 overlay·라우팅 구현 필요 |
-| 공유 환경을 돌보는 담당자 | 실행 허용 여부와 장애·정리 요청에 반복 개입 | 승인 범위 명시, 실패 상태와 복구 경로 보존 | 개입 시간이 실제 줄어야 가치가 생김 |
-| 혼자 작은 앱 하나를 개발하는 사람 | 비교적 단순한 시작·종료 | 프로파일 작성과 adapter 유지 부담이 추가될 수 있음 | 기존 도구만으로 충분하면 도입하지 않음 |
+| A developer moving between several projects on the same machine | Working out the addresses, engines, how a change is applied, and the data boundary again | Discovering each project's values in the same shape | The more often the operating style differs, the better the fit |
+| Several agents confirming changes at the same time on a shared baseline | Overwriting each other's deploys, confirming the wrong version, leftover environments | A shared contract for the change's scope, its lifetime, and the completion judgment | The core target. Requires the project's own overlay and routing implementation |
+| The person who looks after a shared environment | Repeated intervention on whether a run is allowed, and on failure and cleanup requests | Stating the approved scope, and preserving the failure state and the recovery path | Value only appears if intervention time actually drops |
+| Someone developing one small app alone | A relatively simple start and stop | Writing a profile and maintaining an adapter may be added burden | Do not adopt it if the existing tools are enough |
 
-서비스 수 자체보다 동시 작업, 환경 전환, 타인의 상태에 대한 의존성이 더 중요한
-선별 기준이다. 많은 서비스를 가진 프로젝트라도 충돌과 조정 비용이 작으면
-복잡한 overlay 체계를 도입할 이유는 약하다.
+The number of services matters less as a screening criterion than concurrent
+work, environment switching, and dependence on other people's state. Even a
+project with many services has weak reason to adopt a complex overlay scheme if
+its conflict and coordination costs are small.
 
-## 제공하려는 경험
+## The experience it intends to give
 
-사용자가 느껴야 할 경험은 다음 문장이다.
+The experience a user should feel is this sentence.
 
-> 내가 확인할 변경과 주소를 알고, 다른 작업을 방해하지 않으면서 확인을 끝내고,
-> 중간에 끊겨도 이어갈 수 있으며, 종료 후 남은 환경을 다시 추측하지 않는다.
+> I know which change and which address I am checking, I finish the check
+> without disturbing anyone else's work, I can carry on after being cut off
+> partway, and after finishing I do not have to guess again about what
+> environment is left behind.
 
-이는 목표 경험이다. 현재 CLI가 전부 자동으로 제공한다는 뜻은 아니다.
+This is the target experience. It does not mean the current CLI provides all of
+it automatically.
 
-| 작업 순간 | 사용자가 얻어야 할 답 | 현재 제공 범위와 빈틈 |
+| Moment in the work | The answer the user needs | What is provided now, and the gaps |
 | --- | --- | --- |
-| 프로젝트에 들어옴 | 어디를 보고, 무엇을 실행하면 되는가 | 프로파일·URL 출력 제공. DNS·리스너와 통합 상태 화면은 제공하지 않음 |
-| 작업 시작 | 내가 바꿀 수 있는 범위와 현재 소유자는 누구인가 | 소유권 절차 문서화. baseline writer 자동 발견·획득은 프로젝트 몫 |
-| 변경 확인 | 내 변경만 반영하고 나머지는 어떤 baseline을 쓰는가 | overlay dispatch와 lease 제공. 빌드·workload·fallthrough는 adapter와 프로젝트 몫 |
-| 완료 확인 | 요청한 실행 이미지가 준비됐는가 | adapter의 런타임 이미지·준비 상태를 비교. 실제 요청 경로와 데이터 정합성은 별도 검증 |
-| 중간 실패 | 무엇이 적용됐고 무엇을 재시도해야 하는가 | pending 기록, 동일 작업 재시도, 관측 후 확정 |
-| 작업 종료 | 내가 만든 환경이 없어졌는가 | 프로젝트가 보고하는 부재를 확인한 뒤 registry 정리. 자동 만료 controller는 없음 |
+| Entering the project | Where do I look, and what do I run | Profile and URL output are provided. DNS, listeners, and an integrated status screen are not |
+| Starting work | What is the scope I may change, and who owns it now | The ownership procedure is documented. Automatic discovery and acquisition of the baseline writer is the project's job |
+| Confirming a change | Only my change is applied, and which baseline does the rest use | Overlay dispatch and the lease are provided. Build, workload, and fallthrough are the adapter's and the project's job |
+| Confirming completion | Is the run image I asked for ready | The adapter's runtime image and readiness state are compared. The real request path and data consistency are verified separately |
+| A failure partway | What was applied, and what do I have to retry | A pending record, retrying the same operation, and confirming after observation |
+| Finishing work | Is the environment I created gone | The registry is cleaned up after confirming the absence the project reports. There is no automatic expiry controller |
 
 ```mermaid
 flowchart LR
-  A[프로젝트와 현재 환경 파악] --> B[변경 범위와 소유권 확인]
-  B --> C[필요한 변경만 실행]
-  C --> D[실행 버전과 준비 상태 확인]
-  D --> E[사용자가 결과 확인]
-  E --> F[작업 환경 정리와 부재 확인]
-  C --> G[중단 상태와 복구 작업 표시]
+  A[See the project and the current environments] --> B[Confirm the change scope and ownership]
+  B --> C[Run only the required change]
+  C --> D[Confirm the running version and readiness]
+  D --> E[The user confirms the result]
+  E --> F[Clean up the work environment and confirm its absence]
+  C --> G[Show the aborted state and the recovery work]
   D --> G
   G --> C
 ```
 
-초기 프로젝트 설정에는 설명과 판단이 필요하다. 그러나 같은 프로젝트의 다음
-작업부터 같은 질문에 다시 답하게 만들면 실패한 경험이다. 이미 받은 권한을
-반복 요청하거나, 사용자가 registry와 JSON을 직접 해석해야만 다음 행동을 알 수
-있는 흐름을 목표로 삼지 않는다. 내부 계약은 에이전트를 돕고, 사람에게는 대상,
-진행 상태, 막힌 이유, 필요한 결정이 보여야 한다.
+Setting a project up the first time needs explanation and judgment. But it is a
+failed experience if the same questions have to be answered again from the next
+piece of work on the same project. Do not aim at a flow where an already granted
+permission is requested repeatedly, or where the user has to read the registry
+and the JSON directly to know the next action. The internal contract helps the
+agent; a person has to see the target, the progress, the reason it is blocked,
+and the decision needed.
 
-## 대안과 비교하면 무엇이 남는가
+## What is left once you compare it with the alternatives
 
-아래는 2026-09-05에 확인한 공식 문서의 기능 비교다. 가격, 채택률, 성능 우위,
-각 제품의 모든 기능을 조사한 결과는 아니다. 마지막 열은 그 자료와 현재 Grove
-구현을 바탕으로 한 판단이다. 다른 도구에 같은 계약을 구현할 수 없다는 주장도 아니다.
+Below is a feature comparison of the official documentation, checked on
+2026-09-05. It is not a survey of price, adoption rate, performance advantage,
+or every feature of each product. The last column is a judgment based on that
+material and on Grove's current implementation. It is also not a claim that the
+same contract could not be implemented on another tool.
 
-| 대안 | 공식 문서에서 확인한 제공 경험 | Grove에 주는 시사점 |
+| Alternative | The experience found in the official documentation | What it implies for Grove |
 | --- | --- | --- |
-| Docker Compose Watch | 파일 변경에 따른 동기화, 재빌드, 재시작. [공식 문서](https://docs.docker.com/compose/how-tos/file-watch/) | 코드 반영 속도와 시작 명령 통합만으로 차별화하기 어렵다. 이미 잘 동작하면 활용해야 한다 |
-| OrbStack | 컨테이너·Compose 서비스의 자동 도메인, 웹 포트 탐지와 HTTPS. [공식 문서](https://docs.orbstack.dev/docker/domains) | 이름으로 접근하는 경험은 이미 있다. URL을 출력하는 Grove가 주소 편의성만으로 우위를 주장할 수 없다 |
-| Tilt | 실행 중 컨테이너에 파일을 동기화하고 명령을 실행하며 필요하면 재빌드. [공식 문서](https://docs.tilt.dev/live_update_reference.html) | 빠른 반복 개발을 새로 만드는 것보다 기존 개발 루프에 공통 운영 계약을 붙이는 편이 타당하다 |
-| DevSpace | Kubernetes 개발 환경, 파일 동기화, 포트 전달과 프로젝트 파이프라인. [공식 문서](https://www.devspace.sh/docs/getting-started/development) | Kubernetes 개발 환경 전체를 다시 만드는 범위로 커지면 도입 부담과 경쟁 영역이 커진다 |
-| Telepresence | 서비스 트래픽을 로컬로 전달하고 조건에 맞는 요청만 선택하는 intercept. [공식 문서](https://telepresence.io/docs/concepts/attachments) | 일부 변경을 공유 환경과 함께 검증하는 개념 자체도 독점적이지 않다. 라우팅 기술의 독창성을 내세울 근거는 없다 |
-| 기존 프로젝트 스크립트와 운영 문서 | 각 팀이 이미 갖고 있는 대안. 구체적인 비용과 품질은 프로젝트별 측정 필요 | 가장 중요한 비교 대상이다. Grove가 같은 일을 더 많은 설정으로 만들면 도입하지 않는 편이 낫다 |
+| Docker Compose Watch | Sync, rebuild, and restart on file changes. [Official documentation](https://docs.docker.com/compose/how-tos/file-watch/) | Code-apply speed and a unified start command are not enough to differentiate. Where it already works well, use it |
+| OrbStack | Automatic domains for containers and Compose services, web port detection, and HTTPS. [Official documentation](https://docs.orbstack.dev/docker/domains) | Reaching things by name already exists. Grove, which prints URLs, cannot claim an advantage on address convenience alone |
+| Tilt | Syncs files into a running container, runs commands, and rebuilds when needed. [Official documentation](https://docs.tilt.dev/live_update_reference.html) | It is sounder to attach a shared operating contract to the existing development loop than to build fast iterative development anew |
+| DevSpace | A Kubernetes development environment, file sync, port forwarding, and project pipelines. [Official documentation](https://www.devspace.sh/docs/getting-started/development) | Growing to the scope of rebuilding a whole Kubernetes development environment increases both the adoption burden and the competitive surface |
+| Telepresence | Forwards a service's traffic to a local process and intercepts only the requests matching a condition. [Official documentation](https://telepresence.io/docs/concepts/attachments) | The very concept of verifying some changes alongside a shared environment is not exclusive either. There is no ground for claiming originality in the routing technique |
+| A team's existing project scripts and operating documents | The alternative each team already has. The concrete cost and quality have to be measured per project | This is the most important thing to compare against. If Grove does the same job with more configuration, it is better not to adopt it |
 
-## 경쟁력이 생길 수 있는 곳
+## Where a competitive position could come from
 
-### 1. 사람이 읽는 규칙과 에이전트가 실행하는 계약의 연결
+### 1. The link between rules a person reads and a contract an agent runs
 
-스킬은 언제 실행해도 되는지와 무엇을 완료로 볼지 설명한다. 프로파일은 프로젝트의
-값을 제공하고 CLI는 상태 전이와 영수증을 검사한다. 모델과 프로젝트가 바뀌어도
-같은 판단을 반복 적용할 수 있다는 것이 차별화 가설이다.
+The skill explains when it is allowed to run and what counts as complete. The
+profile supplies the project's values, and the CLI checks state transitions and
+receipts. The differentiation hypothesis is that the same judgment can be
+applied repeatedly even when the model and the project change.
 
-현재 이 연결은 부분적이다. overlay 전이는 CLI가 검사하지만 baseline writer
-소유권과 공유 DB 접근 금지는 상당 부분 절차다. Grove는 에이전트의 임의 셸 실행을
-막는 보안 격리 장치가 아니며, 신뢰할 수 있는 프로젝트 adapter를 전제로 한다.
+Today that link is partial. The CLI checks the overlay transitions, but baseline
+writer ownership and the ban on shared DB access are largely procedure. Grove is
+not a security isolation device that stops an agent from running an arbitrary
+shell, and it assumes a trusted project adapter.
 
-### 2. 중단과 실패까지 포함한 작업 수명
+### 2. A work lifetime that includes aborts and failures
 
-시작 성공뿐 아니라 미확정 작업을 남기고 관측 후 확정하며, 정리 실패도 추적하는
-계약이 현재 구현의 강점이다. 여러 짧은 에이전트 작업이 같은 환경을 사용할 때
-이 부분이 운영자의 확인 비용을 줄일 수 있다. 절감 효과 자체는 아직 측정하지 않았다.
+The strength of the current implementation is a contract that covers more than a
+successful start: it leaves an unconfirmed operation behind, confirms it after
+observation, and tracks a failed cleanup too. When several short agent tasks use
+the same environment, this can reduce the operator's checking cost. The saving
+itself has not been measured yet.
 
-### 3. 두 번째 프로젝트부터 작아지는 통합 비용
+### 3. Integration cost that shrinks from the second project on
 
-공통 명령을 정의하는 것만으로 재사용이 완성되지는 않는다. 새 프로젝트마다 상태
-조회와 이미지 매핑, 라우팅, 복구를 다시 작성해야 한다면 일반화 비용이 높다.
-실제 프로젝트에서 검증한 adapter와 공통 적합성 검사를 재사용할 수 있어야 한다.
-현재 제공되는 fixture와 프로세스 실행 검사는 제품 adapter 보급 실적이 아니다.
+Defining shared commands does not by itself complete reuse. If status queries,
+image mapping, routing, and recovery have to be written again for every new
+project, the cost of generalizing is high. An adapter verified on a real project
+and a shared conformance check have to be reusable. The fixtures and the process
+execution checks provided today are not a record of product adapters in the
+field.
 
-### 4. 실패 사례를 재현하는 검증 자산
+### 4. Verification assets that reproduce failure cases
 
-잘못된 이미지, 준비되지 않은 서비스, 중단된 dispatch, 정리 실패를 같은 계약으로
-재현하는 검사는 유지보수에 도움이 된다. 다만 테스트 개수나 작은 CLI 자체는
-모방하기 어려운 자산이 아니다. 여러 프로젝트에서 얻은 호환성, 유지되는 adapter,
-문제를 빠르게 진단하는 절차와 실제 운영 신뢰가 축적돼야 경쟁력이 생긴다.
+Checks that reproduce a wrong image, an unready service, an aborted dispatch,
+and a failed cleanup under the same contract help with maintenance. But the
+number of tests, or a small CLI in itself, is not an asset that is hard to copy.
+A competitive position appears only once compatibility gathered from several
+projects, maintained adapters, procedures that diagnose a problem quickly, and
+real operational trust have accumulated.
 
-현재 시장 해자나 네트워크 효과를 확보했다고 볼 근거는 없다. 오픈소스의 가치는
-명확한 계약, 실행 가능한 예제, 실패를 포함한 검증 근거, backend를 연결할 수 있는
-확장 지점에서 먼저 드러나야 한다. 실제 반복 비용의 절감은 별도로 측정한다.
+There is no ground to say a market moat or a network effect has been secured
+today. Open source value has to show first in a clear contract, runnable
+examples, verification grounds that include failures, and extension points where
+a backend can be connected. The saving in real repeated cost is measured
+separately.
 
-## 현재 가치가 약해지는 지점
+## Where the current value weakens
 
-- **이름을 출력해도 클릭할 수 있는 환경이 완성되지는 않는다.** DNS·라우팅 설정이
-  어려우면 첫 성공까지의 부담이 사용자에게 남는다.
-- **공유는 격리와 다른 선택이다.** 공용 엔진 장애, schema 호환성, fixture 충돌,
-  consumer·broker 영향이 남는다. 서비스 overlay를 데이터 격리로 설명하면 안 된다.
-- **단일 writer가 병목이 될 수 있다.** 충돌 감소로 얻는 시간과 소유권 대기로 잃는
-  시간을 함께 측정해야 한다. 절차만 추가해서는 순이익이 보장되지 않는다.
-- **adapter가 사실을 정확하게 보고해야 한다.** 요청한 이미지 문자열을 그대로
-  되돌려주면 강한 검증처럼 보이는 약한 시스템이 된다. 실제 backend 관측이 필요하다.
-- **빠른 코드 반영과 불변 이미지 확인의 경계가 있다.** 실행 중 소스를 바꾸는
-  개발 방식에서는 이미지 일치만으로 현재 소스 내용을 증명할 수 없다. 반복 편집과
-  최종 검증을 구분하는 프로젝트 계약이 필요하며, 현재 범용 소스 식별 검사는 없다.
-- **계약 변경 비용이 생긴다.** 상태 응답·프로파일 검증이 강화되면 소비 adapter의
-  이행도 필요하다. 호환성 설명과 회귀 검증이 없으면 공통화가 새 장애 원인이 된다.
+- **Printing a name does not complete a clickable environment.** If DNS and
+  routing setup is hard, the burden up to the first success stays with the user.
+- **Sharing is a different choice from isolation.** Shared engine failures,
+  schema compatibility, fixture collisions, and effects on consumers and brokers
+  remain. A service overlay must not be described as data isolation.
+- **A single writer can become a bottleneck.** The time gained from fewer
+  conflicts and the time lost waiting for ownership have to be measured
+  together. Adding procedure alone does not guarantee a net gain.
+- **The adapter has to report the facts accurately.** Echoing back the requested
+  image string makes a weak system that looks like strong verification. Real
+  backend observation is required.
+- **There is a boundary between fast code reload and immutable image
+  confirmation.** In a development style that changes source in a running
+  process, matching images alone cannot prove the current source content. A
+  project contract that separates repeated editing from final verification is
+  needed, and there is no general-purpose source identity check today.
+- **Contract changes carry a cost.** If status responses and profile validation
+  are strengthened, consuming adapters have to follow. Without a compatibility
+  explanation and regression verification, standardizing becomes a new source of
+  failure.
 
-## 충분히 가치있는지 확인하는 방법
+## How to check whether it is worth enough
 
-현재 판단은 코드와 문서, [실행 증거](evidence/2026-09-05-catalog-review.md)에 근거한다.
-공유 인프라나 소비 프로젝트에서의 생산성 실험은 이 분석 작업에 포함하지 않았다.
-[가상 앱 개발 실험](evaluation/2026-09-05-synthetic-evaluation.md)은 실행 관리 비용과
-실패 복구 동작을 확인한다. 실제 팀의 생산성 개선 증거와 구분한다.
-[실제 Git 워크트리 실험](evaluation/2026-09-05-worktree-evaluation.md)에서는 별도
-브랜치의 동시 수정·빌드·배포와 정리를 확인했다. 여기서 발견한 프로젝트 전체
-직렬 실행 문제는 [오버레이별 병렬 실행 변경](evidence/2026-09-05-overlay-parallel.md)으로
-수정하고, 실험 호출부의 재시도 없이 다시 검증했다.
-[Kubernetes 실행 기록](evidence/2026-09-06-kubernetes-lifecycle.md)은 저장소에 포함된
-가상 웹·API를 대상으로 실제 이미지 빌드, 오버레이 라우팅, 중단과 복구를 확인한다.
+The current judgment rests on the code, the documents, and
+[the execution evidence](evidence/2026-09-05-catalog-review.md). Productivity
+experiments on shared infrastructure or on a consuming project were not part of
+this analysis work. [The synthetic app development experiment](evaluation/2026-09-05-synthetic-evaluation.md)
+checks the cost of run management and the failure recovery behaviour. Keep it
+separate from evidence of a real team's productivity improvement.
+[The real Git worktree experiment](evaluation/2026-09-05-worktree-evaluation.md)
+checked concurrent edit, build, deploy, and cleanup on separate branches. The
+project-wide serialization problem found there was fixed by
+[the per-overlay parallel execution change](evidence/2026-09-05-overlay-parallel.md)
+and verified again without the retries at the experiment's call site.
+[The Kubernetes execution record](evidence/2026-09-06-kubernetes-lifecycle.md)
+checks a real image build, overlay routing, and abort and recovery against the
+synthetic web and API included in the repository.
 
-다음은 제안하는 작은 평가다. 일정이나 승인된 목표 수치가 아니다.
-평가 범위와 실행 순서는 [공통 평가 절차](evaluation/grove-pilot.md)에 둔다.
-소비 프로젝트의 식별 정보와 측정 결과는 문서에 남기지 않는다.
+The following is a small proposed evaluation. It is not a schedule and not an
+approved target number. The evaluation scope and the run order live in
+[the shared evaluation procedure](evaluation/grove-pilot.md). A consuming
+project's identifying information and measurement results are not left in the
+documentation.
 
-1. 운영 방식이 다른 실제 소비 프로젝트 두 곳을 선택한다. 적어도 한 곳은
-   동시에 둘 이상의 작업자가 변경을 확인해야 하는 상황이어야 한다.
-2. 기존 절차와 Grove 절차에서 유사한 작업을 수행한다. 환경·캐시·이미지 준비
-   상태를 기록하고, 첫 설치 비용과 반복 작업 비용을 따로 잰다.
-3. 정상 변경뿐 아니라 이전 이미지 잔존, 준비 실패, 작업 중단, 정리 실패를
-   격리된 허용 범위에서 확인한다. 공유 환경의 실패 주입은 별도 승인이 필요하다.
-4. 평가 전에 합격 기준과 표본 규모를 운영자와 정한다. 작은 표본의 좋은 사례만
-   골라 전체 생산성이 개선됐다고 결론 내리지 않는다.
+1. Choose two real consuming projects with different operating styles. At least
+   one has to be a situation where two or more workers must confirm changes at
+   the same time.
+2. Perform similar work under the existing procedure and under the Grove
+   procedure. Record the state of the environment, the cache, and image
+   preparation, and measure the first installation cost and the repeated work
+   cost separately.
+3. Check not only a normal change but also a leftover previous image, a
+   readiness failure, an aborted operation, and a failed cleanup, within an
+   isolated allowed scope. Injecting failures into a shared environment needs
+   separate approval.
+4. Fix the pass criterion and the sample size with the operator before the
+   evaluation. Do not pick the good cases out of a small sample and conclude
+   that overall productivity improved.
 
-| 지표 | 측정 구간 또는 판정 | 현재 |
+| Metric | Measurement window or judgment | Current |
 | --- | --- | --- |
-| 첫 도입 비용 | 프로파일 작성 시작부터 첫 실제 변경 확인까지의 작업 시간 | notMeasured |
-| 반복 작업 준비 시간 | 변경 확인 요청부터 올바른 버전의 사용 가능한 환경까지 | notMeasured |
-| 운영자 개입 | 작업당 추가 설명·판단 요청 수와 소요 시간. 이미 승인된 범위의 재확인도 포함 | notMeasured |
-| 잘못된 완료 | 성공으로 표시했지만 요청한 버전·준비 조건이 맞지 않은 횟수 | 소비 프로젝트 notMeasured |
-| 정리 비용과 잔여 환경 | 종료 후 추적 가능한 잔여 workload 수, 수동 복구 시간 | 소비 프로젝트 notMeasured |
-| 공유 부작용 | 다른 작업의 배포·데이터·가용성에 영향을 준 사례 | notMeasured |
-| 재사용성 | 첫 번째와 두 번째 adapter의 통합·유지보수 시간 | notMeasured |
-| 자원 비용 | 동일 workload 조건에서 실제 프로세스·컨테이너 자원 사용과 지속 시간 | notMeasured |
+| First adoption cost | Working time from starting to write the profile to confirming the first real change | notMeasured |
+| Setup time for repeated work | From requesting a change check to a usable environment on the correct version | notMeasured |
+| Operator intervention | The number of extra explanation and judgment requests per task and the time they take. Includes re-confirming an already approved scope | notMeasured |
+| False completion | The number of times something was marked successful while the requested version or readiness condition did not match | consuming project notMeasured |
+| Cleanup cost and leftover environments | The number of trackable leftover workloads after finishing, and the manual recovery time | consuming project notMeasured |
+| Shared side effects | Cases that affected another piece of work's deploy, data, or availability | notMeasured |
+| Reusability | Integration and maintenance time for the first and the second adapter | notMeasured |
+| Resource cost | Real process and container resource use and duration under the same workload conditions | notMeasured |
 
-경제성은 같은 평가 기간 안에서 비교한다. 반복 작업 절감 시간에서 추가 유지보수와
-소유권 대기 시간을 뺀 값이 양수인지 보고, 초기 통합 비용을 얼마 동안 회수해야
-하는지 판단한다. 중복 환경을 줄였다는 설계만으로 메모리 절감량을 계산하지 않는다.
+Compare the economics within the same evaluation period. Look at whether the
+time saved on repeated work, minus the extra maintenance and the time waiting
+for ownership, is positive, and judge over what period the initial integration
+cost has to be recovered. Do not compute a memory saving from a design that
+claims to reduce duplicate environments.
 
-**확대 조건:** 두 번째 프로젝트에서도 공통 계약을 대부분 재사용하고, 반복 작업의
-순비용이 줄며, 잘못된 완료와 공유 부작용을 수용 가능한 수준으로 통제할 때.
+**Condition to expand:** when the second project also reuses most of the shared
+contract, the net cost of repeated work falls, and false completions and shared
+side effects are held to an acceptable level.
 
-**축소 조건:** 프로젝트마다 별도 플랫폼을 작성해야 하거나, 반복 작업에서도
-프로파일 유지·승인 대기·실패 복구 비용이 절감 시간을 넘을 때. 이 경우 유용한
-문서와 검증 도구만 남기고 범용 runtime 확장을 멈춘다.
+**Condition to scale down:** when a separate platform has to be written for each
+project, or when the cost of maintaining the profile, waiting for approval, and
+recovering from failures exceeds the time saved even in repeated work. In that
+case, keep only the useful documents and verification tools and stop extending a
+general-purpose runtime.
 
-## 다음 투자의 순서
+## The order of the next investment
 
-1. 실제 소비 adapter 한 곳에서 시작부터 종료까지 목표 경험을 확인한다.
-2. 운영 방식이 다른 두 번째 프로젝트에서 재사용 비용을 확인한다.
-3. 반복된 차이만 추출해 adapter 적합성 검사와 오류 안내를 개선한다.
-4. 그 결과에 따라 설치·상태 발견·주소 연결 중 가장 큰 마찰 하나를 줄인다.
+1. Confirm the target experience from start to finish on one real consuming
+   adapter.
+2. Confirm the reuse cost on a second project with a different operating style.
+3. Extract only the differences that repeat, and improve the adapter conformance
+   check and the error guidance.
+4. Based on that result, reduce the single largest friction among installation,
+   status discovery, and address connection.
 
-프록시, 대시보드, 원격 머신, 추가 스킬 수를 먼저 늘리는 것은 이 검증을 대신하지
-못한다. 기존 도구가 해결하는 부분은 활용하고, 공통 계약이 실제로 줄이는 조정
-비용에 집중한다. 새 카탈로그 스킬도 반복해서 유용한 패턴이 확인된 뒤에 추가한다.
+Increasing the proxy, the dashboard, remote machines, or the number of skills
+first is no substitute for this verification. Use what the existing tools
+already solve, and focus on the coordination cost the shared contract actually
+reduces. Add a new catalog skill only after a pattern has been confirmed useful
+more than once.
 
-현재 소개 문구로 적절한 제안은 다음과 같다.
+An appropriate proposal for the current introduction line is this.
 
-> Grove는 여러 프로젝트와 에이전트가 공유 개발 환경을 사용할 때,
-> 변경의 실행·확인·복구·정리를 같은 규칙으로 다루게 돕는다.
+> Grove helps several projects and agents handle running, confirming,
+> recovering, and cleaning up a change under the same rules when they use a
+> shared development environment.
 
-이 문구의 가치를 증명하는 결과는 스킬 수나 테스트 수가 아니라,
-사용자가 환경을 다시 설명하고 복구하는 데 쓰던 시간이 줄어드는 것이다.
+The result that proves this line's value is not the number of skills or the
+number of tests. It is a fall in the time a user spends explaining the
+environment again and recovering it.
