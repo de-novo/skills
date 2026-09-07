@@ -18,6 +18,12 @@ measurements. It is an analysis, not operating authority or approved scope.
 
 ## Design records
 
+[Playground design](playground-design.md) records the sandbox rules for the
+sample project the catalog ships: one directory holds everything, no machine
+registry, no port chosen in advance, no engines or containers, its own git
+repository. Not implemented.
+
+
 [Canopy design](canopy-design.md) proposes the second round of the read-only
 page: per-worktree cards with the skill verbs actually run, the files each
 seat changed, unseated worktrees, and file overlaps between seats. The seams

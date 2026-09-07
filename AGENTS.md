@@ -63,9 +63,10 @@ Values may change. These may not.
 - **Pattern vs values.** A skill has no domains, ports, service lists, or
   real commands. Those live in the consuming project's
   `.agents/runtime-profile.yml`.
-- **English public surfaces.** README, SKILL, CLI help, error strings, and
-  example comments are English. Design notes under `docs/` may stay in the
-  language they were written in.
+- **English public surfaces.** README, SKILL, CLI help, error strings, example
+  comments, and everything under `docs/` are English. This catalog is
+  published; a reader who arrives from outside must be able to read all of it.
+  Documents written before this rule are converted as they are next edited.
 - **No `down`.** Do not add a down command. Do not `docker compose down` the
   shared stack unless a human explicitly asks to stop machine infra. Several
   projects live on it.
