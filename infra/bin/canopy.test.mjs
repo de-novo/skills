@@ -92,7 +92,9 @@ test('GET / and /api/state serve real CLI reports over an ephemeral loopback soc
   assert.match(response.headers.get('content-type'), /text\/html/);
   const html = await response.text();
   const firstRender = html.split('<script>')[0];
-  assert.match(firstRender, /seats 1 · envs 1\/1/);
+  // The header carries every count in one line; with the worktrees seam live
+  // it names unseated worktrees and overlaps too.
+  assert.match(firstRender, /seats 1 · worktrees 2 \(1 unseated\) · envs 1\/1 · overlaps 0/);
   assert.match(firstRender, /Waiting &lt;script&gt;alert\(1\)&lt;\/script&gt;/);
   assert.match(firstRender, /Archive journal proof/);
   assert.match(firstRender, /<summary>finished 1<\/summary>/);
