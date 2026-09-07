@@ -110,17 +110,27 @@ at the incomplete profile and report what is needed.
 2. **Measure ports and health.** Trace each service's startup configuration to
    its live listener and any host-to-container mapping; distinguish its port
    from the proxy's port. Find a candidate health path in route definitions or
-   existing probes. Make one request to that service at the observed port and
-   path, read the HTTP status, and record the target and result. A failed or
-   non-health response is evidence to investigate, not a path to publish as
-   healthy. Confirm the request reached that service. For a service with no
+   existing probes. **Read what that path reaches before requesting it.** A
+   route that touches a datastore, a queue, or a third party can act on a real
+   system belonging to someone else, and the endpoint's name is evidence of
+   nothing: trace its handler, and trace where the service resolves its
+   endpoint configuration from — the environment files it actually loads, not
+   every such file in the repository. Request a path whose handler you have
+   read and which reaches nothing outside the service; when the only candidate
+   sits behind a datastore, do step 5 first and come back. Then make one
+   request to that service at the observed port and path, read the HTTP status,
+   and record the target and result. A failed or non-health response is
+   evidence to investigate, not a path to publish as healthy. Confirm the request reached that service. For a service with no
    HTTP endpoint, omit the unmeasured HTTP values and record that fact.
 3. **Measure reflection.** In the authorized worktree/runtime, make one small,
    reversible source edit with an observable result. Observe whether it lands
    automatically, after the project's restart procedure, or only after its
-   build and deployment procedure. Record the operation that actually made
-   the edit visible, then restore the edit and verify restoration. Use that
-   evidence to choose `reflect` from the schema; a watcher script or image
+   build and deployment procedure. Confirm the service is serving at both ends
+   of that comparison: a request that fails because the service is not running
+   looks exactly like an edit that did not land, and is recorded as the wrong
+   `reflect` value. Record the operation that actually made the edit visible,
+   then restore the edit and verify restoration. Use that evidence to choose
+   `reflect` from the schema; a watcher script or image
    declaration alone does not prove reflection.
 4. **Find the runtime backend.** Match the project's existing run procedure
    and manifests to what is running now. Reuse that backend and its designated
