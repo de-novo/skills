@@ -125,6 +125,12 @@ export async function collectState(options = {}) {
 export function renderState(state) {
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const shown = value => value == null ? 'notMeasured' : esc(value);
+  // A card is a glance, not a transcript: a long report note is cut here; the
+  // whole note stays in the journal and in /api/state.
+  const clip = (value, limit = 240) => {
+    const text = String(value ?? '');
+    return text.length <= limit ? text : `${text.slice(0, limit - 1)}…`;
+  };
   const journal = entry => entry ? `${entry.at ?? ''} ${entry.actor ?? ''} ${entry.event ?? ''} ${entry.detail ?? ''}`.trim() : '—';
   const link = hostname => {
     const text = hostname;
@@ -175,9 +181,9 @@ export function renderState(state) {
     return `<article class="card ${archived ? 'archived' : 'seat'}" data-seat="${esc(seat.id)}">
       <h3>${esc(seat.id)} · ${esc(seat.by ?? '—')}${seat.last ? ` · <time datetime="${esc(seat.last.at)}" title="${esc(seat.last.at)}">${esc(elapsed(seat.last.at))}</time>` : ''}</h3>
       ${seat.task ? `<p class="task">${esc(seat.task.split(/\r?\n/)[0])}</p>` : ''}
-      <p class="status">${esc(seat.status)}${seat.report ? ` · ${esc(seat.report.detail)}` : ''}</p>
+      <p class="status">${esc(seat.status)}${seat.report ? ` · ${esc(clip(seat.report.detail))}` : ''}</p>
       <p>env ${esc(envState)}${seat.hosts.length ? ' → ' + seat.hosts.map(host => `${host.attached ? link(host.text) : `${esc(host.text)} <span class="muted">(unattached)</span>`}${host.service ? ` <span class="muted">${esc(host.service)}</span>` : ''}`).join(' · ') : ''}</p>
-      ${seat.entries.length ? `<p class="skills">skills · ${Object.entries(seat.verbs).map(([verb, count]) => `${esc(verb)} ${count}`).join(' · ')}<br><span class="muted">last ${esc(seat.last.event)} · ${esc(seat.last.at)}${seat.last.detail ? ` · ${esc(seat.last.detail)}` : ''}</span></p>` : ''}
+      ${seat.entries.length ? `<p class="skills">skills · ${Object.entries(seat.verbs).map(([verb, count]) => `${esc(verb)} ${count}`).join(' · ')}<br><span class="muted">last ${esc(seat.last.event)} · ${esc(seat.last.at)}${seat.last.detail && seat.last.detail !== seat.report?.detail ? ` · ${esc(clip(seat.last.detail))}` : ''}</span></p>` : ''}
       ${files ? `<div class="files"><p>files · +${esc(files.committed)} committed · ${esc(files.open)} open</p><ul>${files.rows.slice(0, 12).map(file => `<li${file.overlap ? ' class="shared"' : ''}>${file.overlap ? '<span title="Overlapping path">⚠</span> ' : ''}${esc(file.path)} <span class="muted">${esc(file.labels.join(' · '))}</span></li>`).join('')}</ul>${files.rows.length > 12 ? `<p class="muted">${files.rows.length - 12} more files</p>` : ''}${files.truncated ? `<p class="muted">Source file list truncated; counts include omitted entries.</p>` : ''}</div>` : ''}
       <p class="meta">${esc(seat.worktree)}<br>${esc(seat.branch)}${seat.ahead == null ? '' : ` · +${esc(seat.ahead)}`}${seat.session ? `<br>session ${esc(seat.session)}` : ''}</p>
       ${archived ? `<pre>${seat.entries.map(entry => esc(journal(entry))).join('\n')}</pre>` : ''}

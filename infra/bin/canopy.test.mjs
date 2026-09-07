@@ -7,7 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { once } from 'node:events';
 import { stringify } from 'yaml';
-import { cliJson, collectState, renderPage, startCanopy } from '../lib/canopy.mjs';
+import { cliJson, collectState, renderPage, renderState, startCanopy } from '../lib/canopy.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CLI = path.join(HERE, 'cli.mjs');
@@ -239,4 +239,21 @@ test('second-screen --once and socket first paint agree on worktrees, skills, fi
   assert.match(unseated, /HEAD 1234567/);
   assert.doesNotMatch(unseated, /class="files"|skills/);
   t.diagnostic('fixture socket first paint: worktree cards 3/3; overlap lines 1/1; seat file counts 2/2; unattached hosts unlinked 2/2; file cap 12/12');
+});
+
+test('a long report note is cut on the card and never printed twice in one card', () => {
+  const note = `NOTEMARK${'x'.repeat(400)}`;
+  const at = new Date().toISOString();
+  const html = renderState({
+    updated_at: at,
+    projects: [{
+      slug: 'clip', root: '/tmp/clip', counts: { seats: 1 },
+      seats: [{ id: 'w1', by: 'worker', status: 'done', branch: 'dryad/w1', worktree: '/tmp/clip/w1',
+        journal: [{ at, actor: 'seat', event: 'report', detail: `done: ${note}` }] }],
+    }],
+  });
+  assert.doesNotMatch(html, new RegExp('x'.repeat(300)), 'the note is cut');
+  assert.match(html, /…/);
+  assert.equal((html.match(/NOTEMARK/g) ?? []).length, 1, 'the same note is not repeated on one card');
+
 });
