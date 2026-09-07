@@ -179,3 +179,21 @@ every rule above is visible in it.
 
 Read it as a shape — the smallest thing that satisfies the contract — not as a
 template. Your project's backend is whatever step 1 found.
+
+## Running verify
+
+Run it from the checkout whose `HEAD` produced the image you pass. An adapter
+is free to bind an environment to the worktree and revision that created it,
+and Grove creates from the caller's directory, so verify run from somewhere
+else will be refused at attach by exactly that rule.
+
+```bash
+de-novo skills overlay verify --project . --image <ref> --service <name>
+```
+
+`--service` names the service the image belongs to; without it verify reads
+the service out of the image reference and falls back to the first entry of
+`overlay.attachable`. Without `--image` the four attach cases are counted as
+skipped rather than guessed. `overlay.attachable` is enforced by Grove's front
+door, not by the adapter: verify reports whether the adapter also refuses an
+undeclared service, and does not require it.

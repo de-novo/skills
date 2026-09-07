@@ -18,6 +18,7 @@ import { parse, stringify } from 'yaml';
 
 import {
   parseDuration,
+  verifyAttachService,
   parseOverlayCliArgs,
   splitOverlayCommand,
   staleOverlayEnvironments,
@@ -789,3 +790,15 @@ for (const [label, broken, expected, evidence] of [
     t.diagnostic(`${expected} failed 1/1 with evidence; cleanup 1/1`);
   });
 }
+
+test('verify picks the attach service from --service, then the image, then the first attachable', () => {
+  const attachable = ['wms-web', 'oms-web', 'seller'];
+  assert.equal(verifyAttachService({ service: 'seller', image: 'reg/oms-web:' + 'a'.repeat(40), attachable }), 'seller');
+  assert.equal(verifyAttachService({ service: null, image: 'reg/oms-web:' + 'a'.repeat(40), attachable }), 'oms-web');
+  assert.equal(verifyAttachService({ service: null, image: 'reg/oms-web@sha256:' + 'b'.repeat(64), attachable }), 'oms-web');
+  assert.equal(verifyAttachService({ service: null, image: 'reg/not-declared:' + 'a'.repeat(40), attachable }), 'wms-web');
+  assert.equal(verifyAttachService({ service: null, image: null, attachable }), 'wms-web');
+  assert.throws(() => verifyAttachService({ service: 'nope', image: null, attachable }), /not in overlay.attachable/);
+  assert.throws(() => parseOverlayCliArgs(['attach', 'w1', 'api', '--service', 'x', '--image', FULL_IMAGE]), /only for verify/);
+  assert.equal(parseOverlayCliArgs(['verify', '--service', 'oms-web']).service, 'oms-web');
+});

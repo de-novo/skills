@@ -152,6 +152,7 @@ export function parseOverlayCliArgs(args) {
 
   let project = null;
   let image = null;
+  let serviceOption = null;
   let envOption = null;
   let staleAfter = null;
   let apply = false;
@@ -172,6 +173,12 @@ export function parseOverlayCliArgs(args) {
     if (arg === '--project') {
       if (project != null) fail('--project may be passed only once.');
       project = takeOption(input, index, '--project');
+      index += 1;
+      continue;
+    }
+    if (arg === '--service') {
+      if (serviceOption != null) fail('--service may be passed only once.');
+      serviceOption = takeOption(input, index, '--service');
       index += 1;
       continue;
     }
@@ -233,6 +240,9 @@ export function parseOverlayCliArgs(args) {
   if (json && !['status', 'verify'].includes(verb)) {
     fail('--json is valid only for status and verify.');
   }
+  if (serviceOption != null && verb !== 'verify') {
+    fail('--service is valid only for verify; attach and detach take the service as an argument.');
+  }
   if (verb === 'touch' && passthrough.length > 0) {
     fail('touch does not dispatch project-specific arguments.');
   }
@@ -243,7 +253,7 @@ export function parseOverlayCliArgs(args) {
     help: false,
     verb,
     env,
-    service: positionals[1] ?? null,
+    service: positionals[1] ?? serviceOption ?? null,
     project,
     image,
     staleAfter,
@@ -1391,9 +1401,28 @@ const verifyPass = (evidence) => ({ status: 'pass', evidence });
 const verifySkip = (evidence) => ({ status: 'skip', evidence });
 const verifyFail = (evidence) => ({ status: 'fail', evidence });
 
+// The attach cases need a service whose image the operator actually has:
+// --service when given, otherwise the service named by the image reference
+// (`<registry>/<service>:<revision>`) when it is attachable, otherwise the
+// first attachable service.
+export function verifyAttachService({ service, image, attachable }) {
+  if (service != null) {
+    if (!attachable.includes(service)) {
+      fail(`--service ${JSON.stringify(service)} is not in overlay.attachable (${attachable.join(', ')}).`);
+    }
+    return service;
+  }
+  const named = image == null ? null : /(?:^|\/)([a-z0-9][a-z0-9-]*)[:@]/.exec(image)?.[1] ?? null;
+  return named != null && attachable.includes(named) ? named : attachable[0];
+}
+
 function verifyCases(context) {
   const { env, image } = context;
-  const attachable = context.profile.overlay.attachable[0];
+  const attachable = verifyAttachService({
+    service: context.service ?? null,
+    image,
+    attachable: context.profile.overlay.attachable,
+  });
   const declared = Object.keys(context.profile.services ?? {});
   const notAttachable =
     context.profile.overlay.sharedOnly[0] ??
@@ -1469,10 +1498,14 @@ function verifyCases(context) {
         if (front.status === 0) {
           return verifyFail(`the front door attached ${notAttachable}, which is not in overlay.attachable`);
         }
+        // The contract puts overlay.attachable on the front door: an adapter
+        // does not read the profile, so its own answer here is reported, not
+        // required.
         const probe = verifyRefusalProbe(context, { service: notAttachable, image });
-        if (!probe.refused) return verifyFail(`the adapter ${probe.detail}`);
-        progress.refusalReceipt ??= `attach ${notAttachable}`;
-        return verifyPass(`front door and adapter both refuse ${notAttachable}`);
+        if (probe.refused) progress.refusalReceipt ??= `attach ${notAttachable}`;
+        return verifyPass(
+          `the front door refuses ${notAttachable}; the adapter ${probe.refused ? 'refuses it too' : `${probe.detail} (not required)`}`
+        );
       },
     },
     {
@@ -1654,6 +1687,7 @@ function runOverlayVerify({ options, profile, projectRoot, environment, cwd }) {
     cwd,
     env,
     image: options.image ?? null,
+    service: options.service ?? null,
     passthrough: options.passthrough,
   };
 
@@ -1739,7 +1773,7 @@ usage:
   ${cli} overlay destroy ENV [--project ROOT] [--apply]
   ${cli} overlay touch ENV [--project ROOT]
   ${cli} overlay prune [--project ROOT] [--stale-after 12h] [--apply]
-  ${cli} overlay verify [--project ROOT] [--env NAME] [--image FULL_SHA] [--json]
+  ${cli} overlay verify [--project ROOT] [--env NAME] [--image FULL_SHA] [--service NAME] [--json]
 
 Workload mutations are plans unless --apply is present; touch only renews the
 lease. Applied mutations finalize only after status observes their runtime
