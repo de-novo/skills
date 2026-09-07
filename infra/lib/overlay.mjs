@@ -805,6 +805,7 @@ function verifyMutationPostcondition({
 }) {
   const deadline = Date.now() + timeout;
   let attempts = 0;
+  let unobservable = false;
   let lastObservation = 'runtime state did not match';
   do {
     attempts += 1;
@@ -825,7 +826,13 @@ function verifyMutationPostcondition({
       });
       const inventory = inventoryFromReceipt(receipt);
       if (inventory == null) {
+        // A receipt without an inventory is the wrong shape, not a runtime
+        // that has not caught up, so waiting cannot change it. Stop polling
+        // instead of burning the whole deadline, which on the default is a
+        // two-minute hang for anyone whose adapter answers status wrongly.
         lastObservation = 'status receipt omitted environments';
+        unobservable = true;
+        break;
       } else if (postconditionSatisfied(pending, inventory)) {
         console.log(
           `postcondition 1/1: ${operationTarget(pending)} observed (attempts ${attempts})`
@@ -845,6 +852,11 @@ function verifyMutationPostcondition({
     if (delay === remaining) break;
   } while (Date.now() <= deadline);
 
+  if (unobservable) {
+    fail(
+      `postcondition for ${operationTarget(pending)} cannot be observed after ${attempts} attempt(s); pending operation retained (${lastObservation}). Waiting cannot fix a status receipt of the wrong shape.`
+    );
+  }
   fail(
     `postcondition for ${operationTarget(pending)} was not observed after ${attempts} attempts within ${timeout}ms; pending operation retained (${lastObservation}).`
   );

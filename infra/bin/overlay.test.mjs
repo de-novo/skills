@@ -213,12 +213,20 @@ test('destroy keeps its lease and pending intent when successful receipt leaves 
 
 test('missing status inventory cannot finalize an applied mutation', (t) => {
   const fixture = projectFixture(t);
+  // A receipt with no inventory can never satisfy the postcondition, so the
+  // deadline is generous and the command must still answer well inside it.
+  // Retrying instead of failing fast made this test flaky under load and
+  // would hang a real adapter for the whole default deadline.
+  const started = Date.now();
   const result = run(fixture, ['create', 'w1', '--apply'], {
     GROVE_OVERLAY_STUB_OMIT_INVENTORY: 'true',
-    GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '500',
+    GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '30000',
   });
+  const elapsed = Date.now() - started;
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /omitted environments/);
+  assert.doesNotMatch(result.stderr, /timed out/);
+  assert.ok(elapsed < 15000, `gave up after ${elapsed}ms instead of failing fast`);
   assert.equal(readState(fixture).pending_by_env.w1.verb, 'create');
   assert.equal(readState(fixture).envs.w1, undefined);
 });
