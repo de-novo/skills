@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // de-novo skills — Grove CLI. yaml is source of truth; the CLI paints it.
 // Invoke as `de-novo skills …`. de-novo-skills is an alias without the
-// skills namespace. There is no down command: several projects live on
+// skills namespace. There is no machine down command: several projects live on
 // machine infra, so a human decides when to stop it.
 import { spawnSync } from 'node:child_process';
 import { readFileSync, realpathSync } from 'node:fs';
@@ -34,6 +34,7 @@ import {
 } from '../lib/overlay.mjs';
 import { dryadHelp, parseDryadCliArgs, recordSeatCliEvent, runDryad } from '../lib/dryad.mjs';
 import { runCanopy } from '../lib/canopy.mjs';
+import { guardPlaygroundInvocation, runPlayground } from '../lib/playground.mjs';
 import {
   COMPOSE_FILE,
   COMPOSE_UP_FLAGS,
@@ -409,8 +410,13 @@ project:
 local overview:
   ${CLI} canopy [--port N] [--once]    read-only dashboard at 127.0.0.1:7420; --once prints JSON
 
+isolated sample:
+  ${CLI} playground up [--dir PATH]   create a sandbox and start its baseline
+  ${CLI} playground status [--json]   sandbox processes, ports, names and isolation
+  ${CLI} playground down              stop sandbox processes and remove its directory
+
 up, status, provision are aliases of infra up|status|provision.
-there is no down command — several projects live on machine infra.`);
+there is no machine down command — several projects live on machine infra.`);
 }
 
 function main(argv) {
@@ -420,7 +426,10 @@ function main(argv) {
     return 1;
   }
   const [command, ...rest] = parsed.args;
+  guardPlaygroundInvocation(parsed.args);
   switch (command) {
+    case 'playground':
+      return runPlayground(rest);
     case 'init':
       return runInit(rest);
     case 'setup':

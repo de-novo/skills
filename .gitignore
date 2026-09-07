@@ -4,3 +4,5 @@
 *.local.yml
 
 node_modules/
+.playground/
+.playground-evidence/
