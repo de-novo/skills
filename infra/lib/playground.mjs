@@ -138,13 +138,40 @@ export function guardPlaygroundInvocation(args, environment = process.env, cwd =
   environment.DRYAD_PROJECT = path.join(sandbox, 'project');
 }
 
+// Every string value in a registry record, so a path can be judged as a whole
+// value rather than as text found somewhere inside a sentence.
+function stringValues(node, out = []) {
+  if (typeof node === 'string') out.push(node);
+  else if (Array.isArray(node)) for (const value of node) stringValues(value, out);
+  else if (node && typeof node === 'object') for (const value of Object.values(node)) stringValues(value, out);
+  return out;
+}
+
+// Isolation rule 2 asks whether the machine registry holds the sandbox, not
+// whether anything on the machine has ever written its name. A seat that
+// reports what it did quotes the commands it ran, so a substring search calls
+// an honest report an isolation failure. The question is answered by fields
+// whose whole value is a path inside the sandbox. A record that cannot be
+// parsed is reported, because then the question cannot be answered.
+export function recordHoldsSandbox(file, sandbox) {
+  const root = path.resolve(sandbox);
+  let record;
+  try { record = parse(readFileSync(file, 'utf8')); } catch { return true; }
+  return stringValues(record).some(value => {
+    if (!value.startsWith('/')) return false;
+    const candidate = path.resolve(value);
+    return candidate === root || inside(root, candidate);
+  });
+}
+
 export function machineMentions(sandbox) {
+  const holds = file => recordHoldsSandbox(file, sandbox);
   const inspect = directory => {
     if (!existsSync(directory)) return [];
     const matches = [];
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       const file = path.join(directory, entry.name);
-      if (entry.isFile() && readFileSync(file, 'utf8').includes(sandbox)) matches.push(file);
+      if (entry.isFile() && holds(file)) matches.push(file);
     }
     return matches;
   };

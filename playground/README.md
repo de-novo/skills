@@ -38,7 +38,11 @@ that worker's project or seat into the sandbox.
 
 `status` reports process liveness, kernel-assigned ports, names from the
 project profile, and references in the machine registries. Machine references
-must be empty. `down` stops recorded processes, removes the sandbox directory,
+must be empty. A reference means a registry field whose whole value is a path
+inside the sandbox, not the sandbox name appearing anywhere in the file: a seat
+that reports what it did quotes the commands it ran, and an honest report is
+not a leak. A record that cannot be parsed is reported, because then the
+question cannot be answered. `down` stops recorded processes, removes the sandbox directory,
 and prints counts of surviving processes, listening ports, machine registry
 references and remaining directories. Every count must be zero. A process
 that cannot be stopped leaves the directory intact for a retry.

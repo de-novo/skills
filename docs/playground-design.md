@@ -28,7 +28,10 @@ into a sandbox that lives outside the repository tree.
    catalog verb aimed at the sandbox carries that variable, and a call without
    it is refused. The `playground` verbs are given the sandbox path itself, so
    they derive the state directory and refuse one naming a different sandbox.
-   The rule governs which state directory is used, not who types it.
+   The rule governs which state directory is used, not who types it. The check
+   for a leak reads registry fields whose whole value is a path inside the
+   sandbox. It is not a text search, because a seat that reports what it did
+   quotes the commands it ran.
 3. **No port number is chosen in advance.** Every listener binds port 0 and
    records what the kernel gave it. No port constant may appear in the source.
    This rule comes from the collision earlier in this work, where two projects

@@ -4,7 +4,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync, existsSync, symlinkSync, readdirSync, chmodSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { up, down, status, assertTree, alive, nextCommands } from '../lib/playground.mjs';
+import { up, down, status, assertTree, alive, nextCommands, recordHoldsSandbox } from '../lib/playground.mjs';
 
 const catalog = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const cli = path.join(catalog, 'infra/bin/cli.mjs');
@@ -246,4 +246,31 @@ test('the process directory only ever contains complete records', async t => {
   assert.equal(reads > 1000, true, `only ${reads} reads raced the writers`);
   assert.equal(results.filter(r => r.code !== 0).length, 0, results.find(r => r.code !== 0)?.stderr);
   assert.equal(status(data.sandbox, f.env(data.sandbox)).counts.finished >= 60, true);
+});
+
+test('the machine registry check reads paths, not prose', async t => {
+  const f = fixture(t);
+  const data = await f.start();
+  const record = name => { const file = path.join(f.root, name); return { file, write: value => writeFileSync(file, value) }; };
+  // A registry record that actually holds the sandbox is a leak.
+  const registered = record('registered.yml');
+  registered.write(`version: 1\nproject:\n  root: ${data.project}\nseats:\n  - id: w1\n    worktree: ${path.join(data.seats, 'w1')}\n`);
+  assert.equal(recordHoldsSandbox(registered.file, data.sandbox), true);
+  // A seat reporting what it did quotes its commands. That is not a leak.
+  const reported = record('reported.yml');
+  reported.write(`version: 1\nproject:\n  root: /Users/someone/elsewhere\njournal:\n  - event: report\n    detail: >-\n      Measured the arc. Exact commands: node infra/bin/cli.mjs playground up\n      --dir ${data.sandbox}; node infra/bin/cli.mjs playground down --dir\n      ${data.sandbox}\n`);
+  assert.equal(recordHoldsSandbox(reported.file, data.sandbox), false);
+  // A path under the sandbox counts, and a neighbour with the same prefix does not.
+  const nested = record('nested.yml');
+  nested.write(`worktree: ${path.join(data.sandbox, 'seats/w2')}\n`);
+  assert.equal(recordHoldsSandbox(nested.file, data.sandbox), true);
+  const neighbour = record('neighbour.yml');
+  neighbour.write(`worktree: ${data.sandbox}-other/project\n`);
+  assert.equal(recordHoldsSandbox(neighbour.file, data.sandbox), false);
+  // A record that cannot be parsed cannot answer the question, so it is reported.
+  const broken = record('broken.yml');
+  broken.write('key: [unterminated\n  - "also broken\n');
+  assert.equal(recordHoldsSandbox(broken.file, data.sandbox), true);
+  // The live sandbox is still absent from the real machine registry.
+  assert.deepEqual(status(data.sandbox, f.env(data.sandbox)).machine, { dryad: [], overlays: [] });
 });

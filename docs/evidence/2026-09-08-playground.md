@@ -45,8 +45,9 @@ api--w1.playground.localhost   {"env":"baseline","revision":"0f4ec10c88b8…"}
 
 ## What the run found
 
-Three defects, all in the playground itself, all found by running it rather
-than by reading it.
+Four defects, all in the playground itself. The first three were found by
+running it rather than by reading it; the fourth by inspecting the machine
+registry afterwards.
 
 1. **`status` and `down` refused without `GROVE_STATE_DIR`** even though the
    sandbox path was the argument they were given. `up` never required it, so
@@ -72,11 +73,22 @@ than by reading it.
    never exposed to this: their staging names are dot-prefixed and end in
    `.tmp`, and every reader filters for `.json`.
 
+4. **The isolation check called an honest report a leak.** `down` asked whether
+   the machine registry holds the sandbox by searching every registry file for
+   the sandbox path as text. A Dryad seat that reports what it did quotes the
+   commands it ran, so once a seat had reported, `down` for that sandbox would
+   exit 1 with a false isolation failure. Running the playground from inside a
+   seat is the recommended workflow, so this was on the main path. It was found
+   by inspecting the machine registry after the run, not by the run itself:
+   `machineMentions` on a sandbox that was never registered and no longer
+   exists returned 1. The check now reads registry fields whose whole value is
+   a path inside the sandbox, and reports a record it cannot parse.
+
 ## Measurement
 
 ```bash
-node --test infra/bin/playground.test.mjs   # 10/10
-npm test                                    # 234/234 (231 before)
+node --test infra/bin/playground.test.mjs   # 11/11
+npm test                                    # 235/235 (231 before)
 ```
 
 Each new guard was reverted once and the test run again:
@@ -89,6 +101,7 @@ Each new guard was reverted once and the test run again:
 | A conflicting state directory is refused | 1 |
 | Staging outside the process directory | 1 |
 | A recorded exit means finished, whatever the code | 1 |
+| The registry check reads paths, not prose | 1 |
 
 The ENOENT flake was reproduced three times out of eight before the fix, by
 running the playground tests against eight concurrent copies of the suite, and
