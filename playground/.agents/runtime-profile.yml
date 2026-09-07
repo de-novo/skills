@@ -1,0 +1,43 @@
+# The playground sample project. Values only — the pattern lives in the grove
+# skill. Every instance of this project runs inside a throwaway sandbox, so
+# these values name services and hosts and never a port: each listener binds
+# port 0 and records what the kernel gave it.
+version: 1
+
+project:
+  slug: playground
+
+addressing:
+  tld: localhost
+  proxy: project              # the project's own router listens; Grove prints names
+  scheme:
+    shared: "{service}.{project}.{tld}"          # web.playground.localhost
+    overlay: "{service}--{env}.{project}.{tld}"  # web--w1.playground.localhost
+  # no ports block: this project reserves no port in advance
+
+runtime:
+  default: sandbox
+  single_stack: true
+  writers: 1
+  profiles:
+    sandbox:
+      backend: process        # plain node processes inside the sandbox
+  commands:
+    status: node tools/baseline.mjs status
+    up: node tools/baseline.mjs up --apply
+    overlay: node tools/overlay.mjs
+
+services:
+  api:    { kind: api,    health: /health, reflect: restart }
+  web:    { kind: web,    health: /health, reflect: restart }
+  router: { kind: router, health: /health, reflect: restart }
+
+overlay:
+  attachable: [api, web]
+  shared_only: [router]       # one router serves every name; never overlaid
+  image_tag: full-git-sha
+  stale_after: 1h
+
+data:
+  infra: project              # a JSON file inside the sandbox; no engine, no database
+  forbid_direct_db_writes: true
