@@ -33,7 +33,7 @@
 그 자리의 저널에 한 줄을 붙인다.
 
 ```yaml
-- { at: …, actor: seat, event: cli, detail: "overlay attach w6 web --image de-novo-me/web:2c46dc9… --apply", exit: 0 }
+- { at: …, actor: seat, event: cli, detail: "overlay attach w6 web --image acme/web:2c46dc9… --apply", exit: 0 }
 ```
 
 - 남기는 동사: `overlay create|attach|detach|destroy|touch|prune --apply`,
@@ -73,8 +73,8 @@
 
 ```json
 "worktrees": [
-  { "path": "/…/de-novo-me", "branch": "main", "head": "73f9c01…", "seat": null, "baseline": true },
-  { "path": "/…/workspaces/de-novo-me/dryad-w8", "branch": "…/dryad-w8", "head": "…", "seat": "w8", "baseline": false },
+  { "path": "/…/acme", "branch": "main", "head": "73f9c01…", "seat": null, "baseline": true },
+  { "path": "/…/acme-seats/w8", "branch": "…/dryad-w8", "head": "…", "seat": "w8", "baseline": false },
   { "path": "/…/somewhere/else", "branch": "feature/x", "head": "…", "seat": null, "baseline": false }
 ]
 ```
@@ -98,7 +98,7 @@
 ## 화면
 
 ```
-■ de-novo-me   seats 3 · worktrees 4 (1 unseated) · envs 2/2 · overlaps 1        Grove · pending 0 · drift 0
+■ acme         seats 3 · worktrees 4 (1 unseated) · envs 2/2 · overlaps 1        Grove · pending 0 · drift 0
 ┌ w8 · claude · 36m ───────────┐ ┌ w9 · codex · 10m ────────────┐ ┌ (unseated) feature/x ──────┐
 │ ASCII figures for the sheet  │ │ scroll-led reading motion    │ │ /Users/…/somewhere/else     │
 │ ● done  "3 plates in SSR…"   │ │ ● done  "5 head states…"     │ │ HEAD 1a2b3c4 · main+3       │
