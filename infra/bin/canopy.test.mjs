@@ -92,7 +92,7 @@ test('GET / and /api/state serve real CLI reports over an ephemeral loopback soc
   assert.match(response.headers.get('content-type'), /text\/html/);
   const html = await response.text();
   const firstRender = html.split('<script>')[0];
-  assert.match(firstRender, /seats 1 · worktrees 1\/1 present · envs 1\/1 tracked · reported blocked 1/);
+  assert.match(firstRender, /seats 1 · envs 1\/1/);
   assert.match(firstRender, /Waiting &lt;script&gt;alert\(1\)&lt;\/script&gt;/);
   assert.match(firstRender, /Archive journal proof/);
   assert.match(firstRender, /<summary>finished 1<\/summary>/);
@@ -176,7 +176,7 @@ test('renderer preserves pending liveness, hostnames and null measurements witho
     finished: [], problems: ['<unsafe>'], grove: { counts: { environments: 1, attachments: 1, pending: 2, stale: null, drift: null }, pending: [{ env: 'w1', verb: 'attach', liveness: 'in-flight' }, { env: 'w2', verb: 'create', liveness: 'stalled' }] },
   }] };
   const html = renderPage(state).split('<script>')[0];
-  assert.match(html, /envs 1\/1 tracked, 1 in-flight/);
+  assert.match(html, /envs 1\/1/);
   assert.match(html, /w1 attach in-flight/);
   assert.match(html, /w2 create stalled/);
   assert.match(html, /stale notMeasured · drift notMeasured/);
@@ -185,4 +185,56 @@ test('renderer preserves pending liveness, hostnames and null measurements witho
   assert.doesNotMatch(html, /href="javascript:|href="http:\/\/user:pass/);
   assert.match(html, /&lt;session&gt;/);
   assert.match(html, /problem · &lt;unsafe&gt;/);
+  assert.equal((html.match(/<article class="card seat"/g) ?? []).length, 1);
+  assert.doesNotMatch(html, /class="files"|class="overlap"|undefined/);
+});
+
+
+test('second-screen --once and socket first paint agree on worktrees, skills, files and overlaps', async (t) => {
+  const environment = { ...process.env, CANOPY_TEST_SCREEN: '1', CANOPY_TEST_PROJECTS: JSON.stringify([{ slug: 'example', root: '/fixture/main', overlay: true }]) };
+  const result = spawnSync(process.execPath, [RUNNER, '--once'], { env: environment, encoding: 'utf8', timeout: 10000 });
+  assert.equal(result.status, 0, result.stderr);
+  const aggregate = JSON.parse(result.stdout).projects[0];
+  assert.equal(aggregate.worktrees.length, 3);
+  assert.deepEqual(aggregate.overlaps, [{ path: 'shared.txt', seats: ['w1', 'w2'] }]);
+  assert.equal(aggregate.seats[0].changes.counts.committed, 14);
+  assert.equal(aggregate.seats[0].journal.at(-1).event, 'cli');
+  assert.equal(aggregate.seats[0].hostnames[1].attached, false);
+  const server = await startCanopy({ port: 0, cli: PROJECTS, projectsCli: PROJECTS, environment });
+  t.after(() => closeServer(server));
+  const url = `http://127.0.0.1:${server.address().port}`;
+  const html = await (await fetch(url)).text();
+  const first = html.split('<script>')[0];
+  const project = (await (await fetch(url + '/api/state')).json()).projects[0];
+  assert.equal((first.match(/<article class="card /g) ?? []).length, project.worktrees.length);
+  assert.equal((first.match(/class="overlap"/g) ?? []).length, project.overlaps.length);
+  assert.match(first, /example — seats 2 · worktrees 3 \(1 unseated\) · envs 2\/2 · overlaps 1/);
+  assert.match(first, /Grove · environments 2 · attachments 2 · pending 1 · w1 attach in-flight · stale 0 · drift 0/);
+  assert.ok(first.indexOf('class="grove"') < first.indexOf('problem · w1: attachment pending'));
+  assert.ok(first.indexOf('data-seat="w2"') < first.indexOf('data-seat="w1"'));
+  assert.ok(first.indexOf('data-seat="w1"') < first.indexOf('class="card unseated"'));
+  const cards = [...first.matchAll(/<article class="card seat"[^>]*>([\s\S]*?)<\/article>/g)];
+  assert.equal(cards.length, 2);
+  for (let i = 0; i < cards.length; i++) {
+    const seat = project.seats[1 - i];
+    const card = cards[i][1];
+    assert.ok(card.includes(`+${seat.changes.counts.committed} committed · ${seat.changes.counts.uncommitted} open`));
+    assert.match(card, /skills · plan 1 · report 1 · cli 1/);
+    assert.ok(card.includes(`working · Report ${seat.id}`));
+    assert.match(card, /last cli · 2026-09-07T/);
+    assert.match(card, /<time datetime="2026-09-07T/);
+    assert.match(card, /<ul><li class="shared">.*shared.txt/);
+    assert.ok(card.includes(`href="http://api--${seat.id}.example.localhost/"`));
+    assert.ok(card.includes(`web--${seat.id}.example.localhost <span class="muted">(unattached)</span>`));
+    assert.ok(!card.includes(`href="http://web--${seat.id}`));
+  }
+  assert.equal((cards[1][1].match(/<li/g) ?? []).length, 12);
+  assert.match(cards[1][1], /3 more files/);
+  assert.doesNotMatch(first, /Hidden second task line/);
+  const unseated = first.match(/<article class="card unseated">([\s\S]*?)<\/article>/)[1];
+  assert.match(unseated, /Not a seat/);
+  assert.match(unseated, /main/);
+  assert.match(unseated, /HEAD 1234567/);
+  assert.doesNotMatch(unseated, /class="files"|skills/);
+  t.diagnostic('fixture socket first paint: worktree cards 3/3; overlap lines 1/1; seat file counts 2/2; unattached hosts unlinked 2/2; file cap 12/12');
 });

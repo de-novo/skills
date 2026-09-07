@@ -13,9 +13,13 @@ header { display: flex; align-items: baseline; justify-content: space-between; g
 h1 { font-size: 19px; margin: 0; } h2 { font-size: 13px; margin: 0; }
 header p, .root { color: var(--muted); } .root { margin: 3px 0 10px; overflow-wrap: anywhere; }
 section { border-top: 1px solid var(--line); padding: 14px 0; margin-top: 12px; }
-.table-wrap { overflow-x: auto; } table { border-collapse: collapse; width: 100%; text-align: left; }
-th, td { padding: 5px 10px 5px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
-th { color: var(--muted); font-weight: normal; white-space: nowrap; } td { max-width: 440px; overflow-wrap: anywhere; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 12px; align-items: start; }
+.card { border: 1px solid var(--line); border-radius: 6px; padding: 14px; min-width: 0; overflow-wrap: anywhere; }
+.card h3 { font-size: 13px; margin: 0 0 10px; } .card p { margin: 8px 0; }
+.task { font-weight: bold; } .muted, .meta, .unseated { color: var(--muted); }
+.files, .meta { border-top: 1px solid var(--line); padding-top: 6px; }
+.files ul { list-style: none; padding: 0; margin: 0; } .files li { margin: 3px 0; }
+.shared, .overlap { color: var(--alert); } a:focus-visible, summary:focus-visible { outline: 2px solid var(--link); outline-offset: 3px; }
 pre { white-space: pre-wrap; margin: 3px 0; font: inherit; } a { color: var(--link); }
 .grove { margin: 9px 0; } .problem { background: var(--problem); color: var(--alert); padding: 6px 8px; margin: 5px 0; overflow-wrap: anywhere; }
 summary { cursor: pointer; padding: 4px 0; } details { margin-top: 8px; }
