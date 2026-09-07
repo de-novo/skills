@@ -144,6 +144,58 @@ Canopy never reads registry files directly, launches workers, writes reports,
 changes worktrees, renews leases, or mutates environments or shared engines.
 It accepts only GET requests, binds only to `127.0.0.1`, and refuses `--host`.
 
+## Writing a seat brief
+
+Before `plan`, read the project's working rules and verification instructions.
+Inspect live seats with `de-novo skills dryad status --json` and read their
+briefs with `de-novo skills dryad seat <id> --task`. Compare intended scope,
+not just paths already changed: an empty diff does not mean its scope is free.
+
+Write the brief with these fields, replacing placeholders with facts from the
+project:
+
+- **Outcome:** an observable result the worker can finish, with any necessary
+  product decisions already settled.
+- **Boundary:** the allowed paths and behavior in this seat's worktree, plus
+  exclusions that keep it separate from other live seats.
+- **Verification:** name the project's check or give its existing command and
+  working directory, prerequisites, and expected counted result. Confirm the
+  worker can run it alone with the seat's available resources. With no Grove
+  environment, use the project's own applicable checks.
+- **Report:** point to [Rules for a seated worker](SKILL.md#rules-for-a-seated-worker)
+  as the report and completion contract. Specify the task evidence to include:
+  outcome, revision, exact checks and counts, unmeasured boundaries, and the
+  session id or transcript path supplied through `--session` under those rules.
+- **Forbidden actions:** reference those same worker rules for pushing,
+  merging, `finish`, and writes to other worktrees; add any project-specific
+  exclusions. Do not turn a task brief into a second lifecycle contract.
+
+Reject the brief before seating if there is no verification the worker can
+run alone, its allowed boundary overlaps another live seat, or its outcome
+needs a decision the worker cannot make. Narrow or resequence overlapping
+work, provide the missing verification resources, or resolve the decision
+before assigning it. These are assignment checks, not new CLI guards.
+
+These examples show the shape only. Replace every placeholder with a measured
+project fact; each uses the report and forbidden-action references above.
+
+> Outcome: correct the documented setup sequence. Boundary: `<guide path>`
+> only. Verification: `<project documentation check>` from `<directory>`;
+> record checked links and failures. Report: revision and check counts under
+> the worker rules, with the session reference. Forbidden: worker-rule
+> restrictions plus changes to runtime files.
+
+> Outcome: reproduce and fix `<already specified input behavior>`. Boundary:
+> `<module path>` and `<its test path>`, disjoint from live seats. Verification:
+> `<focused project check>` with `<seat-local fixture>`; observe the specified
+> result before and after. Report: revision, reproduction and check counts
+> under the worker rules, with the session reference. Forbidden: worker-rule
+> restrictions plus changes to the public interface.
+
+Save the completed brief as a task file and pass it through `--task-file`, or
+use `--task` for a short brief. Review the printed plan against its boundary
+before applying it; launcher handoff follows below.
+
 ## Handing a seat to a launcher
 
 ```bash

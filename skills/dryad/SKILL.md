@@ -60,6 +60,11 @@ report is not done.
 
 ## Seating others
 
+Before planning a seat, write a brief the worker can complete independently.
+Use [Writing a seat brief](README.md#writing-a-seat-brief) for its shape,
+rejection checks, and examples. It points back to the worker rules above for
+reporting and completion; a task does not replace those rules.
+
 For the human or an orchestrator, in order:
 
 1. `de-novo skills dryad plan <id> --task … --by <label>` prints the plan;
