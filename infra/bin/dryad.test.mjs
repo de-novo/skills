@@ -40,7 +40,9 @@ function fixture(t, { overlay = false, worktrees = true, createOn = null } = {})
     GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '3000',
     GROVE_OVERLAY_TIMEOUT_MS: '10000',
   };
+  // A fixture command is nobody's seat: the suite itself may run in one.
   delete environment.DRYAD_PROJECT;
+  delete environment.DRYAD_ID;
   writeFileSync(path.join(root, 'process-test-marker'), 'owned fixture');
   const runtime = { project: { slug: 'dryad-test' }, services: { api: {} }, data: { infra: 'project' } };
   if (overlay) {
@@ -256,22 +258,155 @@ test('projects joins the index with live registries: two seats, then one finishe
   t.diagnostic('missing index 2/2; two seats counted 1/1; one finished counted 1/1; missing root flagged 1/1');
 });
 
-test('status --json carries each seat\'s overlay hostnames from urls --json; without overlays the list is empty', (t) => {
+test('status --json marks each seat\'s overlay hostnames attached or not; without overlays the list is empty', (t) => {
   const f = fixture(t, { overlay: true });
   f.good(['plan', 'w1', '--task', 'named seat', '--apply']);
+  // The env exists but holds no service: a hostname is rendered for every
+  // service of the project, and none of them answers yet.
   const seated = JSON.parse(f.good(['status', '--json']).stdout);
-  assert.deepEqual(seated.seats[0].hostnames, ['api--w1.dryad-test.localhost']);
+  assert.deepEqual(seated.seats[0].hostnames, [{ host: 'api--w1.dryad-test.localhost', service: 'api', attached: false }]);
   assert.equal(JSON.parse(f.good(['projects', '--json'], { cwd: f.root }).stdout).projects[0].overlay, true);
+
+  const attach = spawnSync(process.execPath, [CLI, 'overlay', 'attach', 'w1', 'api', '--image', f.images[0], '--apply', '--project', f.baseline], { cwd: f.seatPath('w1'), env: f.environment, encoding: 'utf8', timeout: 20000 });
+  assert.equal(attach.status, 0, attach.stderr);
+  const live = JSON.parse(f.good(['status', '--json']).stdout);
+  assert.deepEqual(live.seats[0].hostnames, [{ host: 'api--w1.dryad-test.localhost', service: 'api', attached: true }]);
+
   // A pending env has no hostnames yet.
   f.bad(['plan', 'w2', '--task', 'pending', '--apply'], { env: { GROVE_PROCESS_TEST_ROOT: path.join(f.root, 'missing') } });
   const pending = JSON.parse(f.bad(['status', '--json']).stdout);
   assert.deepEqual(pending.seats.find((seat) => seat.id === 'w2').hostnames, []);
-  assert.deepEqual(pending.seats.find((seat) => seat.id === 'w1').hostnames, ['api--w1.dryad-test.localhost']);
+  assert.deepEqual(pending.seats.find((seat) => seat.id === 'w1').hostnames, [{ host: 'api--w1.dryad-test.localhost', service: 'api', attached: true }]);
 
   const plain = fixture(t);
   plain.good(['plan', 'w1', '--task', 'no grove overlay', '--apply']);
   assert.deepEqual(JSON.parse(plain.good(['status', '--json']).stdout).seats[0].hostnames, []);
-  t.diagnostic('hostnames with overlay 1/1; pending empty 1/1; without overlay empty 1/1');
+  t.diagnostic('hostnames unattached 1/1; attached after attach 1/1; pending empty 1/1; without overlay empty 1/1');
+});
+
+test('a seat journals the state-changing catalog verbs it runs with their exit code, and never a read verb', (t) => {
+  const f = fixture(t, { overlay: true });
+  f.good(['plan', 'w1', '--task', 'journal what I ran', '--apply']);
+  const seatEnv = { ...f.environment, DRYAD_ID: 'w1', DRYAD_PROJECT: f.baseline };
+  const catalog = (args, { cwd = f.seatPath('w1'), env = seatEnv } = {}) =>
+    spawnSync(process.execPath, [CLI, ...args], { cwd, env, encoding: 'utf8', timeout: 20000 });
+  const events = () => f.state().seats.w1.journal.filter((entry) => entry.event === 'cli');
+
+  const attached = catalog(['overlay', 'attach', 'w1', 'api', '--image', f.images[0], '--apply', '--project', f.baseline]);
+  assert.equal(attached.status, 0, attached.stderr);
+  assert.equal(events().length, 1);
+  assert.deepEqual([events()[0].actor, events()[0].exit], ['seat', 0]);
+  assert.equal(events()[0].detail, `overlay attach w1 api --image ${f.images[0]} --apply --project ${f.baseline}`);
+
+  // Read verbs stay out: a dashboard polling status must not bury the journal.
+  assert.equal(catalog(['overlay', 'status', '--json', '--project', f.baseline]).status, 0);
+  assert.equal(catalog(['urls', f.baseline, '--env', 'w1', '--json']).status, 0);
+  assert.equal(catalog(['validate', f.baseline]).status, 0);
+  catalog(['dryad', 'status', '--json', '--project', f.baseline]);
+  catalog(['dryad', 'seat', 'w1', '--json', '--project', f.baseline]);
+  assert.equal(events().length, 1, 'overlay status, urls, validate, dryad status and dryad seat record nothing');
+  // report writes its own event; it must not be doubled by a cli one.
+  f.good(['report', 'w1', '--status', 'working', '--note', 'measuring'], { cwd: f.seatPath('w1'), env: seatEnv });
+  assert.equal(events().length, 1);
+  assert.equal(f.state().seats.w1.journal.at(-1).event, 'report');
+
+  // A failed command is what the seat tried: it is recorded with its exit
+  // code, and the passthrough after -- is kept as a digest, never as text.
+  const failed = catalog(['overlay', 'attach', 'w1', 'api', '--image', 'not-a-digest', '--apply', '--project', f.baseline, '--', 'project-secret']);
+  assert.notEqual(failed.status, 0);
+  const last = events().at(-1);
+  assert.equal(events().length, 2);
+  assert.equal(last.exit, 1);
+  assert.doesNotMatch(last.detail, /project-secret/);
+  assert.equal(
+    last.detail,
+    `overlay attach w1 api --image not-a-digest --apply --project ${f.baseline} -- sha256:${createHash('sha256').update(JSON.stringify(['project-secret'])).digest('hex')}`
+  );
+  assert.match(f.good(['status', 'w1']).stdout, /cli +overlay attach w1 api/);
+
+  // A seat that is already finished records nothing and fails nothing.
+  f.good(['finish', 'w1', '--apply']);
+  const orphan = catalog(['overlay', 'create', 'w2', '--apply', '--project', f.baseline], { cwd: f.baseline });
+  assert.equal(orphan.status, 0, orphan.stderr);
+  const archived = readDryadFinished('dryad-test', f.environment).seats[0];
+  assert.equal(archived.journal.filter((entry) => entry.event === 'cli').length, 2);
+  t.diagnostic('cli events recorded 2/2 (exit 0 and 1); read verbs recorded 0/5; passthrough digested 1/1; finished seat skipped 1/1');
+});
+
+test('status --json counts what each seat changed, truncates the lists at 200, and is null without a worktree', (t) => {
+  const f = fixture(t);
+  f.good(['plan', 'w1', '--task', 'change files', '--apply']);
+  const w1 = f.seatPath('w1');
+  writeFileSync(path.join(w1, 'app.txt'), 'seat edit\n');
+  gitIn(w1, ['commit', '-am', 'edit the baseline file']);
+  writeFileSync(path.join(w1, 'added.txt'), 'new\n');
+  gitIn(w1, ['add', 'added.txt']);
+  gitIn(w1, ['commit', '-m', 'add a file']);
+  writeFileSync(path.join(w1, 'open.txt'), 'not committed\n');
+
+  const seat = JSON.parse(f.good(['status', '--json']).stdout).seats[0];
+  assert.equal(seat.changes.base, f.head);
+  assert.deepEqual(seat.changes.counts, { committed: 2, uncommitted: 1, ahead: 2 });
+  assert.deepEqual(seat.changes.committed.map((row) => row.path).sort(), ['added.txt', 'app.txt']);
+  assert.deepEqual(seat.changes.committed.find((row) => row.path === 'app.txt'), { path: 'app.txt', status: 'M' });
+  assert.deepEqual(seat.changes.uncommitted, [{ path: 'open.txt', status: '??' }]);
+  assert.equal(seat.changes.truncated, false);
+  assert.equal(seat.ahead, 2, 'ahead still reports the commits on top of the base');
+
+  mkdirSync(path.join(w1, 'bulk'));
+  for (let index = 0; index < 205; index += 1) writeFileSync(path.join(w1, 'bulk', `f${index}.txt`), `${index}\n`);
+  gitIn(w1, ['add', 'bulk']);
+  gitIn(w1, ['commit', '-m', 'bulk']);
+  const big = JSON.parse(f.good(['status', '--json']).stdout).seats[0];
+  assert.deepEqual(big.changes.counts, { committed: 207, uncommitted: 1, ahead: 3 });
+  assert.equal(big.changes.committed.length, 200, 'the list is capped; the count is whole');
+  assert.equal(big.changes.uncommitted.length, 1);
+  assert.equal(big.changes.truncated, true);
+
+  rmSync(w1, { recursive: true, force: true });
+  const missing = JSON.parse(f.bad(['status', '--json']).stdout).seats[0];
+  assert.equal(missing.changes, null);
+  assert.equal(missing.ahead, null);
+  t.diagnostic('committed 2/2; uncommitted 1/1; ahead 2; truncated at 200 of 207; missing worktree null 1/1');
+});
+
+test('status lists every worktree of the baseline repository; one nobody seated has seat null', (t) => {
+  const f = fixture(t);
+  f.good(['plan', 'w1', '--task', 'seated work', '--apply']);
+  const unseated = path.join(f.root, 'launcher-made');
+  gitIn(f.baseline, ['worktree', 'add', '-b', 'feature/x', unseated]);
+
+  const report = JSON.parse(f.good(['status', '--json']).stdout);
+  assert.equal(report.worktrees.length, 3);
+  const baseline = report.worktrees.find((row) => row.baseline);
+  assert.deepEqual([baseline.path, baseline.branch, baseline.seat], [f.baseline, 'main', null]);
+  assert.equal(baseline.head, f.head);
+  const seated = report.worktrees.find((row) => row.seat === 'w1');
+  assert.deepEqual([seated.path, seated.branch, seated.baseline], [f.seatPath('w1'), 'dryad/w1', false]);
+  const stray = report.worktrees.find((row) => !row.baseline && row.seat == null);
+  assert.deepEqual([stray.path, stray.branch], [realpathSync(unseated), 'feature/x']);
+  assert.equal(stray.head.length, 40);
+  assert.equal(report.seats.length, 1, 'changes are computed for seats only, not for other people\'s worktrees');
+  assert.match(f.good(['status']).stdout, /worktrees  3 \(1 unseated\)/);
+  t.diagnostic('worktrees listed 3/3; seated 1/1; unseated 1/1; baseline flagged 1/1');
+});
+
+test('two seats holding one path are one overlap and do not change the exit code', (t) => {
+  const f = fixture(t);
+  for (const id of ['w1', 'w2']) f.good(['plan', id, '--task', `${id} work`, '--apply']);
+  writeFileSync(path.join(f.seatPath('w1'), 'app.txt'), 'w1 edit\n');
+  gitIn(f.seatPath('w1'), ['commit', '-am', 'w1 edits the shared file']);
+  writeFileSync(path.join(f.seatPath('w2'), 'app.txt'), 'w2 edit\n');
+  writeFileSync(path.join(f.seatPath('w2'), 'solo.txt'), 'only w2 has this\n');
+
+  // f.good asserts exit 0: an overlap is a fact, not a problem.
+  const text = f.good(['status']);
+  assert.match(text.stdout, /overlaps   1/);
+  assert.match(text.stdout, /overlap  app\.txt  w1 · w2/);
+  const report = JSON.parse(f.good(['status', '--json']).stdout);
+  assert.deepEqual(report.overlaps, [{ path: 'app.txt', seats: ['w1', 'w2'] }]);
+  assert.deepEqual(report.problems, []);
+  t.diagnostic('overlap of one committed and one uncommitted change 1/1; unshared path not counted 1/1; exit 0');
 });
 
 test('plan without --apply creates nothing; with --apply it creates a worktree seat that seat, report, status and finish round-trip', (t) => {

@@ -32,7 +32,7 @@ import {
   parseOverlayCliArgs,
   runOverlayLifecycle,
 } from '../lib/overlay.mjs';
-import { dryadHelp, parseDryadCliArgs, runDryad } from '../lib/dryad.mjs';
+import { dryadHelp, parseDryadCliArgs, recordSeatCliEvent, runDryad } from '../lib/dryad.mjs';
 import { runCanopy } from '../lib/canopy.mjs';
 import {
   COMPOSE_FILE,
@@ -412,8 +412,8 @@ up, status, provision are aliases of infra up|status|provision.
 there is no down command — several projects live on machine infra.`);
 }
 
-function main() {
-  const parsed = resolveInvocation(process.argv.slice(2));
+function main(argv) {
+  const parsed = resolveInvocation(argv);
   if (parsed.error) {
     console.error(parsed.error);
     return 1;
@@ -479,10 +479,16 @@ function isMain() {
 }
 
 if (isMain()) {
+  const argv = process.argv.slice(2);
+  let code;
   try {
-    process.exitCode = await main();
+    code = await main(argv);
   } catch (error) {
     console.error(`${CLI}: ${error.message}`);
-    process.exit(1);
+    code = 1;
   }
+  // A seat journals the state-changing verbs it ran, whatever they returned.
+  // recordSeatCliEvent never throws: observing a command must not fail it.
+  recordSeatCliEvent(resolveInvocation(argv).args ?? argv, code);
+  process.exitCode = code;
 }
