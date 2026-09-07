@@ -1,58 +1,67 @@
-# Canopy — 프로젝트별 병렬 작업을 한눈에
+# Canopy — parallel work per project, on one screen
 
-작성: 2026-09-07. 상태: 설계 제안. 첫 판(`5e38159`)은 자리 표와 문제 행까지 있다.
-이 문서는 두 번째 판의 결정을 적는다. 운영 명세가 아니다. 구현이 들어가면
-`infra/lib/canopy.mjs`와 `infra/lib/dryad.mjs`가 동작을, `skills/dryad/README.md`가
-필드를 소유한다.
+Written 2026-09-07. Status: design proposal. The first round (`5e38159`) has the
+seat table and the problem row. This document records the decisions for the
+second round. It is not an operating specification. Once the implementation
+lands, `infra/lib/canopy.mjs` and `infra/lib/dryad.mjs` own the behaviour and
+`skills/dryad/README.md` owns the fields.
 
-## 사람이 답을 얻어야 할 질문
+## The questions a person has to get answered
 
-한 화면에서, 프로젝트마다:
+On one screen, per project:
 
-1. 지금 몇 개의 워크트리가 동시에 움직이는가. 자리인 것과 아닌 것 모두.
-2. 각 워크트리에서 **무슨 일을** 하고 있는가. 작업 한 줄, 마지막 보고, 얼마나 됐는가.
-3. 각 워크트리가 **어떤 스킬 동사**를 실제로 썼는가. plan, report, attach, destroy …
-4. 각 워크트리가 **어떤 파일을** 고쳤는가. 커밋한 것과 아직 안 한 것.
-5. 서로 **겹치는 파일**이 있는가. 병합 충돌은 합칠 때가 아니라 지금 보여야 한다.
+1. How many worktrees are moving right now. Both the ones that are seats and the ones that are not.
+2. **What work** is happening in each worktree. One line of task, the last report, and how long ago.
+3. **Which skill verbs** each worktree actually used. plan, report, attach, destroy …
+4. **Which files** each worktree changed. Committed and not yet committed.
+5. Are there **files that overlap**. A merge conflict has to be visible now, not at merge time.
 
-첫 판은 1(자리만)·2(마지막 저널 한 줄)까지다. 3·4·5는 이음새가 없다.
+The first round covers 1 (seats only) and 2 (the last journal line). 3, 4, and 5
+have no seam.
 
-## 원칙
+## Principles
 
-- 캐노피는 읽기만 한다. 첫 판과 같다. 레지스트리 파일을 열지 않고 공개 CLI의
-  JSON만 읽는다. 따라서 필요한 정보는 전부 **Dryad `status --json`이 내주는 필드**로
-  먼저 정의한다. 캐노피 UI는 그 다음이다.
-- 새 추적 장치를 만들지 않는다. 파일 변경은 git이 이미 안다. 스킬 사용은 자리에서
-  실행된 CLI 동사이므로 CLI 자신이 저널에 적으면 된다. 둘 다 이미 있는 것에서 읽는다.
-- 겹침은 계산해서 보여 주되 판단하지 않는다. "이 두 자리가 같은 파일을 고쳤다"까지.
-  누가 먼저 합칠지, 누가 양보할지는 사람이다.
+- Canopy only reads. Same as the first round. It does not open registry files;
+  it reads only the public CLI's JSON. So the information it needs is defined
+  first as **fields that Dryad `status --json` hands out**. The Canopy UI comes
+  after that.
+- Do not build a new tracking device. Git already knows the file changes. A
+  skill use is a CLI verb run in a seat, so the CLI itself can write it to the
+  journal. Both read from something that already exists.
+- Compute the overlap and show it, but do not judge it. Only as far as "these
+  two seats changed the same file". Who merges first and who yields is a person.
 
-## 이음새 1: 자리에서 실행된 스킬 동사 → 저널 `cli` 이벤트
+## Seam 1: skill verbs run in a seat → journal `cli` events
 
-`DRYAD_ID`가 설정된 프로세스에서 카탈로그 CLI가 **상태를 바꾸는** 동사를 실행하면,
-그 자리의 저널에 한 줄을 붙인다.
+When a process with `DRYAD_ID` set runs a catalog CLI verb that **changes
+state**, one line is appended to that seat's journal.
 
 ```yaml
 - { at: …, actor: seat, event: cli, detail: "overlay attach w6 web --image acme/web:2c46dc9… --apply", exit: 0 }
 ```
 
-- 남기는 동사: `overlay create|attach|detach|destroy|touch|prune --apply`,
-  `dryad report`(이미 `report` 이벤트가 있으므로 중복 기록하지 않음), `setup`,
-  `infra up|provision`. 읽기 동사(`status`, `seat`, `urls`, `validate`, `projects`,
-  `canopy`)는 남기지 않는다. 폴링이 저널을 덮지 않게 하기 위해서다.
-- `--image` 값과 인자는 그대로 적되 `GROVE_PROVISION_PASSWORD` 같은 환경변수는 애초에
-  argv에 없다. passthrough(`--` 뒤)는 Grove 계약과 같이 SHA-256 요약만 적는다.
-- 기록은 CLI 진입점(`cli.mjs`)에서 한 번, 명령이 끝난 뒤 종료 코드와 함께. 실패한
-  attach도 남는다. 그것이 "무엇을 시도했는가"다.
-- `DRYAD_ID`의 자리가 레지스트리에 없으면(이미 finish됨) 조용히 넘어간다. 기록
-  실패가 명령 자체를 실패시키지 않는다.
+- Verbs that are recorded: `overlay create|attach|detach|destroy|touch|prune --apply`,
+  `dryad report` (a `report` event already exists, so it is not recorded twice),
+  `setup`, `infra up|provision`. Read verbs (`status`, `seat`, `urls`,
+  `validate`, `projects`, `canopy`) are not recorded. This is so polling does not
+  bury the journal.
+- The `--image` value and the arguments are written as they are; an environment
+  variable such as `GROVE_PROVISION_PASSWORD` is not in argv in the first place.
+  Passthrough (after `--`) is written as a SHA-256 digest only, the same as
+  Grove's contract.
+- The record is written once at the CLI entry point (`cli.mjs`), after the
+  command ends, together with the exit code. A failed attach is recorded too.
+  That is "what was attempted".
+- If the seat for `DRYAD_ID` is not in the registry (it was already finished),
+  it is skipped silently. A failure to record does not fail the command itself.
 
-이로써 "어떤 스킬을 썼는가"는 저널의 `event ∈ {plan, cli, report, finish…}`를 세는
-것이 된다. 캐노피는 자리마다 동사별 개수와 마지막 시각을 보인다.
+With this, "which skills were used" becomes a count of the journal's
+`event ∈ {plan, cli, report, finish…}`. Canopy shows the per-verb count and the
+last time for each seat.
 
-## 이음새 2: 파일 변경 → `status --json`의 `changes`
+## Seam 2: file changes → `changes` in `status --json`
 
-자리마다 git에서 읽는다. 새 상태는 없다.
+Read from git per seat. There is no new state.
 
 ```json
 "changes": {
@@ -64,12 +73,13 @@
 ```
 
 - `committed` = `git diff --name-status <base>..HEAD`, `uncommitted` = `git status --porcelain`.
-- 수백 개를 넘으면 `truncated: true`와 함께 앞 200개만. 화면은 개수를 먼저 보인다.
-- 워크트리가 없으면 `changes: null`. 입양한 워크트리도 같다.
+- Past several hundred, only the first 200 with `truncated: true`. The screen shows the count first.
+- With no worktree, `changes: null`. The same for an adopted worktree.
 
-## 이음새 3: 자리가 아닌 워크트리 → 프로젝트의 `worktrees`
+## Seam 3: worktrees that are not seats → the project's `worktrees`
 
-`status --json` 최상위에 baseline의 `git worktree list --porcelain`을 붙인다.
+Attach the baseline's `git worktree list --porcelain` at the top level of
+`status --json`.
 
 ```json
 "worktrees": [
@@ -79,23 +89,24 @@
 ]
 ```
 
-자리 없는 워크트리는 "누군가 병렬로 일하지만 Dryad는 모른다"는 뜻이다. 캐노피는
-그것을 회색 열로 보인다. `changes`는 자리에만 계산한다. 자리 아닌 워크트리의 파일까지
-읽는 것은 다른 사람 작업을 들여다보는 일이라 기본으로 하지 않는다.
+A worktree with no seat means "somebody is working in parallel, and Dryad does
+not know about it". Canopy shows it as a grey column. `changes` is computed only
+for seats. Reading the files of a worktree that is not a seat is looking into
+another person's work, so it is not done by default.
 
-## 이음새 4: 겹침 → `status --json`의 `overlaps`
+## Seam 4: overlap → `overlaps` in `status --json`
 
-프로젝트 수준. 같은 파일을 둘 이상의 자리가 `committed` 또는 `uncommitted`로 가진
-경우.
+Project level. The case where more than one seat has the same file as
+`committed` or `uncommitted`.
 
 ```json
 "overlaps": [ { "path": "apps/web/src/routes/work.$slug.tsx", "seats": ["w8", "w9"] } ]
 ```
 
-이 값은 `status`의 종료 코드에 영향을 주지 않는다. 겹침은 문제가 아니라 사실이다.
-텍스트 `status`에는 `overlaps n`을 한 줄로 센다.
+This value does not affect `status`'s exit code. An overlap is not a problem; it
+is a fact. Text `status` counts it as one line, `overlaps n`.
 
-## 화면
+## The screen
 
 ```
 ■ acme         seats 3 · worktrees 4 (1 unseated) · envs 2/2 · overlaps 1        Grove · pending 0 · drift 0
@@ -114,58 +125,69 @@
   ▸ finished 11
 ```
 
-- 프로젝트 하나가 한 줄, 그 아래 워크트리마다 세로 카드. 카드 순서는 자리 → 자리 없는
-  워크트리, 각각 최근 활동순.
-- 카드 안: 작업 첫 줄, 상태와 마지막 보고, env와 hostname 링크, 스킬 동사 개수, 파일
-  개수와 목록(겹치는 파일은 앞에 `⚠`), 경과 시간.
-- 겹침은 카드 안에서 표시하고 프로젝트 아래에 한 번 더 모아 보인다.
-- 첫 판의 문제 행, finished 접기, 5초 폴링, JS 없이 첫 렌더는 그대로 유지한다.
-- 좁은 화면에서는 카드가 세로로 쌓인다. 파일 목록은 12개까지 보이고 나머지는 개수.
+- One project is one line, with a vertical card per worktree below it. Card
+  order is seats first, then worktrees with no seat, each by most recent
+  activity.
+- Inside a card: the task's first line, the status and last report, the env and
+  the hostname link, the skill verb counts, the file count and list (an
+  overlapping file is prefixed with `⚠`), and the elapsed time.
+- An overlap is marked inside the card and gathered once more below the project.
+- The first round's problem row, the finished fold, the 5-second polling, and the
+  first render without JS are kept as they are.
+- On a narrow screen the cards stack vertically. The file list shows up to 12 and
+  the rest as a count.
 
-## 하지 않는 것
+## What it does not do
 
-- 자리 아닌 워크트리의 파일 목록. 이유는 위.
-- 도구의 세션 로그 열기. `session`은 여전히 링크 텍스트다.
-- 작업 지시, 우편함, "다음 할 일". 캐노피는 보기만 한다.
-- 겹침에 대한 판단이나 자동 rebase.
+- The file list of a worktree that is not a seat. The reason is above.
+- Opening a tool's session log. `session` is still link text.
+- Task instructions, mailboxes, "what to do next". Canopy only looks.
+- Any judgment about an overlap, or an automatic rebase.
 
-## 측정 계획
+## Measurement plan
 
-| 이음새 | 검사 |
+| Seam | Check |
 | --- | --- |
-| `cli` 이벤트 | 임시 자리에서 `DRYAD_ID`를 두고 `overlay create --apply`와 실패하는 `attach`를 실행 → 저널에 `cli` 2줄, exit 0과 1. `status`는 남지 않음. finish된 자리에서 실행해도 명령은 성공 |
-| `changes` | 실제 임시 저장소에서 커밋 2개와 미커밋 1개 → committed 2, uncommitted 1, ahead 2. 200개 초과에서 `truncated` |
-| `worktrees` | baseline 옆에 `git worktree add`로 자리 아닌 워크트리 하나 → `seat: null` 1, baseline 1 |
-| `overlaps` | 두 자리가 같은 파일을 고침 → overlaps 1, 종료 코드 그대로 |
-| 캐노피 | `--once`가 위 필드를 그대로 싣는다. 소켓으로 `/`를 받아 `⚠` 와 카드 수를 센다 |
+| `cli` events | In a temporary seat, set `DRYAD_ID` and run `overlay create --apply` and a failing `attach` → 2 `cli` lines in the journal, exit 0 and 1. `status` is not recorded. The command still succeeds when run from a finished seat |
+| `changes` | In a real temporary repository, 2 commits and 1 uncommitted → committed 2, uncommitted 1, ahead 2. `truncated` past 200 |
+| `worktrees` | Next to the baseline, one worktree with no seat via `git worktree add` → `seat: null` 1, baseline 1 |
+| `overlaps` | Two seats change the same file → overlaps 1, exit code unchanged |
+| Canopy | `--once` carries the fields above as they are. Take `/` over the socket and count the `⚠` and the cards |
 
-가드마다 되돌려 red를 본다. 실제 도구로는 도그푸딩 자리로 한 번 더 돈다.
+Revert every guard once to see red. With the real tools, run around once more on
+a dogfooding seat.
 
-## 실린 것
+## What landed
 
-- **2026-09-07, 데이터 자리(d1).** 이음새 1~4와 `hostnames` 수정이
-  `infra/lib/dryad.mjs`·`infra/bin/cli.mjs`에 들어갔다. `DRYAD_ID`가 있는
-  프로세스가 상태를 바꾸는 동사(`overlay …--apply`, `setup`, `infra
-  up|provision`)를 실행하면 CLI 진입점이 종료 코드와 함께 `cli` 저널 한 줄을
-  붙인다(읽기 동사는 남기지 않고, `--` 뒤는 SHA-256 요약만). `status --json`은
-  자리마다 `changes`(200개 초과 시 `truncated`, 개수는 온전)와 자리 없는
-  워크트리까지 포함한 최상위 `worktrees`, 그리고 종료 코드를 바꾸지 않는
-  `overlaps`를 싣는다. `hostnames`는 `[{host, service, attached}]`가 되어 붙지
-  않은 서비스를 구분한다. 필드는 `skills/dryad/README.md`가 소유한다. 잰 것:
-  `node --test infra/bin/dryad.test.mjs` 18/18, `npm test` 214/214(전 210),
-  새 가드 5개를 각각 되돌려 red 5/5. 화면(카드)은 아직 없다.
+- **2026-09-07, the data seat (d1).** Seams 1 to 4 and the `hostnames` fix went
+  into `infra/lib/dryad.mjs` and `infra/bin/cli.mjs`. When a process with
+  `DRYAD_ID` runs a state-changing verb (`overlay …--apply`, `setup`, `infra
+  up|provision`), the CLI entry point appends one `cli` journal line together
+  with the exit code (read verbs are not recorded, and everything after `--` is
+  a SHA-256 digest only). `status --json` carries, per seat, `changes`
+  (`truncated` past 200, with the counts intact), a top-level `worktrees` that
+  includes worktrees with no seat, and `overlaps`, which does not change the
+  exit code. `hostnames` became `[{host, service, attached}]` so an unattached
+  service is distinguished. The fields are owned by `skills/dryad/README.md`.
+  Measured: `node --test infra/bin/dryad.test.mjs` 18/18, `npm test` 214/214
+  (210 before), each of the 5 new guards reverted for red 5/5. The screen (the
+  cards) does not exist yet.
 
-## 자리 나누기
+## Splitting the seats
 
-- 카탈로그 자리 하나(데이터): 이음새 1~4를 `dryad.mjs`/`cli.mjs`에, 테스트, README 필드 표.
-- 카탈로그 자리 하나(화면): 위 JSON 형태를 지시서로 받아 fixture에 대고 카드 화면.
-  이전 판과 같은 방식으로 병렬.
-- 두 자리가 끝나면 사이트에 자리 둘을 다시 열어 겹침이 실제로 보이는지 캐노피로
-  본다. 그 캡처가 이 판의 증거다.
+- One catalog seat (data): seams 1 to 4 in `dryad.mjs` / `cli.mjs`, the tests,
+  and the README field table.
+- One catalog seat (screen): take the JSON shape above as the brief and build
+  the card screen against a fixture. In parallel, the same way as the previous
+  round.
+- When the two seats are done, open two seats on the site again and look through
+  Canopy to see whether the overlap is actually visible. That capture is this
+  round's evidence.
 
-## 나중 후보 (2026-09-07)
+## Later candidates (2026-09-07)
 
-- **선언된 포트의 머신 단위 충돌 검사.** 두 프로젝트가 각자의 리스너로 같은 호스트
-  포트를 잡아 하나가 다른 하나를 조용히 가렸다. Dryad의 프로젝트 색인이 이 머신의
-  프로젝트를 알고 있으므로, 각 프로파일의 `addressing.ports.blocks`를 모아 겹침을
-  세어 보일 수 있다. 겹침 자체는 사실이고 판단은 사람이 한다.
+- **A machine-level conflict check on declared ports.** Two projects each took
+  the same host port for their own listener, and one silently shadowed the
+  other. Dryad's project index knows this machine's projects, so it can gather
+  each profile's `addressing.ports.blocks` and count the overlaps. The overlap
+  itself is a fact; a person makes the judgment.

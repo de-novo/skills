@@ -1,108 +1,133 @@
-# 가상 앱 개발로 확인한 Grove의 비용과 복구 경험
+# Grove's cost and recovery experience, measured by developing a synthetic app
 
-이 문서는 병렬 실행 수정 전의 측정 기록이다. 이후 변경과 재실행 결과는
-[병렬 실행 변경 증거](../evidence/2026-09-05-overlay-parallel.md)를 참조한다.
+This document is a measurement record from before the parallel-execution fix.
+For the change that followed and the results of the re-run, see
+[the parallel-execution change evidence](../evidence/2026-09-05-overlay-parallel.md).
 
-2026-09-05의 격리된 합성 실험이다. 실제 소비 프로젝트의 코드, 설정, 이름,
-경로, 실행 결과를 사용하지 않았다. 실제 팀의 생산성이나 도입 합격 판정으로
-해석하지 않는다. 합격 기준은 정하지 않았고 실행 전에 정한 표본과 시나리오를
-모두 실행했다. 실행 개수, 시간, 환경, 오류, 정리 결과의 원본은
-[선택한 실행 결과](synthetic/results.json)에 있다.
+This is an isolated synthetic experiment from 2026-09-05. No real consuming
+project's code, configuration, names, paths, or run results were used. Do not
+read it as a real team's productivity or as an adoption pass. No pass criterion
+was set, and every sample and scenario fixed before the run was run. The raw run
+counts, times, environment, errors, and cleanup results are in
+[the selected run results](synthetic/results.json).
 
-이 실험은 실제 Git 워크트리를 생성하지 않았다. 여러 워크트리의 독립적인
-수정·빌드·배포와 한쪽 정리가 다른 쪽에 미치는 영향은
-[후속 워크트리 실험](2026-09-05-worktree-evaluation.md)에서 별도로 확인했다.
+This experiment did not create real Git worktrees. Independent edit, build, and
+deploy across several worktrees, and the effect of one side's cleanup on the
+other, were checked separately in
+[the follow-up worktree experiment](2026-09-05-worktree-evaluation.md).
 
-## 개발 상황
+## The development situation
 
-작업 보드는 작업 목록을 반환하는 단일 앱이다. 두 작업 환경에서 서로 다른
-작업 항목을 추가한 버전을 동시에 확인한다. 상점은 공통 상품 서비스와 앱으로
-나뉜다. 두 작업 환경에서 서로 다른 할인 규칙을 확인하면서 같은 상품 서비스를
-사용한다. 각 프로젝트의 기준 앱은 그대로 실행한다.
+The task board is a single app that returns a list of tasks. Two work
+environments check, at the same time, versions that each add a different task
+item. The shop is split into a shared product service and an app. Two work
+environments check different discount rules while using the same product
+service. Each project's baseline app keeps running as it is.
 
-두 프로젝트 모두 Node HTTP 프로세스 백엔드를 쓴다. 앱 구조가 다르다는 사실은
-다른 백엔드로의 이식성 증거가 아니다. 가상의 변경은 실행 가능한 JavaScript
-파일로 생성한다. 컨테이너 이미지 빌드나 실제 개발자의 편집 시간을 재지 않는다.
+Both projects use the Node HTTP process backend. That the two app structures
+differ is not evidence of portability to another backend. The synthetic changes
+are generated as runnable JavaScript files. Container image builds and a real
+developer's editing time are not measured.
 
-각 앱은 실행 파일의 바이트에서 해시를 직접 계산해 응답한다. 상점 응답에는
-공통 상품 서비스에서 읽은 가격과 그 서비스의 해시도 포함된다. 검증 클라이언트는
-HTTP 상태, 요청한 해시, 변경된 기능 결과, 작업 환경, 공통 서비스의 해시를
-대조한다. Grove 레지스트리에 기록된 희망 상태를 응답 증거로 사용하지 않는다.
+Each app computes a hash directly from the bytes of its executable file and
+returns it. The shop's response also includes the price read from the shared
+product service and that service's hash. The verifying client cross-checks the
+HTTP status, the requested hash, the changed feature's result, the work
+environment, and the shared service's hash. The desired state recorded in the
+Grove registry is not used as response evidence.
 
-## 비교 방법과 실행 경계
+## How the comparison was made, and the boundary of the run
 
-직접 실행은 실험용 프로세스 관리 도구에 동일한 HTTP 완료 조건을 붙인 방식이다.
-기존 팀의 운영 절차가 아니다. Grove는 같은 프로세스 관리 함수를 프로젝트
-어댑터로 호출하되 운영 CLI의 create, attach, destroy 경로를 거친다.
-직접 실행은 Grove 어댑터 명령을 우회 호출하지 않고 별도 진입점을 사용한다.
+Direct execution is an experiment-only process management tool with the same
+HTTP completion condition attached. It is not an existing team's operating
+procedure. Grove calls the same process management functions through a project
+adapter, but goes through the operating CLI's create, attach, and destroy paths.
+Direct execution does not call Grove adapter commands by a side path; it uses a
+separate entry point.
 
-정상 비교는 프로젝트별로 실행 순서를 번갈아 바꾼다. 준비 시간에는 두 환경의
-생성과 변경 반영, 독립 HTTP 확인을 포함한다. 준비 후 두 비동기 클라이언트가
-동시에 반복 조회하며, 기준 앱의 응답이 유지되는지도 확인한다. 정리 시간에는
-두 환경의 제거와 HTTP 연결 불가 확인을 포함한다. 준비 시간과 정리 시간의
-합에는 그 사이의 반복 조회 시간이 포함되지 않는다.
+The normal comparison alternates the run order per project. Setup time includes
+creating both environments, applying the change, and the independent HTTP check.
+After setup, two asynchronous clients poll repeatedly at the same time, and the
+baseline app's response is also checked for continuity. Teardown time includes
+removing both environments and confirming that HTTP can no longer connect. The
+sum of setup time and teardown time does not include the repeated polling time
+in between.
 
-실패 실험은 정상 비교와 분리한다. 이전 실행 파일을 남기는 경우, 실제 HTTP가
-준비 실패를 반환하는 경우, 실행 프로세스를 만든 뒤 영수증을 출력하기 전에
-어댑터 프로세스를 강제 종료하는 경우, 정리 함수가 실패하는 경우를 주입한다.
-실패 직후 실제 응답을 확인하고, 원인을 해제한 뒤 같은 명령을 재시도한다.
-Grove에서는 미완료 기록과 다른 변경의 차단도 확인한다.
+The failure experiments are kept separate from the normal comparison. These are
+injected: leaving the previous executable file in place; a real HTTP readiness
+failure; killing the adapter process after the running process is created but
+before the receipt is printed; and a failing cleanup function. The real response
+is checked immediately after the failure, then the cause is released and the
+same command is retried. Under Grove, the pending record and the blocking of
+other changes are also checked.
 
-동시 변경 실험에서는 첫 번째 변경을 실제 프로세스 생성 후 멈춰 둔 상태에서
-다른 작업 환경의 변경 명령을 실행한다. 읽기 동시성과 쓰기 동시성을 별도로
-관찰한다. 두 클라이언트는 사람이거나 독립 AI 에이전트가 아니며, 협업 시간의
-대리 지표로 사용하지 않는다.
+In the concurrent-change experiment, the first change is held after the real
+process is created, and a change command for another work environment is run.
+Read concurrency and write concurrency are observed separately. The two clients
+are not people and not independent AI agents, and are not used as a proxy
+measure for collaboration time.
 
-포트는 루프백의 임시 포트를 사용한다. 공통 상품 서비스도 실험이 직접 만든
-프로세스다. 공유 Docker, Kubernetes, DB, DNS, 프록시는 조작하지 않는다.
-프로세스와 Grove 레지스트리는 임시 디렉터리에 두고 종료 시 제거한다.
+Ports are ephemeral ports on loopback. The shared product service is also a
+process the experiment creates itself. Shared Docker, Kubernetes, DB, DNS, and
+proxy are not touched. The processes and the Grove registry live in a temporary
+directory and are removed on exit.
 
-## 확인한 가치와 제약
+## The value confirmed, and the limits
 
-직접 실행과 Grove 모두 정상 변경과 실패 감지 조건을 만족했다. 이 비교에서는
-Grove가 기동이나 복구를 더 빠르게 만들지 않았다. 두 방식 모두 원인을 해제한
-뒤 같은 변경을 다시 실행해 복구했다. 직접 실행에도 충분한 검증을 붙이면 같은
-종류의 잘못된 완료를 막을 수 있다.
+Both direct execution and Grove met the conditions for a normal change and for
+failure detection. In this comparison Grove did not make startup or recovery
+faster. Both approaches recovered by releasing the cause and running the same
+change again. Direct execution with enough verification attached can prevent the
+same kind of false completion.
 
-Grove에서 추가로 확인한 것은 **지속되는 미완료 작업 기록과 공통 복구 순서**다.
-어댑터가 중간에 종료돼도 요청이 남고, 그 요청을 복구하기 전 다른 변경을 막는다.
-이 상태 관리와 계약을 프로젝트마다 직접 구현할 필요가 줄어들 수 있다. 실제
-구현·유지보수 시간 절감은 아직 측정하지 않았다.
+What Grove additionally showed is **a durable pending-operation record and a
+shared recovery order**. Even when the adapter exits partway, the request
+remains, and other changes are blocked until that request is recovered. This may
+reduce the need to implement that state management and contract in each project.
+The saving in real implementation and maintenance time is not yet measured.
 
-반대로 **프로젝트 단위 잠금은 서로 다른 작업 환경의 변경도 직렬화한다.**
-진행 중인 명령과 경쟁한 두 번째 Grove 명령은 대기하지 않고 거절됐다.
-호출자는 첫 번째 작업 완료 후 다시 실행해야 했다. 직접 실행 쪽은 서로 다른
-프로세스 파일을 쓰므로 이 상황을 병렬로 완료했다. 이 사실이 직접 실행 도구의
-일반적인 동시 쓰기 안전성을 증명하지는 않는다.
+On the other side, **a project-level lock serializes changes to different work
+environments too.** A second Grove command that competed with a command in
+progress was rejected rather than made to wait. The caller had to run it again
+after the first operation finished. Direct execution writes different process
+files, so it completed this situation in parallel. That fact does not prove that
+the direct-execution tool is generally safe for concurrent writes.
 
-현재의 투자 판단은 공통 실행 계약과 복구 기록의 재사용 가능성을 더 검증하는
-것이다. 빠른 기동이나 생산성 개선을 판매 근거로 삼을 증거는 부족하다. 다음
-경험 개선 후보는 잠금을 유지한 채 경쟁 명령의 대기·재시도를 안내하는 방식과
-프로젝트 어댑터 작성 부담을 줄이는 방식이다. 잠금 범위를 바로 줄이면 공통
-자원의 동시 변경 문제가 생길 수 있으므로 이번 결과만으로 그렇게 변경하지 않는다.
+The current investment judgment is to verify further how reusable the shared
+execution contract and the recovery record are. There is not enough evidence to
+sell fast startup or a productivity improvement. The next candidates for
+improving the experience are guiding a competing command to wait and retry while
+the lock is held, and reducing the burden of writing a project adapter.
+Narrowing the lock scope right away could create concurrent-change problems on
+shared resources, so this result alone is not a reason to make that change.
 
-## 재실행과 증거
+## Re-running, and the evidence
 
-카탈로그 의존성이 설치된 체크아웃 루트에서 실행한다. 과거 결과를 덮어쓰지
-않도록 새 출력 경로를 지정한다.
+Run it from a checkout root that has the catalog's dependencies installed. Give
+a new output path so past results are not overwritten.
 
 ```bash
 node docs/evaluation/synthetic/run.mjs /tmp/grove-synthetic-result.json
 npm test
 ```
 
-운영 CLI 후보 SHA와 실험 도구의 SHA-256은 결과 파일에 기록된다. 실험 도구는
-해당 후보 커밋에 포함되지 않은 신규 파일이므로 두 식별자를 함께 확인한다.
-집계는 러너가 출력하며, 시간 비교는 프로젝트 내 쌍별 차이의 중앙값을 사용한다.
-서로 다른 실행을 합쳐 유리한 표본을 고르지 않는다.
+The operating CLI's candidate SHA and the experiment tool's SHA-256 are recorded
+in the result file. The experiment tool is a new file that is not contained in
+that candidate commit, so check the two identifiers together. The runner prints
+the aggregate, and the time comparison uses the median of paired differences
+within a project. Separate runs are not merged to pick a favourable sample.
 
-- [실험 러너](synthetic/run.mjs)와 [합성 백엔드](synthetic/backend.mjs)
-- [선택한 실행](synthetic/results.json): 독립 HTTP 확인까지 준비 시간에 포함한다.
-- [첫 시도](synthetic/attempt-01.json): fork에 실행 옵션이 상속된 실험 도구 오류로
-  앱이 시작되지 않았다. 제품 비교에 도달하지 못했으며 오류를 보존했다.
-- [이전 완료 실행](synthetic/attempt-02.json): 시나리오는 완료했지만 준비 시간의
-  종료점이 독립 HTTP 확인 직전이었다. 측정 경계를 수정한 후 전체를 재실행했다.
+- [Experiment runner](synthetic/run.mjs) and [synthetic backend](synthetic/backend.mjs)
+- [The selected run](synthetic/results.json): setup time includes the independent HTTP check.
+- [First attempt](synthetic/attempt-01.json): an experiment-tool error in which
+  run options were inherited through fork, so the app did not start. It did not
+  reach the product comparison, and the error is preserved.
+- [The previous completed run](synthetic/attempt-02.json): the scenario
+  completed, but setup time ended just before the independent HTTP check. The
+  measurement boundary was fixed and the whole thing was re-run.
 
-머신 부하는 결과 파일의 시작·종료 관찰값뿐이며 실행 내내 일정했다고 가정하지
-않는다. 컴파일, 이미지 준비, DNS 라우팅, DB 격리, 메모리 절감, 최초 연동에 든
-사람의 시간, 실제 운영자 개입과 장기 유지보수 비용은 `notMeasured`다.
+Machine load is only the observations at the start and the end in the result
+file; it is not assumed to have stayed constant throughout the run. Compilation,
+image preparation, DNS routing, DB isolation, memory savings, the human time
+spent on a first integration, real operator intervention, and long-term
+maintenance cost are `notMeasured`.
