@@ -104,7 +104,10 @@ once per machine — not in the consuming app. The app gets a profile, not an
 6. For an overlay-enabled profile, use `de-novo skills overlay status`, then
    `create` / `attach`; use `touch` for long work and `destroy` at task end.
    `prune` lists stale leases and destroys them only with `--apply`. Contract:
-   [references/overlay-contract.md](references/overlay-contract.md).
+   [references/overlay-contract.md](references/overlay-contract.md). Writing
+   the project's own `runtime.commands.overlay` and checking it with
+   `de-novo skills overlay verify`:
+   [references/adapter.md](references/adapter.md).
 7. Make the skill loadable: in the project, keep one canonical copy under
    `.agents/skills/grove` and put only symlinks in tool-specific dirs
    (`.claude/skills/`, `.cursor/skills/`, …). For a user-wide install, symlink

@@ -403,6 +403,7 @@ project:
                                  print hostnames (no listener)
   ${CLI} setup [project-root|profile]  owner-authorized engines + DB/account provisioning
   ${CLI} overlay <verb> ...            create/attach/detach/destroy/status/touch/prune
+  ${CLI} overlay verify [--image REF]   drive this project's adapter through the contract
   ${CLI} dryad <verb> ...              plan/seat/report/status/finish/projects — seats for workers, no agent launch
 
 local overview:

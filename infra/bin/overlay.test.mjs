@@ -699,3 +699,93 @@ test('create_on: attach lets the first applied attach create the environment fro
   assert.equal(calls(byAttach).filter((c) => c.verb === 'create').length, 1);
   t.diagnostic('create_on plan refused 1/1; create_on attach created+attached 1/1; caller cwd on all dispatches');
 });
+
+// --------------------------------------------------------------- verify
+// The stub is a conforming adapter; each switch below breaks exactly one
+// contract obligation so verify has to name the case that caught it.
+const VERIFY_ENV = {
+  GROVE_OVERLAY_STUB_ATTACHABLE: 'api',
+  GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '2000',
+};
+
+function runVerify(fixture, args = [], extraEnv = {}) {
+  return run(fixture, ['verify', ...args], { ...VERIFY_ENV, ...extraEnv });
+}
+
+test('overlay verify passes against a conforming adapter and counts every case', (t) => {
+  const fixture = projectFixture(t);
+  const result = runVerify(fixture, ['--env', 'vfy', '--image', FULL_IMAGE, '--json']);
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.ok, true);
+  assert.deepEqual(report.counts, { cases: 10, passed: 10, failed: 0, skipped: 0 });
+  assert.deepEqual(report.cases.map((item) => item.name), [
+    'plan-mutates-nothing',
+    'create-observed',
+    'create-idempotent',
+    'attach-refuses-unknown-service',
+    'attach-refuses-mutable-tag',
+    'attach-observed',
+    'status-inventory-shape',
+    'receipt-identity',
+    'refusal-leaves-no-journal',
+    'destroy-observed',
+  ]);
+  for (const item of report.cases) assert.ok(item.evidence.length > 0, `${item.name} reported evidence`);
+  assert.equal(report.cleanup.ok, true);
+  assert.equal(existsSync(fixture.stateFile), false, 'verify leaves no lease behind');
+  assert.deepEqual(runtimeState(fixture).environments, {}, 'verify leaves no environment behind');
+  t.diagnostic(`verify cases ${report.counts.passed}/${report.counts.cases}; cleanup 1/1`);
+});
+
+test('overlay verify counts skipped attach cases without --image and refuses a name in use', (t) => {
+  const fixture = projectFixture(t);
+  const skipped = runVerify(fixture, ['--env', 'vfy']);
+  assert.equal(skipped.status, 0, skipped.stderr);
+  assert.match(skipped.stdout, /cases {9}6\/6/);
+  assert.match(skipped.stdout, /skipped {7}4/);
+  assert.match(skipped.stdout, /skip {2}attach-observed {2,}--image is required/);
+
+  assert.equal(run(fixture, ['create', 'taken', '--apply']).status, 0);
+  const before = calls(fixture).length;
+  const refused = runVerify(fixture, ['--env', 'taken']);
+  assert.notEqual(refused.status, 0);
+  assert.match(refused.stderr, /already tracked/);
+  assert.deepEqual(
+    [...new Set(calls(fixture).slice(before).map((call) => call.verb))],
+    [],
+    'a refused verify dispatches nothing'
+  );
+  assert.ok(readState(fixture).envs.taken, 'the existing environment is untouched');
+  t.diagnostic("skipped 4/4 without --image; existing name refused 1/1");
+});
+
+test('overlay verify rejects options that do not belong to it', () => {
+  assert.throws(() => parseOverlayCliArgs(['verify', '--apply']), /--apply is not valid for verify/);
+  assert.throws(() => parseOverlayCliArgs(['create', 'w1', '--env', 'x']), /--env is not valid for create/);
+  assert.throws(() => parseOverlayCliArgs(['verify', 'w1']), /must follow --/);
+});
+
+for (const [label, broken, expected, evidence] of [
+  ['a name-only status inventory', { GROVE_OVERLAY_STUB_NAME_ONLY: 'true' }, 'status-inventory-shape', /name-only/],
+  ['an adapter that accepts a mutable tag', { GROVE_OVERLAY_STUB_ACCEPT_ANY_IMAGE: 'true' }, 'attach-refuses-mutable-tag', /the adapter accepted/],
+  ['a create that is not idempotent', { GROVE_OVERLAY_STUB_DUPLICATE_ENVS: 'true' }, 'create-idempotent', /create left environments/],
+]) {
+  test(`overlay verify fails and names the case for ${label}`, (t) => {
+    const fixture = projectFixture(t);
+    const result = runVerify(fixture, ['--env', 'vfy', '--image', FULL_IMAGE, '--json'], {
+      ...broken,
+      GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '400',
+    });
+    assert.notEqual(result.status, 0);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.ok, false);
+    const failed = report.cases.filter((item) => item.status === 'fail');
+    const named = failed.find((item) => item.name === expected);
+    assert.ok(named, `expected ${expected} to fail, got ${failed.map((item) => item.name).join(',') || 'none'}`);
+    assert.match(named.evidence, evidence);
+    assert.equal(report.cleanup.ok, true, 'verify cleans up its environment even when a case fails');
+    assert.deepEqual(runtimeState(fixture).environments, {}, 'no environment is left behind');
+    t.diagnostic(`${expected} failed 1/1 with evidence; cleanup 1/1`);
+  });
+}
