@@ -14,7 +14,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { homedir, hostname } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -35,6 +35,8 @@ const CLI_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../
 // project vendoring or symlinking the catalog.
 const SKILL_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../skills/dryad/SKILL.md');
 const LOCK_WAIT_MS = 2000;
+// A seat's `changes` lists at most this many paths each; the counts stay whole.
+const CHANGE_LIMIT = 200;
 
 function isMap(value) {
   return value != null && typeof value === 'object' && !Array.isArray(value);
@@ -408,6 +410,127 @@ function isInside(child, parent) {
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
+// Two checkouts of one repository can spell the same directory differently
+// (a symlinked temp root, /var vs /private/var). Compare what the disk says.
+function canonicalPath(value) {
+  try {
+    return realpathSync(value);
+  } catch {
+    return path.resolve(value);
+  }
+}
+
+// -z output keeps paths raw; the default format quotes and escapes them.
+function splitNulRecords(text) {
+  const parts = text.split('\0');
+  if (parts.at(-1) === '') parts.pop();
+  return parts;
+}
+
+function committedChanges(base, cwd) {
+  const result = git(['diff', '--name-status', '-z', `${base}..HEAD`], cwd);
+  if (result.status !== 0) return null;
+  const fields = splitNulRecords(result.stdout);
+  const rows = [];
+  for (let index = 0; index < fields.length; ) {
+    const status = fields[index];
+    // A rename or copy carries source then destination; the destination is
+    // the path this seat holds now.
+    const paths = /^[RC]/.test(status) ? 2 : 1;
+    const target = fields[index + paths];
+    if (target == null) break;
+    rows.push({ path: target, status });
+    index += paths + 1;
+  }
+  return rows;
+}
+
+function uncommittedChanges(cwd) {
+  const result = git(['status', '--porcelain', '-z'], cwd);
+  if (result.status !== 0) return null;
+  const fields = splitNulRecords(result.stdout);
+  const rows = [];
+  for (let index = 0; index < fields.length; index += 1) {
+    const field = fields[index];
+    const code = field.slice(0, 2);
+    rows.push({ path: field.slice(3), status: code.trim() });
+    // A rename or copy is followed by its original path in its own record.
+    if (/[RC]/.test(code)) index += 1;
+  }
+  return rows;
+}
+
+// git already knows what a seat changed; Dryad adds no tracking of its own.
+// Returns the public `changes` object plus the full path set overlaps read,
+// which is not truncated.
+function seatChanges(seat) {
+  if (!existsSync(seat.worktree)) return { changes: null, paths: [] };
+  const committed = committedChanges(seat.base, seat.worktree);
+  const uncommitted = uncommittedChanges(seat.worktree);
+  if (committed == null || uncommitted == null) return { changes: null, paths: [] };
+  return {
+    changes: {
+      base: seat.base,
+      committed: committed.slice(0, CHANGE_LIMIT),
+      uncommitted: uncommitted.slice(0, CHANGE_LIMIT),
+      counts: {
+        committed: committed.length,
+        uncommitted: uncommitted.length,
+        ahead: gitAhead(seat.base, seat.worktree),
+      },
+      truncated: committed.length > CHANGE_LIMIT || uncommitted.length > CHANGE_LIMIT,
+    },
+    paths: [...new Set([...committed, ...uncommitted].map((row) => row.path))],
+  };
+}
+
+// Every worktree of the baseline repository, seated or not. A worktree with
+// `seat: null` means somebody works in parallel and Dryad does not know it.
+function repositoryWorktrees(project, state) {
+  const result = git(['worktree', 'list', '--porcelain'], project.root);
+  if (result.status !== 0) return [];
+  const seatByPath = new Map(
+    Object.entries(state.seats).map(([id, seat]) => [canonicalPath(seat.worktree), id])
+  );
+  const baseline = canonicalPath(project.root);
+  const rows = [];
+  let current = null;
+  for (const line of result.stdout.split('\n')) {
+    if (line.startsWith('worktree ')) {
+      current = { path: line.slice('worktree '.length), branch: null, head: null, seat: null, baseline: false };
+      rows.push(current);
+    } else if (current == null) {
+      continue;
+    } else if (line.startsWith('HEAD ')) {
+      current.head = line.slice('HEAD '.length);
+    } else if (line.startsWith('branch ')) {
+      current.branch = line.slice('branch '.length).replace(/^refs\/heads\//, '');
+    }
+  }
+  for (const row of rows) {
+    const key = canonicalPath(row.path);
+    row.seat = seatByPath.get(key) ?? null;
+    row.baseline = key === baseline;
+  }
+  return rows;
+}
+
+// A fact, not a problem: two seats hold the same path. Who merges first is a
+// person's call, so this never reaches the exit code.
+function seatOverlaps(rows) {
+  const holders = new Map();
+  for (const row of rows) {
+    for (const file of row.paths) {
+      if (!holders.has(file)) holders.set(file, []);
+      holders.get(file).push(row.id);
+    }
+  }
+  return [...holders.entries()]
+    .filter(([, seats]) => seats.length > 1)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([file, seats]) => ({ path: file, seats }));
+}
+
 // ------------------------------------------------------------------ grove
 
 function grove(args, project, environment) {
@@ -435,7 +558,7 @@ function probeHostnames(project, env, environment) {
   if (result.status !== 0 || !Array.isArray(report.overlay)) {
     return { hostnames: [], error: `urls --env ${env} exited ${result.status}: ${lastLine(result.stderr)}` };
   }
-  return { hostnames: report.overlay.map((row) => row.host), error: null };
+  return { hostnames: report.overlay.map((row) => ({ host: row.host, service: row.service })), error: null };
 }
 
 function lastLine(text) {
@@ -462,6 +585,14 @@ function probeOverlay(project, environment) {
   return {
     ok: result.status === 0 && report.ok === true,
     envs: new Set(report.environments.map((entry) => entry.env)),
+    // Which services each env actually has attached. A hostname exists for
+    // every service of the project; only these answer.
+    attached: new Map(
+      report.environments.map((entry) => [
+        entry.env,
+        new Set((entry.services ?? []).map((service) => service.service)),
+      ])
+    ),
     pending: report.pending.map((item) => ({
       target: `${item.verb} ${item.env}${item.service ? `/${item.service}` : ''}`,
       env: item.env,
@@ -565,6 +696,61 @@ export function parseDryadCliArgs(args) {
 
 function camel(name) {
   return name.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+}
+
+// ----------------------------------------------------------- cli journal
+
+// Which catalog verbs change something. Read-only verbs are left out on
+// purpose: a dashboard polling `status` must not bury the journal it reads.
+const CLI_JOURNAL_OVERLAY_VERBS = Object.freeze(['create', 'attach', 'detach', 'destroy', 'touch', 'prune']);
+
+// The journal line for a command as typed, or null when the verb is read-only.
+export function cliJournalDetail(args) {
+  const [command, ...rest] = args ?? [];
+  if (command == null) return null;
+  const separator = rest.indexOf('--');
+  const head = separator === -1 ? rest : rest.slice(0, separator);
+  const passthrough = separator === -1 ? [] : rest.slice(separator + 1);
+  let recorded = false;
+  if (command === 'overlay') {
+    recorded = CLI_JOURNAL_OVERLAY_VERBS.includes(head[0]) && head.includes('--apply');
+  } else if (command === 'setup') {
+    recorded = true;
+  } else if (command === 'infra') {
+    recorded = head[0] === 'up' || head[0] === 'provision';
+  } else if (command === 'up' || command === 'provision') {
+    recorded = true;
+  }
+  if (!recorded) return null;
+  // Passthrough belongs to the project's own command and may carry values
+  // Grove never sees; the overlay contract keeps a digest of it, not the text.
+  const digest =
+    passthrough.length === 0
+      ? []
+      : ['--', `sha256:${createHash('sha256').update(JSON.stringify(passthrough)).digest('hex')}`];
+  return [command, ...head, ...digest].join(' ');
+}
+
+// The seat records what it tried, with the exit code, so a failed attach is
+// in the journal too. This observes a command; it must never fail one. A
+// finished seat, an unresolvable project, or a locked registry records
+// nothing and says so only through the return value.
+export function recordSeatCliEvent(args, exit, environment = process.env, cwd = process.cwd()) {
+  try {
+    const id = environment.DRYAD_ID;
+    if (typeof id !== 'string' || !ID_PATTERN.test(id)) return false;
+    const detail = cliJournalDetail(args);
+    if (detail == null) return false;
+    const project = loadDryadProject(resolveDryadProject({ environment, cwd }));
+    return updateState(project.slug, environment, (state) => {
+      const seat = state.seats[id];
+      if (seat == null) return false;
+      seat.journal.push({ at: now(), actor: 'seat', event: 'cli', detail, exit });
+      return true;
+    });
+  } catch {
+    return false;
+  }
 }
 
 // ------------------------------------------------------------------ verbs
@@ -831,17 +1017,22 @@ function runStatus({ options, project, environment }) {
   const problems = [];
   const wantsEnv = entries.filter(([, seat]) => seat.env != null);
   let tracked = null;
+  let attached = null;
   let busy = new Set();
   if (project.overlayActive && (wantsEnv.length > 0 || options.id == null)) {
     const probe = probeOverlay(project, environment);
     tracked = probe.envs;
+    attached = probe.attached;
     busy = new Set(probe.pending.filter((item) => item.state === 'in-flight').map((item) => item.env));
     problems.push(...overlayProblems(probe));
   }
 
+  const worktrees = repositoryWorktrees(project, state);
+
   const rows = entries.map(([id, seat]) => {
     const present = existsSync(seat.worktree);
-    const ahead = present ? gitAhead(seat.base, seat.worktree) : null;
+    const { changes, paths } = seatChanges(seat);
+    const ahead = changes?.counts.ahead ?? null;
     let envState = 'none';
     if (seat.env === 'pending') envState = 'pending';
     else if (seat.env != null) {
@@ -856,15 +1047,19 @@ function runStatus({ options, project, environment }) {
     let hostnames = [];
     if (options.json && project.overlayActive && seat.env != null && seat.env !== 'pending') {
       const probe = probeHostnames(project, seat.env, environment);
-      hostnames = probe.hostnames;
+      const live = attached?.get(seat.env) ?? null;
+      hostnames = probe.hostnames.map((row) => ({ ...row, attached: live?.has(row.service) ?? false }));
       if (probe.error != null) problems.push(`${id}: ${probe.error}`);
     }
-    return { id, seat, present, ahead, envState, hostnames };
+    return { id, seat, present, ahead, envState, hostnames, changes, paths };
   });
   if (options.id == null && tracked != null) {
     const seated = new Set(entries.map(([, seat]) => seat.env).filter(Boolean));
     for (const env of tracked) if (!seated.has(env)) problems.push(`env ${env} tracked by overlay status has no seat`);
   }
+
+  const overlaps = seatOverlaps(rows);
+  const unseated = worktrees.filter((row) => !row.baseline && row.seat == null).length;
 
   const counts = {
     seats: rows.length,
@@ -881,6 +1076,8 @@ function runStatus({ options, project, environment }) {
         {
           project: project.slug,
           counts,
+          worktrees,
+          overlaps,
           problems,
           seats: rows.map((row) => ({
             id: row.id,
@@ -890,6 +1087,7 @@ function runStatus({ options, project, environment }) {
             branch: row.seat.branch,
             base: row.seat.base,
             ahead: row.ahead,
+            changes: row.changes,
             env: row.seat.env,
             env_state: row.envState,
             hostnames: row.hostnames,
@@ -916,6 +1114,8 @@ function runStatus({ options, project, environment }) {
       ? `  envs       ${counts.envs_tracked}/${counts.envs_wanted} tracked${tracked == null ? ' (notMeasured)' : ''}${counts.envs_in_flight > 0 ? `, ${counts.envs_in_flight} in-flight` : ''}`
       : '  envs       none (overlay inactive)',
     `  reported   ${reported || 'none'}`,
+    `  worktrees  ${worktrees.length} (${unseated} unseated)`,
+    `  overlaps   ${overlaps.length}`,
   ];
   for (const row of rows) {
     const envLabel = row.seat.env == null ? '-' : `env ${row.seat.env} ${row.envState}`;
@@ -925,6 +1125,7 @@ function runStatus({ options, project, environment }) {
       `  ${row.id}  ${row.seat.branch}  ${row.present ? `+${row.ahead ?? '?'}` : 'missing'}  ${envLabel}  ${row.seat.status}${row.seat.by ? '  by ' + row.seat.by : ''}${note}`
     );
   }
+  for (const item of overlaps) lines.push(`  overlap  ${item.path}  ${item.seats.join(' · ')}`);
   for (const problem of problems) lines.push(`  problem  ${problem}`);
   if (options.id != null) {
     for (const entry of rows[0].seat.journal) lines.push(`  ${entry.at}  ${entry.actor.padEnd(5)}  ${entry.event.padEnd(14)}  ${entry.detail}`);
@@ -1088,5 +1289,8 @@ this skill, so a worker can read it from any launcher. ROOT defaults to
 DRYAD_PROJECT, then the nearest .agents/dryad-profile.yml above the cwd.
 projects lists every project that has planned a seat on this machine (the
 index next to the registries) with live seat, finished, and overlay counts.
-status --json carries each seat's overlay hostnames, read from \`urls --json\`.`;
+status --json carries each seat's overlay hostnames (read from \`urls --json\`,
+marked attached or not), the files it changed, every worktree of the baseline
+repository whether seated or not, and the paths two seats both hold. A seat
+also journals the state-changing catalog verbs it runs, with their exit code.`;
 }

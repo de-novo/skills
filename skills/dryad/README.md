@@ -47,7 +47,21 @@ is set). One record per seat: worktree, `owned` (created by Dryad or
 adopted), branch, base commit, task, env (`null`, `pending`, or the env
 name), `by`, `session`, `status`, and an append-only `journal` of what Dryad
 did and what the worker reported. The registry mirrors state; it does not
-repair it. `finish` moves the record to `<slug>.finished.yml` next to it;
+repair it.
+
+Journal entries are `{ at, actor, event, detail }`. `actor` is `dryad` for
+what the tooling did (`plan`, `plan.retry`, `finish…`) and `seat` for what
+the worker did (`report`, `cli`). A `cli` entry also carries `exit`: whenever
+a process with `DRYAD_ID` set runs a state-changing catalog verb — `overlay
+create|attach|detach|destroy|touch|prune --apply`, `setup`, `infra
+up|provision` — the CLI appends one line with the command as typed and its
+exit code, so a failed attach is recorded as what the seat tried. Read-only
+verbs (`status`, `seat`, `urls`, `validate`, `projects`, `canopy`) are never
+recorded: a dashboard polling them must not bury the journal it reads, and
+`report` writes its own event. Arguments after `--` belong to the project's
+own command, so only their SHA-256 digest is kept. Recording is best effort:
+a finished seat, an unresolvable project, or a busy registry records nothing
+and never fails or delays the command it observes. `finish` moves the record to `<slug>.finished.yml` next to it;
 `status --finished` reads that archive. It grows without bound; trim it by
 hand when it stops being useful.
 
@@ -78,14 +92,19 @@ de-novo skills dryad projects [--json]
 | plan | prints worktree, branch, base, env; creates nothing | `git worktree add` (or adopt `--worktree`), `overlay create` when the profile has overlays, register the seat |
 | seat | always read-only: the seat for a launcher | — |
 | report | always writes the worker's status and a journal line | — |
-| status | always read-only: counts and problems; non-zero on any problem. With `overlay.create_on: attach` a seat's env shows `unattached` until its first attach and is not a problem. Another seat's in-flight overlay mutation is shown as `in-flight`, not counted as a problem; a stalled one is | — |
+| status | always read-only: counts and problems; non-zero on any problem. Counts every worktree of the repository (`worktrees n (m unseated)`) and the paths two seats both hold (`overlaps n`, then one `overlap <path> <id> · <id>` line each). With `overlay.create_on: attach` a seat's env shows `unattached` until its first attach and is not a problem. Another seat's in-flight overlay mutation is shown as `in-flight`, not counted as a problem; a stalled one is. An overlap is a fact, not a problem: it never changes the exit code | — |
 | finish | prints what would be destroyed or removed | `overlay destroy`, remove a clean Dryad-created worktree, move the seat and its journal to `<slug>.finished.yml`; branches kept |
 | projects | always read-only, machine-wide (no project needed): one counted line per indexed project — root, present or missing, `seats n`, `finished n`, `overlay on|off`; `--json` prints `{ projects: [ { slug, root, root_present, seats, finished, overlay, updated_at } ] }`; a missing index prints `projects 0` | — |
 
-`status --json` gives every seat a `hostnames` list: the overlay hostnames of
-its env, read from Grove's `urls --env <id> --json` (Dryad renders no
-hostname itself). The list is empty when the project has no Grove profile,
-overlays are off, or the seat's env is pending.
+`status --json` adds four fields that no new tracking pays for — git and
+Grove already know all of it:
+
+| Field | Where | Shape |
+| --- | --- | --- |
+| `hostnames` | per seat | `[{ host, service, attached }]` — the overlay hostnames of the seat's env, read from Grove's `urls --env <id> --json` (Dryad renders no hostname itself). A project renders a hostname for every service; `attached` says which of them the overlay status inventory actually holds. Empty without a Grove profile, with overlays off, or while the env is pending; `attached` is `false` when the env is not tracked |
+| `changes` | per seat | `{ base, committed: [{path, status}], uncommitted: [{path, status}], counts: { committed, uncommitted, ahead }, truncated }` from `git diff --name-status <base>..HEAD` and `git status --porcelain` in the seat's worktree. The lists stop at 200 entries with `truncated: true`; the counts stay whole. `null` when the worktree is missing |
+| `worktrees` | project | `[{ path, branch, head, seat, baseline }]` from the baseline's `git worktree list --porcelain`. `seat` is the seat id holding that path, or `null` — somebody works in parallel and Dryad does not know it. `changes` is computed for seats only: reading another person's worktree is not Dryad's business |
+| `overlaps` | project | `[{ path, seats: [id, …] }]` for every path two or more of the listed seats have committed or uncommitted. Shown, never judged — who merges first is a person's call |
 
 `--project ROOT` names the baseline checkout. Omitted, Dryad uses
 `DRYAD_PROJECT`, then the nearest `.agents/dryad-profile.yml` above the cwd.

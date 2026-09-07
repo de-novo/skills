@@ -141,6 +141,20 @@
 
 가드마다 되돌려 red를 본다. 실제 도구로는 도그푸딩 자리로 한 번 더 돈다.
 
+## 실린 것
+
+- **2026-09-07, 데이터 자리(d1).** 이음새 1~4와 `hostnames` 수정이
+  `infra/lib/dryad.mjs`·`infra/bin/cli.mjs`에 들어갔다. `DRYAD_ID`가 있는
+  프로세스가 상태를 바꾸는 동사(`overlay …--apply`, `setup`, `infra
+  up|provision`)를 실행하면 CLI 진입점이 종료 코드와 함께 `cli` 저널 한 줄을
+  붙인다(읽기 동사는 남기지 않고, `--` 뒤는 SHA-256 요약만). `status --json`은
+  자리마다 `changes`(200개 초과 시 `truncated`, 개수는 온전)와 자리 없는
+  워크트리까지 포함한 최상위 `worktrees`, 그리고 종료 코드를 바꾸지 않는
+  `overlaps`를 싣는다. `hostnames`는 `[{host, service, attached}]`가 되어 붙지
+  않은 서비스를 구분한다. 필드는 `skills/dryad/README.md`가 소유한다. 잰 것:
+  `node --test infra/bin/dryad.test.mjs` 18/18, `npm test` 214/214(전 210),
+  새 가드 5개를 각각 되돌려 red 5/5. 화면(카드)은 아직 없다.
+
 ## 자리 나누기
 
 - 카탈로그 자리 하나(데이터): 이음새 1~4를 `dryad.mjs`/`cli.mjs`에, 테스트, README 필드 표.
