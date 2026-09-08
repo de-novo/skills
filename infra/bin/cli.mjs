@@ -34,6 +34,8 @@ import {
 } from '../lib/overlay.mjs';
 import { dryadHelp, parseDryadCliArgs, recordSeatCliEvent, runDryad } from '../lib/dryad.mjs';
 import { runCanopy } from '../lib/canopy.mjs';
+import { foresterHelp, parseForesterCliArgs, runForester } from '../lib/forester.mjs';
+import { parseUnderstoryCliArgs, runUnderstory, understoryHelp } from '../lib/understory.mjs';
 import { guardPlaygroundInvocation, runPlayground } from '../lib/playground.mjs';
 import {
   COMPOSE_FILE,
@@ -215,6 +217,24 @@ function cmdDryad(args) {
     return 0;
   }
   return runDryad({ options });
+}
+
+function cmdForester(args) {
+  const options = parseForesterCliArgs(args);
+  if (options.help) {
+    console.log(foresterHelp(CLI));
+    return 0;
+  }
+  return runForester({ options });
+}
+
+function cmdUnderstory(args) {
+  const options = parseUnderstoryCliArgs(args);
+  if (options.help) {
+    console.log(understoryHelp(CLI));
+    return 0;
+  }
+  return runUnderstory({ options });
 }
 
 function cmdOverlay(args) {
@@ -406,6 +426,8 @@ project:
   ${CLI} overlay <verb> ...            create/attach/detach/destroy/status/touch/prune
   ${CLI} overlay verify [--image REF]   drive this project's adapter through the contract
   ${CLI} dryad <verb> ...              plan/seat/report/status/finish/projects — seats for workers, no agent launch
+  ${CLI} forester <verb> ...           plan/next/assign/status — keep this machine's slots full through Dryad seats
+  ${CLI} understory graph|reading      Forester's graph as a Mermaid flowchart, and one readable line per item
 
 local overview:
   ${CLI} canopy [--port N] [--once]    read-only dashboard at 127.0.0.1:7420; --once prints JSON
@@ -454,6 +476,10 @@ function main(argv) {
       return cmdOverlay(rest);
     case 'dryad':
       return cmdDryad(rest);
+    case 'forester':
+      return cmdForester(rest);
+    case 'understory':
+      return cmdUnderstory(rest);
     case 'canopy':
       return runCanopy(rest);
     case 'infra':

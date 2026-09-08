@@ -1,0 +1,233 @@
+{
+  "project": "playground",
+  "budget": {
+    "parallel": 2,
+    "source": "local"
+  },
+  "counts": {
+    "done": 9,
+    "active": 1,
+    "failed": 0,
+    "blocked": 0,
+    "ready": 0
+  },
+  "items": [
+    {
+      "id": "api-notes-count",
+      "state": "done",
+      "why": "seat reported done",
+      "task": "Add a count field to the /notes response of the api",
+      "owns": [
+        "app/api/**"
+      ],
+      "depends_on": [],
+      "tool": null,
+      "attempts": 0,
+      "max_attempts": 1,
+      "seat": {
+        "id": "api-notes-count",
+        "status": "done",
+        "worktree": "/seats/api-notes-count",
+        "env": "api-notes-count"
+      },
+      "session": null
+    },
+    {
+      "id": "web-heading",
+      "state": "done",
+      "why": "seat reported done",
+      "task": "Change the web heading to say Notes",
+      "owns": [
+        "app/web/**"
+      ],
+      "depends_on": [],
+      "tool": null,
+      "attempts": 0,
+      "max_attempts": 1,
+      "seat": {
+        "id": "web-heading",
+        "status": "done",
+        "worktree": "/seats/web-heading",
+        "env": "web-heading"
+      },
+      "session": null
+    },
+    {
+      "id": "web-count",
+      "state": "done",
+      "why": "seat reported done",
+      "task": "Show the notes count from the api on the web page (app/web/server.mjs). You are seated by Dryad: DRYAD_ID names your seat. Edit only inside this worktree, commit on your branch, then run exactly: node de-novo skills dryad report \"$DRYAD_ID\" --status done --note \"<one line on what you did>\". Do not push or merge.",
+      "owns": [
+        "app/web/**"
+      ],
+      "depends_on": [
+        "api-notes-count"
+      ],
+      "tool": null,
+      "attempts": 0,
+      "max_attempts": 1,
+      "seat": {
+        "id": "web-count",
+        "status": "done",
+        "worktree": "/seats/web-count",
+        "env": "web-count"
+      },
+      "session": null
+    },
+    {
+      "id": "readme-notes",
+      "state": "done",
+      "why": "seat reported done",
+      "task": "Add a short section to README.md documenting that /notes returns a count field. You are seated by Dryad: DRYAD_ID names your seat. Edit only inside this worktree, commit on your branch, then run exactly: node de-novo skills dryad report \"$DRYAD_ID\" --status done --note \"<one line on what you did>\". Do not push or merge.",
+      "owns": [
+        "README.md"
+      ],
+      "depends_on": [],
+      "tool": null,
+      "attempts": 0,
+      "max_attempts": 1,
+      "seat": {
+        "id": "readme-notes",
+        "status": "done",
+        "worktree": "/seats/readme-notes",
+        "env": "readme-notes"
+      },
+      "session": null
+    },
+    {
+      "id": "changelog-codex",
+      "state": "done",
+      "why": "seat reported done",
+      "task": "Create CHANGELOG.md with one line: \"notes count shown on the web page\". You are seated by Dryad: DRYAD_ID names your seat. Edit only inside this worktree, commit on your branch, then run exactly: node de-novo skills dryad report \"$DRYAD_ID\" --status done --note \"<one line on what you did>\". Do not push or merge.",
+      "owns": [
+        "CHANGELOG.md"
+      ],
+      "depends_on": [],
+      "tool": "codex",
+      "attempts": 0,
+      "max_attempts": 1,
+      "seat": {
+        "id": "changelog-codex",
+        "status": "done",
+        "worktree": "/seats/changelog-codex",
+        "env": "changelog-codex"
+      },
+      "session": null
+    },
+    {
+      "id": "authors-grok",
+      "state": "done",
+      "why": "seat reported done",
+      "task": "Create AUTHORS.md with one line: \"playground sample\". You are seated by Dryad: DRYAD_ID names your seat. Edit only inside this worktree, commit on your branch, then run exactly: node de-novo skills dryad report \"$DRYAD_ID\" --status done --note \"<one line on what you did>\". Do not push or merge.",
+      "owns": [
+        "AUTHORS.md"
+      ],
+      "depends_on": [],
+      "tool": "grok",
+      "attempts": 0,
+      "max_attempts": 1,
+      "seat": {
+        "id": "authors-grok",
+        "status": "done",
+        "worktree": "/seats/authors-grok",
+        "env": "authors-grok"
+      },
+      "session": null
+    },
+    {
+      "id": "license-codex",
+      "state": "done",
+      "why": "seat reported done",
+      "task": "Create LICENSE-NOTE.md with one line: \"sample project, no license\". You are seated by Dryad: DRYAD_ID names your seat. Edit only inside this worktree, commit on your branch, then run exactly: node de-novo skills dryad report \"$DRYAD_ID\" --status done --note \"<one line on what you did>\". Do not push or merge.",
+      "owns": [
+        "LICENSE-NOTE.md"
+      ],
+      "depends_on": [],
+      "tool": "codex",
+      "attempts": 0,
+      "max_attempts": 1,
+      "seat": {
+        "id": "license-codex",
+        "status": "done",
+        "worktree": "/seats/license-codex",
+        "env": "license-codex"
+      },
+      "session": null
+    },
+    {
+      "id": "contrib-grok",
+      "state": "done",
+      "why": "seat reported done",
+      "task": "Create CONTRIBUTING.md with one line: \"open a pull request\". You are seated by Dryad: DRYAD_ID names your seat. Edit only inside this worktree, commit on your branch, then run exactly: node de-novo skills dryad report \"$DRYAD_ID\" --status done --note \"<one line on what you did>\". Do not push or merge.",
+      "owns": [
+        "CONTRIBUTING.md"
+      ],
+      "depends_on": [],
+      "tool": "grok",
+      "attempts": 0,
+      "max_attempts": 1,
+      "seat": {
+        "id": "contrib-grok",
+        "status": "done",
+        "worktree": "/seats/contrib-grok",
+        "env": "contrib-grok"
+      },
+      "session": null
+    },
+    {
+      "id": "support-cursor",
+      "state": "active",
+      "why": "seat planned",
+      "task": "Create SUPPORT.md with one line: \"no support\". You are seated by Dryad: DRYAD_ID names your seat. Edit only inside this worktree, commit on your branch, then run exactly: node de-novo skills dryad report \"$DRYAD_ID\" --status done --note \"<one line on what you did>\". Do not push or merge.",
+      "owns": [
+        "SUPPORT.md"
+      ],
+      "depends_on": [],
+      "tool": "cursor-agent",
+      "attempts": 0,
+      "max_attempts": 1,
+      "seat": {
+        "id": "support-cursor",
+        "status": "planned",
+        "worktree": "/seats/support-cursor",
+        "env": "support-cursor"
+      },
+      "session": null
+    },
+    {
+      "id": "security-opencode",
+      "state": "done",
+      "why": "seat reported done",
+      "task": "Create SECURITY.md with one line: \"report privately\". You are seated by Dryad: DRYAD_ID names your seat. Edit only inside this worktree, commit on your branch, then run exactly: node de-novo skills dryad report \"$DRYAD_ID\" --status done --note \"<one line on what you did>\". Do not push or merge.",
+      "owns": [
+        "SECURITY.md"
+      ],
+      "depends_on": [],
+      "tool": "opencode",
+      "attempts": 0,
+      "max_attempts": 1,
+      "seat": {
+        "id": "security-opencode",
+        "status": "done",
+        "worktree": "/seats/security-opencode",
+        "env": "security-opencode"
+      },
+      "session": null
+    }
+  ],
+  "next": [],
+  "held": [],
+  "slots": {
+    "active": 1,
+    "free": 1,
+    "parallel": 2
+  },
+  "seats_outside_plan": [
+    "w1",
+    "w2",
+    "w3",
+    "w4",
+    "w5"
+  ],
+  "serve": null
+}
