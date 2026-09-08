@@ -6,3 +6,6 @@
 node_modules/
 .playground/
 .playground-evidence/
+
+# Tool workspace pointers — clone-local, never the catalog.
+.haru.json

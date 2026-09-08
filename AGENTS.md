@@ -31,6 +31,8 @@ Remote: `git@github.com:de-novo/skills.git`. CLI: `de-novo skills` (alias `de-no
 | Forester plan parse + allocation rule | `infra/lib/forester.mjs` only |
 | Understory document shape | `skills/understory/SKILL.md` |
 | Understory graph + reading lines | `infra/lib/understory.mjs` only |
+| Mycelium envelope, transitions, CLI | `skills/mycelium/README.md` |
+| Mycelium log fold + conflict rule | `infra/lib/mycelium.mjs` only |
 | Hostname render | `infra/lib/addressing.mjs` |
 | How to work in this catalog | this file |
 | Agent skill load paths | `.agents/` (see `.agents/README.md`) |
@@ -48,6 +50,7 @@ skills/          published skill sources
   dryad/         seats on Grove's ground (no agent launch)
   forester/      plan + budget + allocator over Dryad seats
   understory/    the graph drawn and written up for people
+  mycelium/      the facts under the forest: an assertion log per project
 infra/           machine-shared engines Grove's CLI drives
 docs/            design notes (not the user-facing spec)
 ```
