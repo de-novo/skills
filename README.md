@@ -44,6 +44,7 @@ Agents working in this catalog: [`AGENTS.md`](AGENTS.md). Skill load paths: [`.a
 | [dryad](skills/dryad/) | One seat per worker on that ground: worktree, overlay env, task. No agent launch |
 | [forester](skills/forester/) | Analyse the work into a plan, set how many run at once here, keep that many seated through Dryad; serve holds each seat's real session |
 | [understory](skills/understory/) | The story under the canopy: Forester's graph drawn and written up for people, a map that points rather than copies |
+| [mycelium](skills/mycelium/) | The facts under the forest: one append-only log of assertions per project, with time, confidence, domain, and provenance; workers propose, a person or the judge commits |
 
 ## CLI
 

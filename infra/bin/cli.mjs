@@ -36,6 +36,7 @@ import { dryadHelp, parseDryadCliArgs, recordSeatCliEvent, runDryad } from '../l
 import { runCanopy } from '../lib/canopy.mjs';
 import { foresterHelp, parseForesterCliArgs, runForester } from '../lib/forester.mjs';
 import { parseUnderstoryCliArgs, runUnderstory, understoryHelp } from '../lib/understory.mjs';
+import { myceliumHelp, parseMyceliumCliArgs, runMycelium } from '../lib/mycelium.mjs';
 import { guardPlaygroundInvocation, runPlayground } from '../lib/playground.mjs';
 import {
   COMPOSE_FILE,
@@ -237,6 +238,15 @@ function cmdUnderstory(args) {
   return runUnderstory({ options });
 }
 
+function cmdMycelium(args) {
+  const options = parseMyceliumCliArgs(args);
+  if (options.help) {
+    console.log(myceliumHelp(CLI));
+    return 0;
+  }
+  return runMycelium({ options });
+}
+
 function cmdOverlay(args) {
   const options = parseOverlayCliArgs(args);
   if (options.help) {
@@ -428,6 +438,7 @@ project:
   ${CLI} dryad <verb> ...              plan/seat/report/status/finish/projects — seats for workers, no agent launch
   ${CLI} forester <verb> ...           plan/next/assign/status — keep this machine's slots full through Dryad seats
   ${CLI} understory graph|reading      Forester's graph as a Mermaid flowchart, and one readable line per item
+  ${CLI} mycelium <verb> ...           propose/commit/invalidate/query/status — the project's assertion log
 
 local overview:
   ${CLI} canopy [--port N] [--once]    read-only dashboard at 127.0.0.1:7420; --once prints JSON
@@ -480,6 +491,8 @@ function main(argv) {
       return cmdForester(rest);
     case 'understory':
       return cmdUnderstory(rest);
+    case 'mycelium':
+      return cmdMycelium(rest);
     case 'canopy':
       return runCanopy(rest);
     case 'infra':

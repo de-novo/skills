@@ -1,0 +1,5 @@
+# The catalog's own vocabulary. It seats its own workers with Dryad, so the
+# facts those seats find are logged here. Domains and types stay small.
+version: 1
+domains: [catalog]
+types: [skill, decision, check, seat]

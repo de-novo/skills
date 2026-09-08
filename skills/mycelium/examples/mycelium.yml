@@ -1,0 +1,6 @@
+# The project's vocabulary for Mycelium. Domains say where a fact belongs;
+# types say what a subject or object is. Start small: a proposal that is
+# refused for a missing type is the signal to add one.
+version: 1
+domains: [sprint, auth, payments]
+types: [spec, sprint, issue, decision, module, blocker, agent, check]

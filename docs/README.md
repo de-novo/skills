@@ -32,6 +32,13 @@ the skill README owns the document shape, `infra/lib/understory.mjs` owns
 the drawn graph and the reading lines, and the reasons are two sentences in
 the Forester note. Landed 2026-09-08.
 
+[Mycelium design](mycelium-design.md) proposes a fifth skill: an append-only
+log of assertions per project, each with valid time, confidence, domain, source,
+and agent, folded into the graph of what the project holds true. Workers
+propose; a person or the named judge commits or invalidates. The only seam to
+Forester is read-only: a seat's done report may be proposed as a fact. Landed
+2026-09-08.
+
 [Playground design](playground-design.md) records the sandbox rules for the
 sample project the catalog ships: one directory holds everything, no machine
 registry, no port chosen in advance, no engines or containers, its own git
