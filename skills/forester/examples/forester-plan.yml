@@ -1,0 +1,17 @@
+# Example plan. The item ids become Dryad seat ids. Claims are paths or
+# globs the item expects to edit; the allocator never runs two intersecting
+# claims at once. Order is the tie-break, so the unblocking item goes first.
+version: 1
+tasks:
+  define-shape:
+    task: "Decide the response shape and write it into the reference"
+    owns: [docs/reference/**]
+  api-endpoint:
+    task: "Add the endpoint returning that shape"
+    owns: [src/api/**]
+    depends_on: [define-shape]
+  web-panel:
+    task: "Show it in the page"
+    owns: [src/web/**]
+    depends_on: [define-shape]
+    retry: { max_attempts: 2 }

@@ -18,6 +18,20 @@ measurements. It is an analysis, not operating authority or approved scope.
 
 ## Design records
 
+[Forester design](forester-design.md) proposes a third skill: analyse work into a
+plan with dependencies and expected file ownership, set how many items this
+machine may run at once, and keep that many assigned as Dryad seats. A budget
+the project declares is followed; a local, untracked one applies only when the
+project sets none. Landed 2026-09-08 in two rounds: the plan, budget,
+allocator, and verbs; then `serve`, which holds each seat's real interactive
+session in a pseudo-terminal, `attach`, and `hooks`, which makes Codex,
+Grok, Cursor, and OpenCode report their state the way Claude Code does.
+
+[Understory](../skills/understory/README.md) has no design note of its own:
+the skill README owns the document shape, `infra/lib/understory.mjs` owns
+the drawn graph and the reading lines, and the reasons are two sentences in
+the Forester note. Landed 2026-09-08.
+
 [Playground design](playground-design.md) records the sandbox rules for the
 sample project the catalog ships: one directory holds everything, no machine
 registry, no port chosen in advance, no engines or containers, its own git
@@ -49,6 +63,11 @@ the record is not operating authority.
 - [Playground arc](evidence/2026-09-08-playground.md): the sample project's
   whole arc in a sandbox with no Docker, the three defects that running it
   found, and the guard-reversal counts.
+- [Forester first round](evidence/2026-09-08-forester.md): plan, budget,
+  and allocator over real Dryad seats in the playground sandbox, then serve
+  holding two real Claude Code sessions to done with every prompt answered
+  through the socket, then hooks for the other tools with Codex, Grok, and
+  OpenCode run to done; 29 guards seen red.
 
 Published evidence uses repository-owned synthetic applications. Private project
 identities, configuration, source fingerprints, and adoption history do not
