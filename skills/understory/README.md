@@ -47,7 +47,12 @@ the item names one, and the session state when serve holds one.
 | blocked | `cannot start yet: waits for …` |
 | failed | `gave up: <why>` |
 
-`--json` prints `{ summary, reading: [{ id, state, line }] }`.
+`--json` prints `{ summary, reading: [{ id, state, line, facts }] }`.
+`facts` is the list of ids of the active Mycelium facts whose subject is
+the item, read through Mycelium's own query and never restated; the text
+form appends `· facts a-…, a-…` to the line. A project without
+`.agents/mycelium.yml` gets an empty list, and so does `--from`, which has
+no project to ask. Pattern: [mycelium](../mycelium/SKILL.md).
 
 ## CLI
 

@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { stringify } from 'yaml';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -82,4 +84,51 @@ test('the cli draws and reads a saved plan without a project', () => {
   const missing = spawnSync(process.execPath, [CLI, 'understory', 'graph', '--from', '/nonexistent.json'], { encoding: 'utf8' });
   assert.notEqual(missing.status, 0);
   assert.match(missing.stderr, /nonexistent\.json/);
+});
+
+// The reading lines point at what was proven: active Mycelium facts whose
+// subject is the item. A project without a values file gets no pointer and
+// no error; --from has no project and gets none either.
+test('the reading points at the active facts about each item, and only when the project has Mycelium', (t) => {
+  const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'understory-facts-')));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const baseline = path.join(root, 'baseline');
+  mkdirSync(path.join(baseline, '.agents'), { recursive: true });
+  const environment = { ...process.env, GROVE_STATE_DIR: path.join(root, 'state') };
+  delete environment.DRYAD_PROJECT;
+  delete environment.DRYAD_ID;
+  writeFileSync(path.join(baseline, '.agents/dryad-profile.yml'), stringify({ version: 1, project: { slug: 'understory-facts' }, worktrees: { root: '../seats', branch: 'dryad/{id}' } }));
+  writeFileSync(path.join(baseline, '.agents/forester-plan.yml'), 'version: 1\nparallel: 2\ntasks:\n  define-shape:\n    task: "Decide the shape"\n  api-endpoint:\n    task: "Add the endpoint"\n    depends_on: [define-shape]\n');
+  const run = (args, extra = []) => spawnSync(process.execPath, [CLI, ...args, '--project', baseline, ...extra], { cwd: root, encoding: 'utf8', env: environment });
+
+  // No values file: plain reading, no facts key filled, exit 0.
+  const before = run(['understory', 'reading'], ['--json']);
+  assert.equal(before.status, 0, before.stderr);
+  assert.deepEqual(JSON.parse(before.stdout).reading.map((row) => row.facts), [[], []]);
+
+  writeFileSync(path.join(baseline, '.agents/mycelium.yml'), stringify({ version: 1, domains: ['sprint'], types: ['issue', 'decision'], predicates: { 'done-when': 'one', 'depends-on': 'many' } }));
+  const propose = (args) => {
+    const result = run(['mycelium', 'propose', ...args, '--by', 'human:jane'], ['--json']);
+    assert.equal(result.status, 0, result.stderr);
+    return JSON.parse(result.stdout).id;
+  };
+  const active = propose(['--s', 'define-shape', '--p', 'done-when', '--o', 'the reference names the shape', '--s-type', 'issue', '--domain', 'sprint', '--source', 'docs/reference.md']);
+  const staging = propose(['--s', 'define-shape', '--p', 'depends-on', '--o', 'nothing', '--s-type', 'issue', '--domain', 'sprint', '--source', 'plan']);
+  const other = propose(['--s', 'api-endpoint', '--p', 'depends-on', '--o', 'define-shape', '--s-type', 'issue', '--o-type', 'issue', '--domain', 'sprint', '--source', 'plan']);
+  for (const id of [active, other]) assert.equal(run(['mycelium', 'commit', id, '--by', 'human:jane']).status, 0);
+
+  const after = run(['understory', 'reading'], ['--json']);
+  assert.equal(after.status, 0, after.stderr);
+  const reading = JSON.parse(after.stdout).reading;
+  assert.deepEqual(reading.map((row) => [row.id, row.facts]), [['define-shape', [active]], ['api-endpoint', [other]]]);
+  assert.ok(!reading[0].facts.includes(staging), 'staging is not proven');
+  const text = run(['understory', 'reading']);
+  assert.match(text.stdout, new RegExp(`define-shape .*· facts ${active}`));
+  // --from has no project and therefore no facts.
+  const saved = run(['forester', 'plan'], ['--json']);
+  const savedFile = path.join(root, 'plan.json');
+  writeFileSync(savedFile, saved.stdout);
+  const from = spawnSync(process.execPath, [CLI, 'understory', 'reading', '--from', savedFile, '--json'], { cwd: root, encoding: 'utf8', env: environment });
+  assert.equal(from.status, 0, from.stderr);
+  assert.deepEqual(JSON.parse(from.stdout).reading.map((row) => row.facts), [[], []]);
 });

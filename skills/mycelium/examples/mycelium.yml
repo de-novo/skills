@@ -1,6 +1,18 @@
 # The project's vocabulary for Mycelium. Domains say where a fact belongs;
-# types say what a subject or object is. Start small: a proposal that is
-# refused for a missing type is the signal to add one.
+# types say what a subject or object is; predicates say what may be said and
+# whether a subject holds one object at a time (one) or several (many).
+# Start small: a proposal that is refused for a missing entry is the signal
+# to add one. `reported` is built in (many) for seat reports.
 version: 1
 domains: [sprint, auth, payments]
 types: [spec, sprint, issue, decision, module, blocker, agent, check]
+predicates:
+  caused-by: one        # an issue has one verified cause at a time
+  done-when: one        # a sprint or issue has one definition of done
+  depends-on: many      # an item may depend on several
+  blocked-by: many
+  owns: many            # a module may be owned by several agents
+  passed: many          # a check passed, one line per run
+  failed: many
+  tried-and-failed: many
+judges: [human:jane]    # optional; omitted, any named writer may commit

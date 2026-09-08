@@ -9,7 +9,8 @@ description: >-
   decision, a verified cause, a blocker, a check result), when a person
   asks what the project currently holds true, or when the user runs
   /mycelium. Values live in .agents/mycelium.yml (domains, entity types,
-  and the judges who may commit; tracked). Corrections are amendments
+  predicates with one|many cardinality, and the judges who may commit;
+  tracked). Corrections are amendments
   that point back; nothing is edited in place. The CLI never judges; the
   promotion is yours.
 ---
@@ -64,8 +65,11 @@ When your work produces a fact worth keeping:
    turn: no. The full list is the README's commit rules.
 2. **Propose it in the envelope.** Subject, predicate, object, the subject's
    type, the domain, the source you read it from, and your confidence.
-   The domain and the types must already be in `.agents/mycelium.yml`; if
-   the vocabulary lacks one, say so to a person rather than inventing it.
+   The domain, the types, and the predicate must already be in
+   `.agents/mycelium.yml`; if the vocabulary lacks one, say so to a person
+   rather than inventing it. A predicate is `one` when a subject holds a
+   single object at a time (a cause, a definition of done) and `many` when
+   it holds several (a dependency, a blocker, an owner).
 3. **Name the source precisely.** A file path and line, a PR, a seat's
    report, a check's output line. A fact with no source is a rumour and
    is not proposed.
@@ -89,9 +93,11 @@ When you hold the judge's role, or are a person reading staging:
 ## Read
 
 Ask the log, not the chat. `query --domain <d>` for what is held now,
-`query --at <moment>` for what was held then, `query --s <entity>` for
-one thing's history. Put the answer into the worker's brief as pointers
-to assertion ids, so the brief stays short and the facts stay in one home.
+`query --at <moment>` for what was held then, `query --s <entity> --all`
+for one thing's history, `query --since <moment>` when you come back to a
+seat and want only what changed, `trace <id>` for how a fact got to be
+what it is. Put the answer into the worker's brief with `query --brief`,
+so the brief stays short and the facts stay in one home.
 
 ## Invariants — not weakenable
 
@@ -99,7 +105,8 @@ to assertion ids, so the brief stays short and the facts stay in one home.
 - **The graph is the fold of the log.** Nothing else is consulted.
 - **Every assertion names its source and its agent.** No defaults for either.
 - **Correction is a new line that points back.** `amend` links; nothing is edited.
-- **Vocabulary is declared, not discovered.** Unknown domains and types are refused.
+- **Vocabulary is declared, not discovered.** Unknown domains, types, and predicates are refused.
+- **A write is one step.** Every write re-reads the log under a lock; no two writers pass the same check on a stale graph.
 - **The CLI never calls a model and never judges.** Commit is a person's or the named judge's.
 - **Mycelium does not write the plan.** The Forester seam reads seats; it does not touch them.
 

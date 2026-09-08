@@ -311,8 +311,9 @@ function sleepSync(milliseconds) {
 }
 
 // Short read/merge/write critical section only. No git or Grove call runs
-// while this lock is held.
-function acquireStateLock(file, waitMs) {
+// while this lock is held. Exported for Mycelium, whose log sits under the
+// same state root and needs the same rule around commit.
+export function acquireStateLock(file, waitMs) {
   mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
   const lock = `${file}.lock`;
   const deadline = Date.now() + waitMs;
