@@ -22,3 +22,10 @@ clearing and say it again.
 3. Name any fact you cannot point at as a guess. Do not fill the gap.
 
 Say nothing that is not on that screen or in that log.
+
+## Not this skill
+
+- Writing a file or a fact. Clearing reads and speaks; it never edits a
+  document or proposes an assertion.
+- Being the written record. That is Understory; Clearing is the spoken
+  re-pitch of what Understory and Mycelium already hold.
