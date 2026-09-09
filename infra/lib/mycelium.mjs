@@ -22,7 +22,10 @@ export const CARDINALITIES = Object.freeze(['one', 'many']);
 // The predicate --from-seat writes. Always declared, many: a seat reports
 // more than once. A values file may not redeclare it.
 export const REPORTED = 'reported';
-const LOCK_WAIT_MS = 2000;
+// A log write waits for the lock rather than giving up: twelve seats
+// proposing at once on a loaded machine is the normal case, not a fault.
+// One CI run saw a proposer time out at two seconds.
+const LOCK_WAIT_MS = 15000;
 const TOKEN = /^[a-z0-9][a-z0-9._-]{0,62}$/;
 // A writer id: seat:<id>, human:<name>, agent:<name>, or any short handle.
 const WRITER = /^[a-z0-9][a-z0-9._:@-]{0,78}$/;

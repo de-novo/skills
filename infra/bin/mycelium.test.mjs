@@ -440,10 +440,13 @@ test('commit takes the log lock: two committers racing on one predicate leave ex
 
   const proposers = Array.from({ length: 12 }, (_, index) => new Promise((resolve) => {
     const child = spawn(process.execPath, [CLI, 'mycelium', 'propose', '--s', `issue-${index}`, '--p', 'depends-on', '--o', 'x'.repeat(200), '--s-type', 'issue', '--domain', 'auth', '--source', 'f', '--by', `seat:p${index}`], { cwd: f.baseline, env: f.environment });
-    child.on('close', (code) => resolve(code));
+    let stderr = '';
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.on('close', (code) => resolve({ code, stderr }));
   }));
-  const codes = await Promise.all(proposers);
-  assert.deepEqual(codes, Array(12).fill(0));
+  const outcomes = await Promise.all(proposers);
+  // A failed proposer names itself: the assertion carries its stderr.
+  assert.deepEqual(outcomes.map((o) => o.code), Array(12).fill(0), outcomes.filter((o) => o.code !== 0).map((o) => o.stderr).join('\n'));
   const lines = readFileSync(f.log, 'utf8').split('\n').filter(Boolean);
   assert.equal(lines.length, 2 + 4 - 3 + 12);
   assert.ok(lines.every((line) => JSON.parse(line).v === 1));
