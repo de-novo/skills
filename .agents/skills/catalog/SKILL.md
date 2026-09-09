@@ -25,12 +25,33 @@ belong in it.
 | `skills/<name>/README.md` | Human diagram and apply steps. Optional if the skill is tiny. |
 | `skills/<name>/references/` | Schema or long facts the skill points at. |
 | `skills/<name>/examples/` | Shape of values, not a required backend. |
+| `skills/<name>/agents/openai.yaml` | Codex picker metadata: `interface.display_name`, `interface.short_description`; for a user-invoked skill also `policy.allow_implicit_invocation: false`. |
 | `.agents/skills/<name>` | Relative symlink to `../../skills/<name>`. |
-| Root `README.md` Skills table | One-line index. |
+| `.claude-plugin/plugin.json` | The plugin manifest: every published skill in `skills`, nothing else. CI diffs the two. |
+| Root `README.md` Skills table | One-line index, grouped user-invoked / model-invoked. |
 | `infra/addressing.yml` | This checkout's TLD and hostname scheme. Clone override: `addressing.local.yml`. |
 
-`name` in frontmatter equals the directory name. Description includes what
-it does and when to use it (trigger phrases, `/name`).
+`name` in frontmatter equals the directory name.
+
+## Invocation
+
+Every skill is one of two:
+
+- **Model-invoked** (the default): a model or a person may reach for it.
+  The description is model-facing and keeps its trigger phrases ("Use
+  when…", `/name`). Grove, Dryad, Understory, Mycelium: a seat reaches for
+  them on its own when its work meets them.
+- **User-invoked**: only a person typing `/name`. Frontmatter carries
+  `disable-model-invocation: true` and `agents/openai.yaml` carries
+  `policy.allow_implicit_invocation: false`; the two are always set
+  together or neither. The description is human-facing, one or two
+  sentences, no trigger list. Forester: the plan is a person's ask.
+
+A skill that tells the agent to run another skill says so as a tool call,
+one skill per call: `Call the Skill tool with "dryad"`. A relative link
+(`[dryad](../dryad/SKILL.md)`) is router prose for a person and fires
+nothing. Nothing may name a user-invoked skill to the Skill tool; tell the
+person to run it instead.
 
 ## Add a skill
 
@@ -40,10 +61,13 @@ it does and when to use it (trigger phrases, `/name`).
    skill names.
 2. Write `README.md` next to it if a human needs a diagram or apply steps.
    Do not paste the SKILL body into the README; point.
-3. `ln -s ../../skills/<name> .agents/skills/<name>`
-4. Add one row to the root README Skills table.
-5. Public surfaces are English.
-6. If the skill has parser or CLI behavior in `infra/`, add tests under
+3. Decide the invocation (above) and write `agents/openai.yaml`.
+4. `ln -s ../../skills/<name> .agents/skills/<name>`
+5. Add the path to `.claude-plugin/plugin.json` `skills`, then
+   `claude plugin validate . --strict`.
+6. Add one row to the root README Skills table, in its invocation group.
+7. Public surfaces are English.
+8. If the skill has parser or CLI behavior in `infra/`, add tests under
    `infra/bin/` and revert the production change once to see the new test
    go red. Then `npm test`.
 

@@ -1,0 +1,26 @@
+{
+  "name": "de-novo-skills",
+  "version": "0.1.0",
+  "description": "Shared local ground for many agents on one machine: Grove (engines, names, overlays), Dryad (seats), Forester (plan and budget), Understory (the written record), Mycelium (the assertion log).",
+  "author": {
+    "name": "de-novo",
+    "url": "https://github.com/de-novo"
+  },
+  "repository": "https://github.com/de-novo/skills",
+  "license": "MIT",
+  "keywords": [
+    "skills",
+    "worktrees",
+    "parallel-agents",
+    "local-environment",
+    "overlays",
+    "assertions"
+  ],
+  "skills": [
+    "./skills/grove",
+    "./skills/dryad",
+    "./skills/forester",
+    "./skills/understory",
+    "./skills/mycelium"
+  ]
+}

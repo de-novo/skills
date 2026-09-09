@@ -14,6 +14,9 @@ through **relative symlinks**, not copies.
 Add a published skill under `skills/`, then symlink it here. Procedure:
 [catalog](skills/catalog/SKILL.md). Working rules: [`AGENTS.md`](../AGENTS.md).
 
+Installing from outside a checkout goes through the plugin manifest in
+`.claude-plugin/` (root README, Install), not through these symlinks.
+
 Repo-only skills (not published to consuming projects) may live here as real
 directories. `catalog` is one — it teaches how to work on this catalog.
 

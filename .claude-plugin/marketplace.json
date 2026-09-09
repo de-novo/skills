@@ -1,0 +1,16 @@
+{
+  "$schema": "https://www.schemastore.org/claude-code-marketplace.json",
+  "name": "de-novo",
+  "description": "de-novo skills: shared local ground for many agents on one machine.",
+  "owner": {
+    "name": "de-novo"
+  },
+  "plugins": [
+    {
+      "name": "de-novo-skills",
+      "description": "Grove, Dryad, Forester, Understory, Mycelium.",
+      "source": "./",
+      "category": "engineering"
+    }
+  ]
+}

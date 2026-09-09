@@ -1,14 +1,13 @@
 ---
 name: forester
 description: >-
-  de-novo Forester — analyse a body of work into a plan of items with
+  de-novo Forester — break a body of work into a plan of items with
   dependencies and file claims, set how many may run at once on this
-  machine, and keep that many seated as Dryad seats. Use when a person asks
-  to break work into parallel items, to decide what to assign next, or to
-  fill free slots; when the user runs /forester. Values live in
+  machine, and keep that many seated as Dryad seats. Values live in
   .agents/forester-plan.yml (the plan, tracked) and
   .agents/forester.local.yml (this machine's budget, never committed). The
   CLI never calls a model; the analysis is yours.
+disable-model-invocation: true
 ---
 
 # Forester
