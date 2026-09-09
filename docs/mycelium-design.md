@@ -1,7 +1,7 @@
 # Mycelium — the facts under the forest
 
 Written 2026-09-08. Status: landed the same day, first round. Once landed,
-`infra/lib/mycelium.mjs` owns the behaviour and `skills/mycelium/README.md`
+`infra/lib/mycelium.mjs` owns the behaviour and `skills/mycelium/references/log.md`
 owns the fields. This note records why.
 
 ## The gap

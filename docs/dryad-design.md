@@ -3,7 +3,7 @@
 Written 2026-09-06. Status: design record. Implemented the same day. Design
 base: `69418fc`. This document is not an operating specification. The pattern is
 owned by [`skills/dryad/SKILL.md`](../skills/dryad/SKILL.md), the schema,
-registry, and CLI by [`skills/dryad/README.md`](../skills/dryad/README.md), and
+registry, and CLI by [`skills/dryad/references/seats.md`](../skills/dryad/references/seats.md), and
 the checks by `infra/lib/dryad.mjs`. This document keeps only the reasons for
 the decisions. Where the implementation differs from the design: under
 `GROVE_STATE_DIR` the registry also goes into a `dryads/` subdirectory, so it

@@ -22,8 +22,8 @@ belong in it.
 | File | Owns |
 | --- | --- |
 | `skills/<name>/SKILL.md` | Pattern. Agent prompt. YAML frontmatter `name` + `description`. |
-| `skills/<name>/README.md` | Human diagram and apply steps. Optional if the skill is tiny. |
-| `skills/<name>/references/` | Schema or long facts the skill points at. |
+| `skills/<name>/README.md` | The human page, under about 400 words: a diagram if one helps, then **What it does** (with the one defining constraint), **When to reach for it** (invocation mode and the trigger boundary), **It's working if** (tells a reader can check without opening SKILL.md), **Where it fits**, **Apply to a project**, **Pointers**. |
+| `skills/<name>/references/` | The long facts: fields, registry, CLI tables, state machines. The README and SKILL point here; neither restates them. |
 | `skills/<name>/examples/` | Shape of values, not a required backend. |
 | `skills/<name>/agents/openai.yaml` | Codex picker metadata: `interface.display_name`, `interface.short_description`; for a user-invoked skill also `policy.allow_implicit_invocation: false`. |
 | `.agents/skills/<name>` | Relative symlink to `../../skills/<name>`. |
@@ -59,8 +59,9 @@ person to run it instead.
    lists, or real commands. Those go in a consuming project's
    `.agents/runtime-profile.yml` (Grove) or the equivalent values file the
    skill names.
-2. Write `README.md` next to it if a human needs a diagram or apply steps.
-   Do not paste the SKILL body into the README; point.
+2. Write `README.md` next to it in the six-section shape above, and put
+   every field or CLI table in `references/`. Do not paste the SKILL body
+   into the README; point.
 3. Decide the invocation (above) and write `agents/openai.yaml`.
 4. `ln -s ../../skills/<name> .agents/skills/<name>`
 5. Add the path to `.claude-plugin/plugin.json` `skills`, then

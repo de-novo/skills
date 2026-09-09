@@ -1,7 +1,7 @@
-# Understory — the document a person reads the graph from
+# Understory
 
-Pattern: [SKILL.md](SKILL.md). This file owns the section shapes and the
-CLI. The graph belongs to [Forester](../forester/README.md).
+The story under the canopy: the document a person who was not here reads to
+know what the work is, where it stands, and what has been proven.
 
 ```
 forester plan --json ──▶ understory graph     ──▶ ┐
@@ -9,61 +9,29 @@ forester plan --json ──▶ understory graph     ──▶ ┐
 plan · design note · evidence ──(links only)──▶ ┘
 ```
 
-## Sections, in order
+## What it does
 
-| # | Section | Answers | Source |
-| --- | --- | --- | --- |
-| 1 | What this graph is | One sentence: nodes, edges, claims, budget. Why this kind of graph, in three lines | design note (link) |
-| 2 | The graph now | The Mermaid flowchart from `understory graph`, as it came out | CLI |
-| 3 | How to read it | The `understory reading` lines, and one line per state saying what a reader does about it | CLI |
-| 4 | How the plan was written | The five rules from the Forester skill, pointed to, not restated | Forester SKILL (link) |
-| 5 | What is proven | One table: what was run, what happened, what was not run. Failures in the same table | evidence files (link) |
-| 6 | Words | One line each for the names a reader meets: Grove, Dryad, Forester, Canopy, Understory, Playground | root README (link) |
-| 7 | Open | What is not decided or not measured yet | design note, evidence |
-| 8 | Pointers | The plan file, the Forester README, the design note, the evidence | — |
+Draws Forester's graph and one reading line per item through the CLI, then
+an agent writes eight short sections around them. The defining constraint:
+a map points, it does not copy. Every fact stays in its home and the
+document links to it; what the document owns is the reading.
 
-Never in the document: schema field tables, CLI option lists, hook store
-paths, machine paths. Those have homes.
+## When to reach for it
 
-## The drawn graph
+A person asks for a shared document, a write-up, a map, or a status page of
+the work graph; or an agent reaches for it when a sprint needs a record.
+For the live screen instead, use Canopy (`de-novo skills canopy`).
 
-`understory graph` prints a Mermaid flowchart: one node per item, in plan
-order, coloured by state (done recedes; active and failed stand out; ready
-and blocked read as waiting); a solid edge per `depends_on`; a dotted edge
-labelled with the claim for every ready item a claim hold keeps waiting; a
-self-note for an item the budget alone holds; and a legend of only the
-states present. The node label carries the id, the claims, the tool when
-the item names one, and the session state when serve holds one.
+## It's working if
 
-## The reading
+- A reader who was not here says, from the document alone, that they know what is happening.
+- The document gets shorter as it gets better, and every number in it changes what the reader does.
+- What is not proven sits in the same table as what is.
 
-`understory reading` prints a summary line and one line per item:
+## Where it fits
 
-| State | Line |
-| --- | --- |
-| done | `finished (why)` |
-| active | `someone is working on it (session …)`, or `… and the session is waiting for a person` |
-| ready | `would be assigned now`, or `could start, but <hold reason>`, or `could start` |
-| blocked | `cannot start yet: waits for …` |
-| failed | `gave up: <why>` |
-
-`--json` prints `{ summary, reading: [{ id, state, line, facts }] }`.
-`facts` is the list of ids of the active Mycelium facts whose subject is
-the item, read through Mycelium's own query and never restated; the text
-form appends `· facts a-…, a-…` to the line. A project without
-`.agents/mycelium.yml` gets an empty list, and so does `--from`, which has
-no project to ask. Pattern: [mycelium](../mycelium/SKILL.md).
-
-## CLI
-
-```text
-de-novo skills understory graph   [--project ROOT | --from plan.json]
-de-novo skills understory reading [--project ROOT | --from plan.json] [--json]
-```
-
-Both are pure functions of `forester plan --json`. `--from` reads a saved
-copy of that output, so a document can be drawn from a plan captured
-earlier or on another machine. `--project` resolves as Forester does.
+Reads Forester's graph and Mycelium's fact ids; writes only prose. Root
+map: [How the skills fit](../../README.md#how-the-skills-fit).
 
 ## Apply to a project
 
@@ -73,3 +41,8 @@ earlier or on another machine. `--project` resolves as Forester does.
 3. The project decides where the document lives and in which language.
 4. A person reads it and says whether they know what is happening. That
    answer is the evidence; record it with the date.
+
+## Pointers
+
+The eight sections, the drawn graph, the reading lines, the CLI:
+[references/document.md](references/document.md). Pattern: [SKILL.md](SKILL.md).

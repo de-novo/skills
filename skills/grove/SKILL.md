@@ -25,7 +25,7 @@ Human diagram and CLI onboarding: [README.md](README.md).
 ## Plant it
 
 For a repository without a profile, follow
-[Apply to a project](README.md#apply-to-a-project): measure the existing
+[Apply to a project](references/planting.md#apply-to-a-project): measure the existing
 project before writing its values. That procedure owns the planting steps.
 
 ## First actions

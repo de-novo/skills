@@ -64,6 +64,6 @@ test('a skill is user-invoked in both harnesses or in neither', () => {
       assert.doesNotMatch(fm.description, /Use when|when the user runs/, `${name}: a user-invoked description is human-facing and carries no trigger list`);
     }
   }
-  // Forester is the one skill a person triggers; the rest a seat reaches for.
-  assert.deepEqual(userInvoked, ['forester']);
+  // Forester and Clearing are the skills a person triggers; the rest a seat reaches for.
+  assert.deepEqual(userInvoked, ['clearing', 'forester']);
 });

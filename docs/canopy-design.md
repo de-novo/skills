@@ -4,7 +4,7 @@ Written 2026-09-07. Status: design proposal. The first round (`5e38159`) has the
 seat table and the problem row. This document records the decisions for the
 second round. It is not an operating specification. Once the implementation
 lands, `infra/lib/canopy.mjs` and `infra/lib/dryad.mjs` own the behaviour and
-`skills/dryad/README.md` owns the fields.
+`skills/dryad/references/seats.md` owns the fields.
 
 ## The questions a person has to get answered
 
@@ -168,7 +168,7 @@ a dogfooding seat.
   (`truncated` past 200, with the counts intact), a top-level `worktrees` that
   includes worktrees with no seat, and `overlaps`, which does not change the
   exit code. `hostnames` became `[{host, service, attached}]` so an unattached
-  service is distinguished. The fields are owned by `skills/dryad/README.md`.
+  service is distinguished. The fields are owned by `skills/dryad/references/seats.md`.
   Measured: `node --test infra/bin/dryad.test.mjs` 18/18, `npm test` 214/214
   (210 before), each of the 5 new guards reverted for red 5/5. The screen (the
   cards) does not exist yet.
