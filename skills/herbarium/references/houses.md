@@ -23,7 +23,7 @@ ignore: [dist/**, .playground/**]      # never read; node_modules and .git are a
 | `language` | The script public surfaces use. `en`: a file holding Hangul, Han, kana, Cyrillic, Arabic, or Thai letters is counted | `en` |
 | `public` | Globs of every document a reader from outside may meet. Required, non-empty | — |
 | `pages.globs` | Globs of the human pages held to the cap | none |
-| `pages.max_words` | The cap on a page's prose, outside code fences | 450 |
+| `pages.max_words` | The cap on a page's prose: words outside code fences and tables | 450 |
 | `archive` | Globs of retired documents. A link into them from an active document is shown, not judged | none |
 | `ignore` | Globs never read. Symlinks are never followed | none |
 
@@ -83,7 +83,7 @@ de-novo skills herbarium check [--project ROOT] [--json]
 | `copies n near` | a run of 14 words, after case and punctuation are dropped, shared by two public files that hold no exact copy; one finding per pair, with the first run | any |
 | `copies n similar` | a paragraph of 25 words or more, half of whose word 4-grams (of the shorter of the two) appear in a paragraph of another file, for a pair not already reported; one finding per pair, with the paragraph's first line | never; shown for a person |
 | `language n` | public files holding letters outside the named script | any |
-| `pages n/n` | human pages whose prose is within the cap | one over |
+| `pages n/n` | human pages whose prose (outside fences and tables) is within the cap | one over |
 | `archive n` | links from active documents into the archive | never; shown for a person |
 
 `--project ROOT` names the project; omitted, the nearest

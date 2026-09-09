@@ -38,6 +38,11 @@ Underneath every other skill's documents: each skill's SKILL, README, and
 references follow this rule, and this catalog checks itself with it. Root
 map: [How the skills fit](../../README.md#how-the-skills-fit).
 
+## What it does to your machine
+
+Reads the public files the values file names. Writes nothing, downloads
+nothing, runs nothing.
+
 ## Apply to a project
 
 1. Write `.agents/herbarium.yml`: the public globs, the human pages and

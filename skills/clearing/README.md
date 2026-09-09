@@ -26,6 +26,10 @@ mid-work. For the written record instead, use
 A standalone over Understory and Mycelium; it changes nothing. Root map:
 [How the skills fit](../../README.md#how-the-skills-fit).
 
+## What it does to your machine
+
+Reads two screens. Writes nothing, runs nothing else.
+
 ## Apply to a project
 
 Nothing to plant. It uses whichever of Forester and Mycelium the project

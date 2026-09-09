@@ -34,6 +34,11 @@ person types `/understory`. For the live screen instead, use Canopy
 Reads Forester's graph and Mycelium's fact ids; writes only prose. Root
 map: [How the skills fit](../../README.md#how-the-skills-fit).
 
+## What it does to your machine
+
+Reads Forester's JSON and Mycelium's log. Writes nothing itself; the
+document is written by the agent, where the project says.
+
 ## Apply to a project
 
 1. The project has a Forester plan.

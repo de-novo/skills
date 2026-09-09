@@ -76,7 +76,7 @@ able to read why it was made.
 - **The CLI never edits.** It counts; a person or an agent moves the text.
 - **Public surfaces are one language**, the one the values file names.
 - **A human page is short.** Its prose stays under the cap; a diagram in a
-  fence is looked at, not read, and does not count.
+  fence or a table is looked at, not read, and does not count.
 - **Retired documents are kept**, dated, and pointed at what replaced them.
 
 ## Not this skill

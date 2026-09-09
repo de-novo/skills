@@ -43,6 +43,12 @@ Forester assigns into it; Grove stands under it; Mycelium reads its done
 and blocked reports; Canopy (`de-novo skills canopy`) is the live screen
 over its JSON. Root map: [How the skills fit](../../README.md#how-the-skills-fit).
 
+## What it does to your machine
+
+| Writes | Downloads | Runs | Undo |
+| --- | --- | --- | --- |
+| A git worktree and branch per seat at `worktrees.root`; the registry and journal under `~/.dev-infra/dryads/`; one journal line per state-changing catalog verb a seat runs | Nothing | `git worktree add`, and Grove's overlay verbs when the project has overlays | `finish --apply` removes a clean Dryad-made worktree and archives the journal; branches are kept |
+
 ## Apply to a project
 
 1. Plant Grove first ([grove planting](../grove/references/planting.md#apply-to-a-project)).
