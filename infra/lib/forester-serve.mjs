@@ -18,6 +18,9 @@ import { stringify } from 'yaml';
 
 import { parseDryadCliArgs, readDryadState, runDryad } from './dryad.mjs';
 import { loadForester, sessionsPath } from './forester.mjs';
+import { claudeSettings, doingFromEvents, seatEventsPath, seatSettingsPath, stateFromEvents } from './seat-events.mjs';
+
+export { claudeSettings, doingFromEvents, stateFromEvents };
 
 // The seat carries the Dryad skill's path, as `dryad seat --env` does.
 const DRYAD_SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../skills/dryad/SKILL.md');
@@ -56,86 +59,6 @@ export function launchCommand({ toolName, tool, task, settingsFile = null }) {
   const [file, ...rest] = args;
   if (settingsFile != null && path.basename(file) === 'claude') rest.push('--settings', settingsFile);
   return { file, args: rest, tool: toolName };
-}
-
-// Hook commands append the hook's own JSON payload, one line each, to the
-// seat's events file. The payload names the event, so the file is the
-// session's history and its last line is its state.
-export function claudeSettings(eventsFile) {
-  const command = `cat >> ${shellSingle(eventsFile)} && printf '\\n' >> ${shellSingle(eventsFile)}`;
-  const hook = [{ hooks: [{ type: 'command', command }] }];
-  // PreToolUse is what turns needs-input back into running once a person
-  // has answered a permission prompt.
-  return { hooks: { UserPromptSubmit: hook, PreToolUse: hook, PostToolUse: hook, Stop: hook, StopFailure: hook, SessionEnd: hook, Notification: hook } };
-}
-
-const EVENT_NAMES = new Map(['UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop', 'StopFailure', 'SessionEnd', 'PermissionRequest', 'Notification'].map((name) => [name.toLowerCase(), name]));
-
-function canonicalEvent(raw) {
-  if (typeof raw !== 'string') return null;
-  return EVENT_NAMES.get(raw.replace(/[_-]/g, '').toLowerCase()) ?? raw;
-}
-
-const EVENT_STATES = Object.freeze({
-  UserPromptSubmit: 'running',
-  PreToolUse: 'running',
-  PostToolUse: 'running',
-  Stop: 'idle',
-  StopFailure: 'idle',
-  SessionEnd: 'exited',
-  PermissionRequest: 'needs-input',
-});
-
-// The state the last meaningful event implies, or null when the file says
-// nothing yet. A Notification counts only when it is a prompt for a person.
-// What the session is doing right now, read from the last tool event the
-// hooks wrote: the tool's name and its target (a path, a command, a
-// pattern), never the worker's own account of itself. Null until a tool
-// has been used. The payload keys are Claude Code's; Codex and OpenCode
-// send the same names, Cursor's hook maps to them.
-export function doingFromEvents(text) {
-  let doing = null;
-  for (const line of text.split('\n')) {
-    if (line.trim().length === 0) continue;
-    let event;
-    try {
-      event = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    const name = canonicalEvent(event.hook_event_name ?? event.hookEventName);
-    if (name !== 'PreToolUse' && name !== 'PostToolUse') continue;
-    const tool = event.tool_name ?? event.toolName;
-    if (typeof tool !== 'string' || tool.length === 0) continue;
-    const input = event.tool_input ?? event.toolInput ?? {};
-    const target = [input.file_path, input.command, input.pattern, input.skill, input.url]
-      .find((value) => typeof value === 'string' && value.length > 0);
-    doing = target == null ? tool : `${tool} ${target.replace(/\s+/g, ' ').slice(0, 80)}`;
-  }
-  return doing;
-}
-
-export function stateFromEvents(text) {
-  let state = null;
-  for (const line of text.split('\n')) {
-    if (line.trim().length === 0) continue;
-    let event;
-    try {
-      event = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    // Claude, Codex, and OpenCode name the event UserPromptSubmit; Grok
-    // writes user_prompt_submit under a camelCase key. Compare on letters.
-    const name = canonicalEvent(event.hook_event_name ?? event.hookEventName);
-    if (name === 'Notification') {
-      const kind = event.notification_type ?? event.notificationType ?? event.matcher ?? event.reason;
-      if (kind === 'idle_prompt' || kind === 'permission_prompt' || kind === 'elicitation_dialog') state = 'needs-input';
-      continue;
-    }
-    if (EVENT_STATES[name] != null) state = EVENT_STATES[name];
-  }
-  return state;
 }
 
 // Before its first prompt is submitted no hook can fire, yet a tool can
@@ -343,13 +266,16 @@ export class ForesterServe {
       record.note = `worktree missing: ${seat.worktree}`;
       return;
     }
-    record.events = path.join(this.dir, `${item.id}.events`);
-    // A fresh file per launch: a previous session's SessionEnd must not
-    // read as this one's exit.
+    // The seat's own events file, the one dryad status, Canopy, and
+    // Understory read; serve is one launcher among others. A fresh file
+    // per launch: a previous session's SessionEnd must not read as this
+    // one's exit.
+    record.events = seatEventsPath(this.project.slug, item.id, this.environment);
+    mkdirSync(path.dirname(record.events), { recursive: true, mode: 0o700 });
     writeFileSync(record.events, '');
     let settingsFile = null;
     if (path.basename(tool.command[0]) === 'claude') {
-      settingsFile = path.join(this.dir, `${item.id}.claude-settings.json`);
+      settingsFile = seatSettingsPath(this.project.slug, item.id, this.environment);
       writeFileSync(settingsFile, JSON.stringify(claudeSettings(record.events), null, 2));
       const trust = seedClaudeTrust(seat.worktree, this.environment);
       this.log(`forester: ${item.id}: trust ${trust.result} (${trust.file})`);
@@ -357,6 +283,8 @@ export class ForesterServe {
     const command = launchCommand({ toolName, tool, task: item.task, settingsFile });
     const env = seatEnvironment(seat, item.id, this.project, this.environment);
     env.FORESTER_EVENTS = record.events;
+    env.DRYAD_EVENTS = record.events;
+    if (settingsFile != null) env.DRYAD_CLAUDE_SETTINGS = settingsFile;
     try {
       record.pty = this.pty.spawn(command.file, command.args, { name: 'xterm-256color', cols: 120, rows: 40, cwd: seat.worktree, env });
     } catch (error) {

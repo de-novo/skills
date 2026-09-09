@@ -134,8 +134,7 @@ unix socket path is capped near 100 bytes.
 | `exited` | The process ended on its own; `exit` carries the code |
 | `closed` | serve ended it: the seat reported done, or serve stopped |
 
-Claude Code sessions get their hooks through `--settings <file>` written
-next to the snapshot, never into the worktree or the person's own settings.
+Each session's events go to the seat's own file, `DRYAD_EVENTS`, laid by Dryad at `plan --apply` and read back by `dryad status`, so a session serve holds and one another launcher started look the same. Claude Code sessions get their hooks through `--settings <file>`, the seat's `DRYAD_CLAUDE_SETTINGS`, never into the worktree or the person's own settings.
 Before launch the seat's worktree is pre-trusted in Claude's own state file
 (`projects[<path>].hasTrustDialogAccepted`, honouring `CLAUDE_CONFIG_DIR`),
 the way Claude's own error message says to; nothing is written when that

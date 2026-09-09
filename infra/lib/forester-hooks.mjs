@@ -29,11 +29,14 @@ function homeOf(environment) {
 // `payload` tools already send a JSON object that names the event, so it is
 // appended as is; the others get a line written here.
 function hookCommand(event, { payload }) {
+  // The seat's file (DRYAD_EVENTS) is the address whoever launched the
+  // tool; FORESTER_EVENTS is serve's older name for the same file.
+  const target = 'E="${DRYAD_EVENTS:-$FORESTER_EVENTS}"';
   const append = payload
-    ? 'cat >> "$FORESTER_EVENTS" && printf \'\\n\' >> "$FORESTER_EVENTS"'
-    : `printf '{"hook_event_name":"${event}"}\\n' >> "$FORESTER_EVENTS"`;
-  const inside = 'case "$FORESTER_EVENTS" in "${GROVE_STATE_DIR:-$HOME/.dev-infra}"/foresters/*) true ;; *) false ;; esac';
-  return `# ${HOOK_MARKER}\nif [ -n "$FORESTER_EVENTS" ] && ${inside}; then ${append}; else cat >/dev/null 2>&1 || :; fi`;
+    ? 'cat >> "$E" && printf \'\\n\' >> "$E"'
+    : `printf '{"hook_event_name":"${event}"}\\n' >> "$E"`;
+  const inside = 'case "$E" in "${GROVE_STATE_DIR:-$HOME/.dev-infra}"/dryads/events/*|"${GROVE_STATE_DIR:-$HOME/.dev-infra}"/foresters/*) true ;; *) false ;; esac';
+  return `# ${HOOK_MARKER}\n${target}; if [ -n "$E" ] && ${inside}; then ${append}; else cat >/dev/null 2>&1 || :; fi`;
 }
 
 const CLAUDE_LIKE_EVENTS = ['UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop', 'StopFailure', 'SessionEnd', 'Notification'];

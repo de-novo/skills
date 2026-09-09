@@ -103,6 +103,7 @@ Grove already know all of it:
 | `changes` | per seat | `{ base, committed: [{path, status}], uncommitted: [{path, status}], counts: { committed, uncommitted, ahead }, truncated }` from `git diff --name-status <base>..HEAD` and `git status --porcelain` in the seat's worktree. The lists stop at 200 entries with `truncated: true`; the counts stay whole. `null` when the worktree is missing |
 | `worktrees` | project | `[{ path, branch, head, seat, baseline }]` from the baseline's `git worktree list --porcelain`. `seat` is the seat id holding that path, or `null` — somebody works in parallel and Dryad does not know it. `changes` is computed for seats only: reading another person's worktree is not Dryad's business |
 | `overlaps` | project | `[{ path, seats: [id, …] }]` for every path two or more of the listed seats have committed or uncommitted. Shown, never judged — who merges first is a person's call |
+| `activity` | per seat | `{ state, doing, changed_at, events }` from the seat's events file: `state` is `running`, `idle`, `needs-input`, or `exited` from the last hook event; `doing` is the last tool event's name and target (`Edit app/api/server.mjs`); `changed_at` is the file's last write. `null` until a session has written. The text form appends `· now <doing>` to the seat line |
 
 `--project ROOT` names the baseline checkout. Omitted, Dryad uses
 `DRYAD_PROJECT`, then the nearest `.agents/dryad-profile.yml` above the cwd.
@@ -110,9 +111,15 @@ A worker inside a worktree must rely on `DRYAD_PROJECT`, because the worktree
 carries its own copy of `.agents/`.
 
 Seat environment: `DRYAD_ID`, `DRYAD_ENV` (empty without overlays),
-`DRYAD_BRANCH`, `DRYAD_PROJECT`, and `DRYAD_SKILL` (the path to this skill's
+`DRYAD_BRANCH`, `DRYAD_PROJECT`, `DRYAD_SKILL` (the path to this skill's
 SKILL.md inside the installed catalog, so the project need not vendor or
-symlink it). The task text is not an environment variable; launchers read it
+symlink it), `DRYAD_EVENTS` (the seat's events file, which the agent
+tools' hooks append to), and `DRYAD_CLAUDE_SETTINGS` (a hooks file a
+Claude Code launcher passes as `--settings`). `plan --apply` lays the two
+files under `<state>/dryads/events/<slug>/`; `finish` removes them. Any
+launcher that starts a tool with this environment, and `forester hooks
+--apply` once per machine for tools other than Claude Code, gets the
+seat's activity read back by `status`. The task text is not an environment variable; launchers read it
 from `seat --json` or `seat --task`.
 
 ## Canopy

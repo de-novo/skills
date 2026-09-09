@@ -174,7 +174,7 @@ test('renderer preserves pending liveness, hostnames and null measurements witho
   const state = { updated_at: '2026-01-01T00:00:00Z', projects: [{
     slug: 'example', root: '/example', overlay: true,
     counts: { seats: 1, worktrees_present: 1, envs_tracked: 1, envs_wanted: 1, envs_in_flight: 1, reported: { working: 1 } },
-    seats: [{ id: 'w1', branch: 'task', ahead: 2, env: 'w1', env_state: 'in-flight', status: 'working', by: 'worker', session: '<session>', journal: [], hostnames: ['api--w1.example.localhost', 'https://example.invalid/path', 'javascript://example.invalid', 'http://user:pass@example.invalid'] }],
+    seats: [{ id: 'w1', branch: 'task', ahead: 2, env: 'w1', env_state: 'in-flight', status: 'working', by: 'worker', session: '<session>', journal: [], hostnames: ['api--w1.example.localhost', 'https://example.invalid/path', 'javascript://example.invalid', 'http://user:pass@example.invalid'], activity: { state: 'running', doing: 'Edit <src>/x.ts', changed_at: new Date().toISOString() } }],
     finished: [], problems: ['<unsafe>'], grove: { counts: { environments: 1, attachments: 1, pending: 2, stale: null, drift: null }, pending: [{ env: 'w1', verb: 'attach', liveness: 'in-flight' }, { env: 'w2', verb: 'create', liveness: 'stalled' }] },
   }] };
   const html = renderPage(state).split('<script>')[0];
@@ -189,6 +189,7 @@ test('renderer preserves pending liveness, hostnames and null measurements witho
   assert.match(html, /problem · &lt;unsafe&gt;/);
   assert.equal((html.match(/<article class="card seat"/g) ?? []).length, 1);
   assert.doesNotMatch(html, /class="files"|class="overlap"|undefined/);
+  assert.match(html, /<p class="doing">now Edit &lt;src&gt;\/x\.ts · running · /, 'the card says what the session is doing, escaped');
 });
 
 
