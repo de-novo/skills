@@ -70,7 +70,8 @@ every change instead of a person retyping it after a merge.
 | C5 | A local check passed or failed | a `check` fact, one line, no output | measured |
 | C6 | A new seat's brief should start from the facts | round 2: `query --brief` prints the block a Dryad brief takes | measured |
 | C7 | Understory should point at what was proven | round 2: `understory reading` lists the active fact ids per item, through Mycelium's query | measured |
-| C8 | A seat reports done and the fact should exist without a person typing | not automated by decision; see the design note | deferred |
+| C8 | A seat reports done and the fact should exist without a person typing | not automated by decision; in the notes pilot every seat proposed its own facts from the skill text, so the seam was not missed | deferred |
+| C10 | A blocked seat reads what another seat already found | the notes pilot: a Codex seat blocked on a build refusal was pointed at one `tried-and-failed` fact and finished | measured |
 | C9 | Forester's plan must never hold world facts | separate files, separate slugs, read-only seam | measured |
 
 ## D. Reading

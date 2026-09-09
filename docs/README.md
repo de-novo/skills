@@ -43,7 +43,9 @@ tested, pattern, or gap at `7047aa0`, and names the second round: declared
 predicates with cardinality, a lock around commit, and the reading verbs.
 That round landed 2026-09-09 with its own
 [evidence](evidence/2026-09-09-mycelium-round-2.md). The skills themselves
-were then run cold in fresh sessions: [skill eval](evidence/2026-09-09-skill-eval.md).
+were then run cold in fresh sessions: [skill eval](evidence/2026-09-09-skill-eval.md),
+and one whole sprint ran through every skill with Claude Code and Codex seats
+in a playground sandbox: [the notes pilot](evidence/2026-09-09-notes-pilot.md).
 
 [Playground design](playground-design.md) records the sandbox rules for the
 sample project the catalog ships: one directory holds everything, no machine
