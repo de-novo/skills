@@ -1,0 +1,3 @@
+interface:
+  display_name: "Grove"
+  short_description: "Shared local ground: engines, names not ports, thin overlays"

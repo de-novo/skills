@@ -89,15 +89,43 @@ seam is `propose --from-seat`. Reasons: [`docs/mycelium-design.md`](docs/myceliu
 terminal, a worktree app, tmux, an ACP client); merging; browser QA and e2e;
 stopping machine infra. Those are a person's, by decision.
 
+## Install
+
+Two routes; pick one.
+
+**As a Claude Code plugin.** The skills arrive as a managed bundle. From
+inside a session:
+
+```
+/plugin marketplace add de-novo/skills
+/plugin install de-novo-skills@de-novo
+```
+
+**As a checkout.** Clone, then `npm install && npm link`; the skills load
+through `.agents/skills/` symlinks and `de-novo skills` is on your PATH.
+
+The CLI comes only with the checkout today. A plugin install gives you the
+five skills; the verbs they name (`de-novo skills …`) need the checkout
+linked once on the machine. The skills say what to run; the checkout is
+what runs it.
+
 ## Skills
+
+Model-invoked: a seat or a person reaches for these.
 
 | Name | One line |
 | --- | --- |
 | [grove](skills/grove/) | Shared local ground: n projects, m apps each, one infra set |
 | [dryad](skills/dryad/) | One seat per worker on that ground: worktree, overlay env, task. No agent launch |
-| [forester](skills/forester/) | Analyse the work into a plan, set how many run at once here, keep that many seated through Dryad; serve holds each seat's real session |
 | [understory](skills/understory/) | The story under the canopy: Forester's graph drawn and written up for people, a map that points rather than copies |
 | [mycelium](skills/mycelium/) | The facts under the forest: one append-only log of assertions per project, with time, confidence, domain, and provenance; workers propose, a person or the judge commits |
+
+User-invoked: only a person typing `/forester` reaches it; the plan is a
+person's ask.
+
+| Name | One line |
+| --- | --- |
+| [forester](skills/forester/) | Analyse the work into a plan, set how many run at once here, keep that many seated through Dryad; serve holds each seat's real session |
 
 ## CLI
 
@@ -128,9 +156,12 @@ Overlay lifecycle and cleanup contract:
 
 ```
 AGENTS.md        how agents work in this catalog
+LICENSE          MIT
+.claude-plugin/  plugin manifest and the repo's own marketplace entry
 .agents/         skill load adapter (symlinks into skills/), and this catalog's own
                  dryad-profile.yml and mycelium.yml (it seats its own workers)
-skills/          skill sources. add a skill as <name>/SKILL.md; README next to it for people
+skills/          skill sources. add a skill as <name>/SKILL.md; README next to it for people,
+                 agents/openai.yaml beside it for the Codex picker
   grove/         shared ground: engines, names, overlays
   dryad/         seats on Grove's ground (no agent launch); Canopy is one of its verbs
   forester/      plan, budget, allocator over Dryad seats; serve holds sessions

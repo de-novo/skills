@@ -1,0 +1,3 @@
+interface:
+  display_name: "Dryad"
+  short_description: "One seat per worker: worktree, overlay env, task, journal"

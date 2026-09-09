@@ -36,6 +36,8 @@ Remote: `git@github.com:de-novo/skills.git`. CLI: `de-novo skills` (alias `de-no
 | Hostname render | `infra/lib/addressing.mjs` |
 | How to work in this catalog | this file |
 | Agent skill load paths | `.agents/` (see `.agents/README.md`) |
+| Plugin manifest (install as a Claude Code plugin) | `.claude-plugin/plugin.json`; CI diffs it against `skills/*/` |
+| Skill invocation policy (user- vs model-invoked) | each `skills/<name>/SKILL.md` frontmatter + `agents/openai.yaml`; the rule is in the catalog skill |
 
 Do not copy a fact into a second house. Point.
 

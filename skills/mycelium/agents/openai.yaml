@@ -1,0 +1,3 @@
+interface:
+  display_name: "Mycelium"
+  short_description: "The assertion log: propose, commit, invalidate, query"
