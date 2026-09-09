@@ -47,6 +47,11 @@ were then run cold in fresh sessions: [skill eval](evidence/2026-09-09-skill-eva
 and one whole sprint ran through every skill with Claude Code and Codex seats
 in a playground sandbox: [the notes pilot](evidence/2026-09-09-notes-pilot.md).
 
+[Herbarium design](herbarium-design.md) records why the documentation
+discipline became a skill: one house per kind of document, the levers for
+writing a document an agent runs, and one verb that counts drift; it names
+what was borrowed and from where. Landed 2026-09-09.
+
 [Playground design](playground-design.md) records the sandbox rules for the
 sample project the catalog ships: one directory holds everything, no machine
 registry, no port chosen in advance, no engines or containers, its own git

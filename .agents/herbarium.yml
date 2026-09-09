@@ -1,0 +1,10 @@
+# The catalog's own houses. Public surfaces are English; every skill README
+# is a human page under the cap; docs/archive holds retired designs.
+version: 1
+language: en
+public: [README.md, AGENTS.md, skills/**/*.md, docs/**/*.md, infra/README.md, playground/README.md]
+pages:
+  globs: [skills/*/README.md]
+  max_words: 450
+archive: [docs/archive/**]
+ignore: [.playground/**, .agents/skills/**]

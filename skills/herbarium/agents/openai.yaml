@@ -1,0 +1,3 @@
+interface:
+  display_name: "Herbarium"
+  short_description: "One house per document; links, copies, and length counted"

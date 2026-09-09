@@ -1,0 +1,12 @@
+# The project's houses for Herbarium. `public` is every document a reader
+# from outside may meet; `pages` are the short human pages with their word
+# cap; `archive` is where retired documents go and may only be pointed at
+# from other retired documents without being counted.
+version: 1
+language: en
+public: [README.md, AGENTS.md, docs/**/*.md, skills/**/*.md]
+pages:
+  globs: [README.md, docs/*/README.md]
+  max_words: 450
+archive: [docs/archive/**]
+ignore: [dist/**, .playground/**]
