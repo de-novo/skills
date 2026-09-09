@@ -11,7 +11,13 @@ contract, and the [design](mycelium-design.md) explains the choices.
 A **seat** is a worker's Git worktree and task, managed by Dryad. A
 **judge** is a declared writer allowed to promote or invalidate assertions.
 Forester holds the work plan; Understory renders its progress and links to
-facts. A **slug** identifies a project's local state files.
+facts. A **slug** identifies a project's local state files. Every other
+name a reader meets here (Grove, Dryad, Herbarium, the catalog, the
+playground sandbox, the fold, the values file, each field of the
+envelope) is defined once, in [How the skills fit](../README.md#how-the-skills-fit)
+and the skill references it links; this note does not restate them. A
+reader who was not here found that pointer missing on 2026-09-09, which is
+why this sentence exists.
 
 Each row uses one of four marks:
 

@@ -81,6 +81,7 @@ de-novo skills herbarium check [--project ROOT] [--json]
 | `anchors n/n` | `#heading` parts of those links, and same-file `#heading` links, that name a heading in the target (GitHub's slug rule) | a broken one |
 | `copies n exact` | a line of prose of 80 characters or more, outside code and tables and headings and pointer lines, found in two or more public files | any |
 | `copies n near` | a run of 14 words, after case and punctuation are dropped, shared by two public files that hold no exact copy; one finding per pair, with the first run | any |
+| `copies n similar` | a paragraph of 25 words or more, half of whose word 4-grams (of the shorter of the two) appear in a paragraph of another file, for a pair not already reported; one finding per pair, with the paragraph's first line | never; shown for a person |
 | `language n` | public files holding letters outside the named script | any |
 | `pages n/n` | human pages whose prose is within the cap | one over |
 | `archive n` | links from active documents into the archive | never; shown for a person |
@@ -91,5 +92,5 @@ prints `{ root, ok, counts, findings }`.
 
 ## Not measured yet
 
-A copy paraphrased so thoroughly that no 14-word run survives; a document
-in the right house that is simply wrong. Both are a reader's job.
+A paraphrase that kept fewer than half its 4-grams in the other file; a document in the
+right house that is simply wrong. Both are a reader's job.

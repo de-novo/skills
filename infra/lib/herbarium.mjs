@@ -19,6 +19,14 @@ const COPY_MIN_CHARS = 80;
 // phrase does not match; short enough that a pasted-then-edited paragraph
 // still does.
 const NEAR_COPY_WORDS = 14;
+// A similar paragraph: half of the shorter paragraph's word 4-grams appear
+// in a paragraph of another file. Containment, not Jaccard, because a
+// paraphrase is one paragraph derived from another, and every changed word
+// removes four grams from both sides. Shown, not judged: a person tells a
+// paraphrase from two honest descriptions of one thing.
+const SIMILAR_GRAM = 4;
+const SIMILAR_MIN_WORDS = 25;
+const SIMILAR_CONTAINMENT = 0.5;
 const DEFAULT_MAX_WORDS = 450;
 const DEFAULT_IGNORE = ['node_modules/**', '.git/**'];
 
@@ -124,6 +132,28 @@ export function headingSlugs(text) {
   return slugs;
 }
 
+// Paragraphs of prose: blank-line separated, outside code, tables, headings,
+// and pointer lines, with at least SIMILAR_MIN_WORDS words.
+function proseParagraphs(text) {
+  const out = [];
+  for (const block of stripCode(text).split(/\n\s*\n/)) {
+    const lines = block.split('\n').map((l) => l.trim()).filter(Boolean);
+    if (lines.length === 0 || lines.some((l) => l.startsWith('#') || l.startsWith('|') || l.includes(']('))) continue;
+    const words = lines.join(' ').toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean);
+    if (words.length < SIMILAR_MIN_WORDS) continue;
+    const grams = new Set();
+    for (let i = 0; i + SIMILAR_GRAM <= words.length; i += 1) grams.add(words.slice(i, i + SIMILAR_GRAM).join(' '));
+    out.push({ head: lines[0].slice(0, 90), grams });
+  }
+  return out;
+}
+
+function containment(a, b) {
+  let shared = 0;
+  for (const g of a) if (b.has(g)) shared += 1;
+  return shared / Math.min(a.size, b.size);
+}
+
 function proseWords(text) {
   const words = [];
   for (const raw of stripCode(text).split('\n')) {
@@ -147,7 +177,7 @@ function stripCode(text) {
 export function checkHerbarium({ root, values }) {
   const files = walk(root, values.ignore);
   const publicFiles = files.filter((file) => matchesAny(file, values.public));
-  const findings = { links: [], anchors: [], copies: [], near_copies: [], language: [], pages: [], archive: [] };
+  const findings = { links: [], anchors: [], copies: [], near_copies: [], similar: [], language: [], pages: [], archive: [] };
   const texts = new Map(publicFiles.map((file) => [file, readFileSync(path.join(root, file), 'utf8')]));
   const slugCache = new Map();
   const slugsOf = (relative) => {
@@ -240,6 +270,26 @@ export function checkHerbarium({ root, values }) {
     findings.near_copies.push({ files: entry.files, run: entry.run, runs: entry.runs });
   }
 
+  // Similar paragraphs across files. Pairs already reported as copies are
+  // left to those findings.
+  const reported = new Set([...findings.copies.map((c) => c.files.slice().sort().join('\n')), ...findings.near_copies.map((n) => n.files.join('\n'))]);
+  const paragraphs = [...texts].map(([file, text]) => [file, proseParagraphs(text)]);
+  for (let a = 0; a < paragraphs.length; a += 1) {
+    for (let b = a + 1; b < paragraphs.length; b += 1) {
+      const [fileA, parasA] = paragraphs[a];
+      const [fileB, parasB] = paragraphs[b];
+      if (reported.has([fileA, fileB].sort().join('\n'))) continue;
+      let best = null;
+      for (const pa of parasA) {
+        for (const pb of parasB) {
+          const score = containment(pa.grams, pb.grams);
+          if (score >= SIMILAR_CONTAINMENT && (best == null || score > best.score)) best = { score, head: pa.head };
+        }
+      }
+      if (best) findings.similar.push({ files: [fileA, fileB], score: Math.round(best.score * 100) / 100, head: best.head });
+    }
+  }
+
   const counts = {
     files: publicFiles.length,
     links: linkCount,
@@ -248,6 +298,7 @@ export function checkHerbarium({ root, values }) {
     anchors_broken: findings.anchors.length,
     copies: findings.copies.length,
     near_copies: findings.near_copies.length,
+    similar: findings.similar.length,
     language: findings.language.length,
     pages: publicFiles.filter((file) => matchesAny(file, values.pages.globs)).length,
     pages_over: findings.pages.length,
@@ -308,7 +359,7 @@ export function formatCheck(result, root) {
     `  files     ${c.files} public`,
     `  links     ${c.links - c.links_broken}/${c.links} resolve`,
     `  anchors   ${c.anchors - c.anchors_broken}/${c.anchors} resolve`,
-    `  copies    ${c.copies} exact · ${c.near_copies} near (${NEAR_COPY_WORDS} words)`,
+    `  copies    ${c.copies} exact · ${c.near_copies} near (${NEAR_COPY_WORDS} words) · ${c.similar} similar (shown, not judged)`,
     `  language  ${c.language} file${c.language === 1 ? '' : 's'} in another script`,
     `  pages     ${c.pages - c.pages_over}/${c.pages} within ${result.max_words} words`,
     `  archive   ${c.archive_links} link${c.archive_links === 1 ? '' : 's'} from active documents (shown, not judged)`,
@@ -317,6 +368,7 @@ export function formatCheck(result, root) {
   for (const f of result.findings.anchors) lines.push(`  anchor    ${f.file} -> ${f.target}`);
   for (const f of result.findings.copies) lines.push(`  copy      ${f.files.join(' · ')}: "${f.line}"`);
   for (const f of result.findings.near_copies) lines.push(`  near      ${f.files.join(' · ')} (${f.runs} run${f.runs === 1 ? '' : 's'}): "${f.run}"`);
+  for (const f of result.findings.similar) lines.push(`  similar   ${f.files.join(' · ')} (${f.score}): "${f.head}"`);
   for (const f of result.findings.language) lines.push(`  script    ${f.file}`);
   for (const f of result.findings.pages) lines.push(`  long      ${f.file} ${f.words} words (cap ${f.max})`);
   for (const f of result.findings.archive) lines.push(`  archive   ${f.file} -> ${f.target}`);
@@ -338,7 +390,8 @@ usage:
   ${cli} herbarium check [--project ROOT] [--json]
       counts, over the project's public surfaces: relative links and their
       anchors that resolve, prose copied between files (exact lines, and runs
-      of ${NEAR_COPY_WORDS} words after case and punctuation are dropped), files in
+      of ${NEAR_COPY_WORDS} words after case and punctuation are dropped, and paragraphs
+      whose word ${SIMILAR_GRAM}-grams are half contained in another's, shown not judged), files in
       another script, human pages over the word cap, links from active
       documents into the archive. Non-zero on a broken link or anchor, a
       copy, a wrong script, or a page over the cap.
