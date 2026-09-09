@@ -341,7 +341,9 @@ test('serve seats the budget, holds real sessions, relays a viewer, and refills 
     socket.on('data', (chunk) => { out += chunk; if (out.includes('allow? (y/N)') && !socket.answered) { socket.answered = true; socket.write('y\r'); } if (out.includes('report exit 0')) { socket.end(); resolve(out); } });
     socket.once('connect', () => socket.write(JSON.stringify({ attach: 'define-shape', cols: 100, rows: 30 }) + '\n'));
     socket.on('error', reject);
-    setTimeout(() => reject(new Error('viewer timed out\n' + out)), 15000);
+    // A loaded CI runner spawns the fixture tool's report processes slowly; sixty seconds
+    // still fails a hang, and one post-merge run on main timed out at fifteen (2026-09-09).
+    setTimeout(() => reject(new Error('viewer timed out\n' + out)), 60000);
   });
   assert.match(seen, /"ok":true/);
   assert.match(seen, /fixture tool · seat define-shape · task: Decide the response shape/);
