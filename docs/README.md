@@ -6,7 +6,7 @@ Current operating authority:
 - [Onboarding and human diagram](../skills/grove/README.md)
 - [Profile schema](../skills/grove/references/runtime-profile.md)
 - [Overlay contract](../skills/grove/references/overlay-contract.md)
-- [Dryad pattern](../skills/dryad/SKILL.md) and [profile, registry, CLI](../skills/dryad/README.md)
+- [Dryad pattern](../skills/dryad/SKILL.md) and [profile, registry, CLI](../skills/dryad/references/seats.md)
 - [Catalog machine backend](../infra/README.md)
 - [Catalog working rules](../AGENTS.md)
 

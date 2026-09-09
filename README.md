@@ -120,12 +120,12 @@ Model-invoked: a seat or a person reaches for these.
 | [understory](skills/understory/) | The story under the canopy: Forester's graph drawn and written up for people, a map that points rather than copies |
 | [mycelium](skills/mycelium/) | The facts under the forest: one append-only log of assertions per project, with time, confidence, domain, and provenance; workers propose, a person or the judge commits |
 
-User-invoked: only a person typing `/forester` reaches it; the plan is a
-person's ask.
+User-invoked: only a person typing the name reaches these.
 
 | Name | One line |
 | --- | --- |
-| [forester](skills/forester/) | Analyse the work into a plan, set how many run at once here, keep that many seated through Dryad; serve holds each seat's real session |
+| [forester](skills/forester/) | Grill the person, split the work into a plan, set how many run at once here, keep that many seated through Dryad; serve holds each seat's real session |
+| [clearing](skills/clearing/) | Stop and re-pitch where the work has got to, from the graph and the facts, in plain words |
 
 ## CLI
 
@@ -146,7 +146,7 @@ provisions a project's isolation units on that set. Without a link,
 `node infra/bin/cli.mjs …` works the same. There is no down command —
 stopping machine infra is a human decision because several projects live on it.
 
-`de-novo skills canopy [--port N] [--once]` shows read-only [Canopy worktree cards, skill activity, files and overlaps](skills/dryad/README.md#canopy).
+`de-novo skills canopy [--port N] [--once]` shows read-only [Canopy worktree cards, skill activity, files and overlaps](skills/dryad/references/seats.md#canopy).
 
 Engine table and ports: [`infra/README.md`](infra/README.md).
 Overlay lifecycle and cleanup contract:
@@ -160,13 +160,14 @@ LICENSE          MIT
 .claude-plugin/  plugin manifest and the repo's own marketplace entry
 .agents/         skill load adapter (symlinks into skills/), and this catalog's own
                  dryad-profile.yml and mycelium.yml (it seats its own workers)
-skills/          skill sources. add a skill as <name>/SKILL.md; README next to it for people,
-                 agents/openai.yaml beside it for the Codex picker
+skills/          skill sources. add a skill as <name>/SKILL.md; a short README next to it
+                 for people, references/ for the long facts, agents/openai.yaml for Codex
   grove/         shared ground: engines, names, overlays
   dryad/         seats on Grove's ground (no agent launch); Canopy is one of its verbs
   forester/      plan, budget, allocator over Dryad seats; serve holds sessions
   understory/    the work graph drawn and written up for people
   mycelium/      the assertion log: what the project holds true
+  clearing/      stop and re-pitch where the work is (reads the two above)
 infra/           machine-shared engines and the CLI (infra/bin/cli.mjs)
   lib/           one module per skill owns that skill's parse and rules
   bin/*.test.mjs the suite, including two sandbox arcs that seat a real worker

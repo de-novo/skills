@@ -22,7 +22,7 @@ This file owns the pattern. Values live in `.agents/dryad-profile.yml` next to
 Grove's `runtime-profile.yml`; with Grove present, Dryad reads the project
 slug and overlay mode from Grove's profile and keeps none of its own. A
 project without Grove declares only its slug and gets seats without envs. Schema and CLI reference:
-[README.md](README.md). Grove pattern: [grove](../grove/SKILL.md).
+[references/seats.md](references/seats.md). Grove pattern: [grove](../grove/SKILL.md).
 
 ## You are a dryad when
 
@@ -58,10 +58,19 @@ project has no overlays. If `DRYAD_ID` is unset, this section does not apply.
 Completion is your report, not your process exit. A seat with no `done`
 report is not done.
 
+**Your done report is a handoff.** The next reader is a fresh agent or a
+person who was not here, so the note says what now works and what is open,
+in the fewest words that let them continue. Do not repeat what already
+lives in a commit, a PR, a spec, or the plan; name it by path or id. A fact
+that outlives the seat (a locked decision, a verified cause, an approach
+that failed) is not a note: propose it to Mycelium when the project has
+the log (Call the Skill tool with "mycelium"), and let the note carry the
+id. Redact any secret before it reaches the journal.
+
 ## Seating others
 
 Before planning a seat, write a brief the worker can complete independently.
-Use [Writing a seat brief](README.md#writing-a-seat-brief) for its shape,
+Use [Writing a seat brief](references/seats.md#writing-a-seat-brief) for its shape,
 rejection checks, and examples. It points back to the worker rules above for
 reporting and completion; a task does not replace those rules.
 

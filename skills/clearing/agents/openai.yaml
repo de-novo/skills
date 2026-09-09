@@ -1,0 +1,5 @@
+interface:
+  display_name: "Clearing"
+  short_description: "Re-pitch where the work has got to"
+policy:
+  allow_implicit_invocation: false

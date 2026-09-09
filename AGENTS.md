@@ -25,13 +25,13 @@ Remote: `git@github.com:de-novo/skills.git`. CLI: `de-novo skills` (alias `de-no
 | Machine infra commands | `de-novo skills infra` (`infra/bin/cli.mjs`) |
 | CLI | `infra/bin/cli.mjs` |
 | Profile parse + invariants | `infra/lib/profile.mjs` only |
-| Dryad profile schema + CLI | `skills/dryad/README.md` |
+| Dryad profile schema + CLI | `skills/dryad/references/seats.md` |
 | Dryad profile parse + seat registry | `infra/lib/dryad.mjs` only |
-| Forester plan schema + CLI | `skills/forester/README.md` |
+| Forester plan schema + CLI | `skills/forester/references/plan.md` |
 | Forester plan parse + allocation rule | `infra/lib/forester.mjs` only |
-| Understory document shape | `skills/understory/SKILL.md` |
+| Understory document shape | `skills/understory/references/document.md` |
 | Understory graph + reading lines | `infra/lib/understory.mjs` only |
-| Mycelium envelope, transitions, CLI | `skills/mycelium/README.md` |
+| Mycelium envelope, transitions, CLI | `skills/mycelium/references/log.md` |
 | Mycelium log fold + conflict rule | `infra/lib/mycelium.mjs` only |
 | Hostname render | `infra/lib/addressing.mjs` |
 | How to work in this catalog | this file |

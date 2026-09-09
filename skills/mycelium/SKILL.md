@@ -24,7 +24,7 @@ so a worker seated tomorrow starts from what was proven today instead of
 from the chat that proved it.
 
 This file owns the pattern. The envelope, the transitions, the query, and
-the CLI are in [README.md](README.md). Forester pattern:
+the CLI are in [references/log.md](references/log.md). Forester pattern:
 [forester](../forester/SKILL.md). Seats: [dryad](../dryad/SKILL.md).
 
 ## Two graphs, one seam
@@ -52,7 +52,7 @@ the moment it held stays answerable. Nothing is ever edited in place.
 
 **Every line names its writer.** A seat standing in its own worktree is
 `seat:<id>` without saying so; a person or a judging agent passes `--by`.
-The id is a declaration the project trusts, not a login; the README says
+The id is a declaration the project trusts, not a login; the reference says
 what that means on a shared machine.
 
 ## Write
@@ -62,7 +62,7 @@ When your work produces a fact worth keeping:
 1. **Ask whether it outlives you.** A locked decision, a verified cause, a
    dependency between lanes, a blocker, a check's pass or fail, an approach
    tried and failed: yes. A file hunk, a build log, a heartbeat, a chat
-   turn: no. The full list is the README's commit rules.
+   turn: no. The full list is the reference's commit rules.
 2. **Propose it in the envelope.** Subject, predicate, object, the subject's
    type, the domain, the source you read it from, and your confidence.
    The domain, the types, and the predicate must already be in

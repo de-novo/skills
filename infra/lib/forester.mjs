@@ -7,7 +7,7 @@
 // Values live in the consuming project:
 //   .agents/forester-plan.yml    the items (tracked)
 //   .agents/forester.local.yml   this machine's budget (gitignored)
-// Pattern lives in skills/forester/SKILL.md. Fields in skills/forester/README.md.
+// Pattern lives in skills/forester/SKILL.md. Fields in skills/forester/references/plan.md.
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from 'yaml';

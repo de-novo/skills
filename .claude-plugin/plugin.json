@@ -17,10 +17,11 @@
     "assertions"
   ],
   "skills": [
-    "./skills/grove",
+    "./skills/clearing",
     "./skills/dryad",
     "./skills/forester",
-    "./skills/understory",
-    "./skills/mycelium"
+    "./skills/grove",
+    "./skills/mycelium",
+    "./skills/understory"
   ]
 }

@@ -18,16 +18,42 @@ The CLI is a pure function of three inputs: the plan, the Dryad seats, and
 the budget. The same inputs give the same assignment every time.
 
 This file owns the pattern. The fields, the allocation rule, and the CLI are
-in [README.md](README.md). Dryad pattern: [dryad](../dryad/SKILL.md).
+in [references/plan.md](references/plan.md). Dryad pattern: [dryad](../dryad/SKILL.md).
+
+## Grill first
+
+Nobody knows exactly what they want. Before any item exists, interview the
+person until the two of you hold the same picture. Work it as a **design
+tree**: every decision branches into the decisions that hang off it. The
+**frontier** is every question whose prerequisites are already answered.
+Ask the whole frontier in one round, numbered, each with your recommended
+answer, then wait. A round with one question is a round; a round that
+guesses at an answer it has not heard is not.
+
+```
+Q1  <title>: <the question, with the choices if there are some>
+    → <your recommended answer, and why in one line>
+```
+
+Stop when the frontier is empty: no open question remains whose answer
+would change an item, a claim, or an edge. A locked decision is a fact
+worth keeping: propose it to Mycelium as a `decision` when the project has
+the log (Call the Skill tool with "mycelium").
 
 ## Analyse the work
 
-You write the plan. The CLI reads it. When a person hands you a goal:
+You write the plan. The CLI reads it. When the grilling is done:
 
 1. **Split it into items a single worker can finish alone**, each with one
-   task line that a stranger could start from. An item is too big when its
-   task line needs "and". It is too small when its worktree would hold one
-   trivial change.
+   task line that a stranger could start from. An item is a **vertical
+   slice**: a narrow but complete path through every layer it touches, so a
+   finished item is demoable or verifiable on its own, never one layer of
+   something bigger. Size each to one fresh context window. An item is too
+   big when its task line needs "and". It is too small when its worktree
+   would hold one trivial change. A **wide refactor** (one mechanical change
+   whose blast radius is the whole codebase) is the exception: sequence it
+   as expand, then migrate in batches sized by blast radius, then contract,
+   each batch an item blocked by the expand.
 2. **Name what each item will touch** in `owns`, as paths or globs. This is
    a claim, not a lock: the allocator refuses to run two items whose claims
    intersect, and nothing else enforces it. Claim what you honestly expect
@@ -42,7 +68,12 @@ You write the plan. The CLI reads it. When a person hands you a goal:
 5. Give `retry.max_attempts` above one only to an item whose failure is
    likely to be the worker's, not the plan's.
 
-Write the result to `.agents/forester-plan.yml`, validate it with
+6. **Quiz the person before writing the file.** Show the items as a
+   numbered list: title, blocked by, what it delivers end to end. Ask three
+   things: is the granularity right, does each edge gate what it says it
+   gates, should any item be merged or split. Iterate until they say yes.
+
+Then write `.agents/forester-plan.yml`, validate it with
 `de-novo skills forester plan`, and show the person the printed graph before
 anything is assigned. The first evidence that a plan is good is that a
 person can read that output and know what is happening.

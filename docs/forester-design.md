@@ -298,7 +298,7 @@ What this settles for Forester:
   sessions in the playground sandbox, every prompt answered through the
   socket, both items committed and done in 74 s: [evidence](evidence/2026-09-08-forester.md).
   `npm test` 245/245, 9 more guards seen red. Session states and the local
-  file's `tools` are owned by `skills/forester/README.md`.
+  file's `tools` are owned by `skills/forester/references/plan.md`.
 - **2026-09-08, third round.** `infra/lib/forester-hooks.mjs` owns `hooks`:
   one marked entry per event in the hook store of every tool found on the
   machine (Codex, Grok, Cursor, OpenCode), gated on `FORESTER_EVENTS` so it
