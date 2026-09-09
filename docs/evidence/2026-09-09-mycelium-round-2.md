@@ -78,7 +78,7 @@ next, with the tests that went red:
 | `many` predicate treated as `one` | 1 |
 | predicate removed after the proposal, at commit | 1 |
 | the lock around every write | 1 |
-| report status matched by prefix (`done-ish` counted as done) | 0, then 1 after the test's fixture string was found to carry a non-ASCII letter and was corrected |
+| report status matched by prefix (`done-ish` counted as done) | 0, then 1 after the test's fixture string was found to carry a non-ASCII letter (Cyrillic ie, U+0435, in place of `e`) and was corrected |
 | `--since` on `changed_at` instead of `tx_at` | 1 |
 | trace in chain order instead of clock order | 1 |
 | Understory listing staging facts as proven | 1 |
@@ -90,8 +90,8 @@ proposers racing leave twelve whole lines. Full suite `npm test`: 264/264.
 ## Found on the way
 
 - A `done-ish` fixture line meant to prove the status match is exact
-  carried a Cyrillic `е`, so the guard could not fail. Corrected; the
-  guard then went red on revert.
+  carried a Cyrillic ie (U+0435) where an `e` belonged, so the guard could
+  not fail. Corrected; the guard then went red on revert.
 - `trace` first ordered by `tx_at`; two lines written in the same
   millisecond came out in the wrong order. Now ordered by chain depth,
   then time.

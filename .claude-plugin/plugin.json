@@ -21,6 +21,7 @@
     "./skills/dryad",
     "./skills/forester",
     "./skills/grove",
+    "./skills/herbarium",
     "./skills/mycelium",
     "./skills/understory"
   ]

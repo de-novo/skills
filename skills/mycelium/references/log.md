@@ -130,7 +130,10 @@ What a person or the judge promotes, and what stays out of the log.
 
 Kept:
 
-- A locked design decision or constraint.
+- A locked design decision or constraint, when all three hold: it is hard
+  to reverse, a later reader would wonder why without it, and there was a
+  real alternative. An easy reversal will just be reversed; an obvious
+  choice needs no record; no alternative means nothing to explain.
 - A sprint goal, a definition of done, a ticket's state change.
 - A verified cause of a bug, and a regression risk.
 - A dependency or a blocker between lanes.

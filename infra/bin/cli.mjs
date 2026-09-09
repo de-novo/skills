@@ -37,6 +37,7 @@ import { runCanopy } from '../lib/canopy.mjs';
 import { foresterHelp, parseForesterCliArgs, runForester } from '../lib/forester.mjs';
 import { parseUnderstoryCliArgs, runUnderstory, understoryHelp } from '../lib/understory.mjs';
 import { myceliumHelp, parseMyceliumCliArgs, runMycelium } from '../lib/mycelium.mjs';
+import { herbariumHelp, parseHerbariumCliArgs, runHerbarium } from '../lib/herbarium.mjs';
 import { guardPlaygroundInvocation, runPlayground } from '../lib/playground.mjs';
 import {
   COMPOSE_FILE,
@@ -247,6 +248,15 @@ function cmdMycelium(args) {
   return runMycelium({ options });
 }
 
+function cmdHerbarium(args) {
+  const options = parseHerbariumCliArgs(args);
+  if (options.help) {
+    console.log(herbariumHelp(CLI));
+    return 0;
+  }
+  return runHerbarium({ options });
+}
+
 function cmdOverlay(args) {
   const options = parseOverlayCliArgs(args);
   if (options.help) {
@@ -439,6 +449,7 @@ project:
   ${CLI} forester <verb> ...           plan/next/assign/status — keep this machine's slots full through Dryad seats
   ${CLI} understory graph|reading      Forester's graph as a Mermaid flowchart, and one readable line per item
   ${CLI} mycelium <verb> ...           propose/commit/invalidate/query/status — the project's assertion log
+  ${CLI} herbarium check               links, copies, script, page length over the project's documents
 
 local overview:
   ${CLI} canopy [--port N] [--once]    read-only dashboard at 127.0.0.1:7420; --once prints JSON
@@ -493,6 +504,8 @@ function main(argv) {
       return cmdUnderstory(rest);
     case 'mycelium':
       return cmdMycelium(rest);
+    case 'herbarium':
+      return cmdHerbarium(rest);
     case 'canopy':
       return runCanopy(rest);
     case 'infra':

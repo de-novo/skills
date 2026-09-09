@@ -119,6 +119,7 @@ Model-invoked: a seat or a person reaches for these.
 | [dryad](skills/dryad/) | One seat per worker on that ground: worktree, overlay env, task. No agent launch |
 | [understory](skills/understory/) | The story under the canopy: Forester's graph drawn and written up for people, a map that points rather than copies |
 | [mycelium](skills/mycelium/) | The facts under the forest: one append-only log of assertions per project, with time, confidence, domain, and provenance; workers propose, a person or the judge commits |
+| [herbarium](skills/herbarium/) | Every document has one house and the rest point at it; `check` counts broken links, copied prose, wrong script, and pages over the cap |
 
 User-invoked: only a person typing the name reaches these.
 
@@ -168,6 +169,7 @@ skills/          skill sources. add a skill as <name>/SKILL.md; a short README n
   understory/    the work graph drawn and written up for people
   mycelium/      the assertion log: what the project holds true
   clearing/      stop and re-pitch where the work is (reads the two above)
+  herbarium/     where each document lives and how it is written; check counts what drifts
 infra/           machine-shared engines and the CLI (infra/bin/cli.mjs)
   lib/           one module per skill owns that skill's parse and rules
   bin/*.test.mjs the suite, including two sandbox arcs that seat a real worker
