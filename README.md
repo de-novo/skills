@@ -36,6 +36,59 @@ The source of truth for each skill is `skills/<name>/SKILL.md`. Human docs sit n
 
 Agents working in this catalog: [`AGENTS.md`](AGENTS.md). Skill load paths: [`.agents/`](.agents/).
 
+## How the skills fit
+
+Five skills, one machine, one direction of flow. Each owns one kind of fact
+and one file; none restates another's.
+
+```
+                  a goal, and a person
+                          │
+                          ▼
+   Forester      the plan: items, dependencies, file claims, a budget
+                 .agents/forester-plan.yml (tracked) · forester.local.yml (this machine)
+                          │ assign: one item → one seat
+                          ▼
+   Dryad         one seat per worker: a worktree, an overlay env, a task, a journal
+                 .agents/dryad-profile.yml · <state>/dryads/<slug>.yml
+                          │ stands on                         ▲ report done / blocked
+                          ▼                                   │
+   Grove         shared ground: machine engines, names not ports, thin overlays
+                 .agents/runtime-profile.yml · infra/ (this catalog's backend)
+                                                              │
+   Mycelium      the facts: seats propose, a judge commits; time, confidence, source
+                 .agents/mycelium.yml · <state>/mycelium/<slug>.jsonl  (append-only)
+
+   Canopy        the live screen: seats, sessions, files that overlap   (reads Dryad + Forester JSON)
+   Understory    the written record: the graph drawn, one line per item, facts pointed at
+```
+
+| Skill | Answers | Writes | Reads | Never does |
+| --- | --- | --- | --- | --- |
+| [grove](skills/grove/) | where does this project run on this machine | engines, overlay envs, names | the runtime profile | choose a port, stop shared engines |
+| [dryad](skills/dryad/) | who sits where, on what task, and what did they report | a seat's worktree, env, journal | Grove's report | launch an agent, merge, order the work |
+| [forester](skills/forester/) | what is the work, what may start now, how many at once | the plan (an agent writes it), seats through Dryad | the plan, the seats, the budget | call a model, hold world facts |
+| [mycelium](skills/mycelium/) | what does the project hold true, since when, on whose word | one log line per propose, commit, invalidate | the log, a seat's report (read-only seam) | judge, write the plan, touch a seat |
+| [understory](skills/understory/) | can a person who was not here read the work | the document (an agent writes the prose) | Forester's graph, Mycelium's ids | draw by hand, restate a fact |
+
+Canopy is a verb of Dryad's CLI (`de-novo skills canopy`), not a skill: a
+read-only screen over the same JSON the other verbs print.
+
+**The seams are one-way.** Forester assigns into Dryad and reads Dryad's
+reports back; Mycelium reads a seat's done or blocked report and never
+writes a seat; Understory reads Forester's graph and Mycelium's fact ids and
+writes only prose. No skill reaches around another to its file.
+
+**Two graphs, kept apart.** Forester's graph is the work: items and their
+five states. Mycelium's graph is what the work found out: assertions with a
+valid interval, transaction time, confidence, domain, and writer. The plan
+file never holds a world fact; the log never holds an assignment. The only
+seam is `propose --from-seat`. Reasons: [`docs/mycelium-design.md`](docs/mycelium-design.md).
+
+**Not in any skill.** Launching agents (a person picks the launcher: a
+terminal, a worktree app, tmux, an ACP client); merging; browser QA and e2e;
+stopping machine infra. Those are a person's, by decision.
+
 ## Skills
 
 | Name | One line |
@@ -56,7 +109,8 @@ npm install && npm link
 ```
 
 Then consuming projects call `de-novo skills infra status` (and `infra up`,
-`setup`, `init`, `validate`, `urls`, `overlay`, `dryad`). Projects choosing this machine
+`setup`, `init`, `validate`, `urls`, `overlay`, `dryad`, `forester`,
+`understory`, `mycelium`). Projects choosing this machine
 backend do not copy its `infra/` directory; projects choosing another backend
 keep their own operating procedure. `de-novo-skills` is an alias without the `skills`
 token. Machine engines are Grove-central (`infra` next to this CLI). `setup`
@@ -74,14 +128,21 @@ Overlay lifecycle and cleanup contract:
 
 ```
 AGENTS.md        how agents work in this catalog
-.agents/         skill load adapter (symlinks into skills/)
-skills/          skill sources. add a skill as <name>/SKILL.md
-  grove/         first skill
-  dryad/         seats on Grove's ground (no agent launch)
-infra/           machine-shared engines Grove uses
+.agents/         skill load adapter (symlinks into skills/), and this catalog's own
+                 dryad-profile.yml and mycelium.yml (it seats its own workers)
+skills/          skill sources. add a skill as <name>/SKILL.md; README next to it for people
+  grove/         shared ground: engines, names, overlays
+  dryad/         seats on Grove's ground (no agent launch); Canopy is one of its verbs
+  forester/      plan, budget, allocator over Dryad seats; serve holds sessions
+  understory/    the work graph drawn and written up for people
+  mycelium/      the assertion log: what the project holds true
+infra/           machine-shared engines and the CLI (infra/bin/cli.mjs)
+  lib/           one module per skill owns that skill's parse and rules
+  bin/*.test.mjs the suite, including two sandbox arcs that seat a real worker
   addressing.yml this checkout's TLD and hostname scheme
   docker-compose.yml engine catalog (profile = engine id)
-docs/            documentation index + archived designs
+playground/      the sample project the sandbox arcs copy out and throw away
+docs/            documentation index, design notes, dated evidence, archived designs
 ```
 
 Documentation index and historical designs: [docs/README.md](docs/README.md).
