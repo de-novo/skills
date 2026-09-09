@@ -21,6 +21,7 @@ import { fileURLToPath } from 'node:url';
 import { parse, stringify } from 'yaml';
 
 import { parseProfile } from './profile.mjs';
+import { claudeSettings, seatActivity, seatEventsDirectory, seatEventsPath, seatSettingsPath } from './seat-events.mjs';
 
 export const DRYAD_PROFILE_RELPATH = '.agents/dryad-profile.yml';
 const RUNTIME_PROFILE_RELPATH = '.agents/runtime-profile.yml';
@@ -876,6 +877,7 @@ function runPlan({ options, project, environment, cwd }) {
     current.seats[options.id] = record;
     return record;
   });
+  prepareSeatEvents(project.slug, options.id, environment);
 
   const movedFrom = recordProjectRoot(project.slug, project.root, environment);
   if (movedFrom != null) {
@@ -899,14 +901,37 @@ function runPlan({ options, project, environment, cwd }) {
   return 0;
 }
 
-function seatEnvironment(seat, id, project) {
+// The seat's environment for whatever launches the worker. DRYAD_EVENTS is
+// the file the tool's hooks append to, so the seat's state and what it is
+// doing can be read by anyone (dryad status, Canopy, Understory) whoever
+// launched it; DRYAD_CLAUDE_SETTINGS is the hooks file a Claude Code
+// launcher passes as --settings.
+export function seatEnvironment(seat, id, project, environment = process.env) {
   return {
     DRYAD_ID: id,
     DRYAD_ENV: seat.env == null || seat.env === 'pending' ? '' : seat.env,
     DRYAD_BRANCH: seat.branch,
     DRYAD_PROJECT: project.root,
     DRYAD_SKILL: SKILL_PATH,
+    DRYAD_EVENTS: seatEventsPath(project.slug, id, environment),
+    DRYAD_CLAUDE_SETTINGS: seatSettingsPath(project.slug, id, environment),
   };
+}
+
+// plan --apply lays the events file and the Claude settings beside the
+// registry; finish removes them with the seat.
+export function prepareSeatEvents(slug, id, environment = process.env) {
+  mkdirSync(seatEventsDirectory(slug, environment), { recursive: true, mode: 0o700 });
+  const events = seatEventsPath(slug, id, environment);
+  writeFileSync(events, '');
+  writeFileSync(seatSettingsPath(slug, id, environment), JSON.stringify(claudeSettings(events), null, 2));
+  return events;
+}
+
+export function removeSeatEvents(slug, id, environment = process.env) {
+  for (const file of [seatEventsPath(slug, id, environment), seatSettingsPath(slug, id, environment)]) {
+    try { unlinkSync(file); } catch {}
+  }
 }
 
 function shellQuote(value) {
@@ -917,7 +942,7 @@ function runSeat({ options, project, environment }) {
   const { state } = readDryadState(project.slug, environment);
   const seat = seatOf(state, options.id);
   const present = existsSync(seat.worktree);
-  const envVars = seatEnvironment(seat, options.id, project);
+  const envVars = seatEnvironment(seat, options.id, project, environment);
   switch (options.format) {
     case 'json':
       console.log(
@@ -1052,7 +1077,7 @@ function runStatus({ options, project, environment }) {
       hostnames = probe.hostnames.map((row) => ({ ...row, attached: live?.has(row.service) ?? false }));
       if (probe.error != null) problems.push(`${id}: ${probe.error}`);
     }
-    return { id, seat, present, ahead, envState, hostnames, changes, paths };
+    return { id, seat, present, ahead, envState, hostnames, changes, paths, activity: seatActivity(project.slug, id, environment) };
   });
   if (options.id == null && tracked != null) {
     const seated = new Set(entries.map(([, seat]) => seat.env).filter(Boolean));
@@ -1095,6 +1120,7 @@ function runStatus({ options, project, environment }) {
             status: row.seat.status,
             by: row.seat.by,
             session: row.seat.session,
+            activity: row.activity,
             journal: row.seat.journal,
           })),
         },
@@ -1123,7 +1149,7 @@ function runStatus({ options, project, environment }) {
     const last = row.seat.journal.at(-1);
     const note = row.seat.status === 'blocked' && last?.detail?.includes(': ') ? `  "${last.detail.split(': ').slice(1).join(': ')}"` : '';
     lines.push(
-      `  ${row.id}  ${row.seat.branch}  ${row.present ? `+${row.ahead ?? '?'}` : 'missing'}  ${envLabel}  ${row.seat.status}${row.seat.by ? '  by ' + row.seat.by : ''}${note}`
+      `  ${row.id}  ${row.seat.branch}  ${row.present ? `+${row.ahead ?? '?'}` : 'missing'}  ${envLabel}  ${row.seat.status}${row.seat.by ? '  by ' + row.seat.by : ''}${note}${row.activity?.doing ? `  · now ${row.activity.doing}` : row.activity?.state ? `  · session ${row.activity.state}` : ''}`
     );
   }
   for (const item of overlaps) lines.push(`  overlap  ${item.path}  ${item.seats.join(' · ')}`);
@@ -1192,6 +1218,7 @@ function runFinish({ options, project, environment }) {
     const record = seatOf(current, options.id);
     journal(record, 'dryad', 'finish', `env ${envResult}; worktree ${worktreeResult}; branch kept ${seat.branch}`);
     archiveFinishedSeat(project.slug, environment, options.id, record);
+    removeSeatEvents(project.slug, options.id, environment);
     delete current.seats[options.id];
   });
   console.log(

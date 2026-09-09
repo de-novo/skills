@@ -325,7 +325,7 @@ test('serve seats the budget, holds real sessions, relays a viewer, and refills 
   });
   const snapshot = path.join(f.root, 'state', 'foresters', 'forester-test.yml');
   // A previous session's last event must not become this session's state.
-  const staleEvents = path.join(f.root, 'state', 'foresters', 'forester-test', 'define-shape.events');
+  const staleEvents = path.join(f.root, 'state/dryads/events/forester-test/define-shape.events');
   mkdirSync(path.dirname(staleEvents), { recursive: true });
   writeFileSync(staleEvents, '{"hook_event_name":"SessionEnd"}\n');
   const serve = spawn(process.execPath, [CLI, 'forester', 'serve', '--project', f.baseline], { env: { ...f.environment, FORESTER_POLL_MS: '300' }, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -414,7 +414,7 @@ test('hooks installs one marked entry per event in each tool store, keeps the pe
   assert.match(cursor.hooks.beforeSubmitPrompt[0].command, /"hook_event_name":"UserPromptSubmit"/);
   const codex = JSON.parse(readFileSync(path.join(home, '.codex/hooks.json'), 'utf8'));
   assert.equal(codex.hooks.Stop[0].hooks[0].command, 'theirs');
-  assert.match(codex.hooks.Stop[1].hooks[0].command, /cat >> "\$FORESTER_EVENTS"/);
+  assert.match(codex.hooks.Stop[1].hooks[0].command, /cat >> "\$E"/);
   assert.deepEqual(Object.keys(codex.hooks), ['Stop', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PermissionRequest']);
   const grok = JSON.parse(readFileSync(path.join(home, '.grok/hooks/de-novo-forester.json'), 'utf8'));
   assert.deepEqual(Object.keys(grok.hooks), ['UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop', 'StopFailure', 'SessionEnd', 'Notification']);
@@ -436,6 +436,12 @@ test('hooks installs one marked entry per event in each tool store, keeps the pe
     const overridden = path.join(home, 'override/foresters/slug/w1.events');
     spawnSync('sh', ['-c', command], { input: '{"hook_event_name":"Stop"}', env: { PATH: process.env.PATH, HOME: home, GROVE_STATE_DIR: path.join(home, 'override'), FORESTER_EVENTS: overridden }, encoding: 'utf8' });
     assert.match(readFileSync(overridden, 'utf8'), /"hook_event_name":"Stop"/, 'GROVE_STATE_DIR moves the allowed root with it');
+    // A seat's own events file (DRYAD_EVENTS) is the first address, whoever launched the tool.
+    mkdirSync(path.join(home, '.dev-infra/dryads/events/slug'), { recursive: true });
+    const seatFile = path.join(home, '.dev-infra/dryads/events/slug/w1.events');
+    spawnSync('sh', ['-c', command], { input: '{"hook_event_name":"Stop"}', env: { PATH: process.env.PATH, HOME: home, DRYAD_EVENTS: seatFile, FORESTER_EVENTS: outside }, encoding: 'utf8' });
+    assert.match(readFileSync(seatFile, 'utf8'), /"hook_event_name":"Stop"/, 'DRYAD_EVENTS wins and its root is allowed');
+    assert.equal(existsSync(outside), false);
   }
 
   // Idempotent: a second apply changes nothing; a remove takes back only ours.
