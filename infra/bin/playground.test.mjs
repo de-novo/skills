@@ -274,3 +274,25 @@ test('the machine registry check reads paths, not prose', async t => {
   // The live sandbox is still absent from the real machine registry.
   assert.deepEqual(status(data.sandbox, f.env(data.sandbox)).machine, { dryad: [], overlays: [] });
 });
+
+// A Dryad seat is a worktree at <sandbox>/seats/<id>; the sample's tools run
+// from there with the same GROVE_STATE_DIR. Two seats in the notes pilot
+// (2026-09-09) were refused by tools/build.mjs because the sandbox root was
+// taken from the file's parent directory, which for a seat is `seats`. The
+// root now comes from the marker the seat's worktree carries.
+test('the sample tools resolve the sandbox root from a seat worktree, so a seat builds its own image', async t => {
+  const f = fixture(t);
+  const sandbox = path.join(f.root, 'seat-build');
+  const data = await up(sandbox, { environment });
+  t.after(async () => { if (existsSync(path.join(sandbox, 'run/sandbox.json'))) await down(sandbox, f.env(sandbox)); });
+  const env = { ...f.env(sandbox), DRYAD_PROJECT: data.project };
+  const plan = spawnSync(process.execPath, [cli, 'dryad', 'plan', 'w1', '--project', data.project, '--task', 'build from a seat', '--by', 'test', '--apply'], { env, cwd: catalog, encoding: 'utf8' });
+  assert.equal(plan.status, 0, plan.stderr);
+  const seat = path.join(data.seats, 'w1');
+  assert.equal(existsSync(path.join(seat, '.agents/playground.json')), true, 'the seat worktree carries the marker');
+  const build = spawnSync(process.execPath, ['tools/build.mjs', 'api'], { cwd: seat, env, encoding: 'utf8' });
+  assert.equal(build.status, 0, `${build.stderr}${build.stdout}`);
+  const sha = git(seat, ['rev-parse', 'HEAD']);
+  assert.equal(existsSync(path.join(sandbox, 'run/images/api', sha)), true, 'the image landed under the sandbox, not under seats/');
+  assert.equal(existsSync(path.join(data.seats, 'run')), false, 'nothing was written beside the seats');
+});
