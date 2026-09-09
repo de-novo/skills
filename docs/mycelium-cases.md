@@ -75,7 +75,7 @@ Evidence sources:
 | --- | --- | --- | --- |
 | C1 | An item reports done | `propose --from-seat` reads the last done report | measured |
 | C2 | An item reports blocked | round 2: `--from-seat ID --report blocked` | measured |
-| C3 | An item is retried; a later seat has the same id | implementation searches the finished archive in reverse order before the live record; retry precedence has no dedicated test | gap |
+| C3 | An item is retried; a later seat has the same id | the live seat answers first, then archived records newest first; the review that found the reversed order also got the test that holds it | tested |
 | C4 | A dependency or blocker between lanes | a fact with `o_type` set on a `many` predicate | measured |
 | C5 | A local check passed or failed | a `check` fact, one line, no output | measured |
 | C6 | A new seat's brief should start from the facts | round 2: `query --brief` prints the block a Dryad brief takes | measured |
@@ -119,9 +119,7 @@ Evidence sources:
 
 ## Remaining limits and verification
 
-A8 has no scheduled expiry input. C3 needs a dedicated retry-precedence
-check before readers can rely on which reused seat record supplies a
-report. Agent judging (B4) has no recorded agent execution. Self-commit
+A8 has no scheduled expiry input. C3's precedence is now tested. Agent judging (B4) has no recorded agent execution. Self-commit
 (B6) and declared identity (B10) rely on project trust; adding another
 judge alone does not enforce independent review. C8 remains a manual
 workflow. E4–E6 leave large logs, multiple machines, and format migration
