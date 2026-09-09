@@ -159,6 +159,20 @@ test('the arc: a seat proposes from its worktree, a judge commits, the reads ans
   assert.ok(lines.every((line) => JSON.parse(line).v === 1));
   assert.equal(existsSync(`${status.file}.lock`), false);
 
+  // Herbarium: the sample's own documents pass a first check, and a copied
+  // paragraph in a seat's README is counted at the project root.
+  writeFileSync(path.join(project, '.agents/herbarium.yml'), 'version: 1\nlanguage: en\npublic: ["**/*.md"]\npages:\n  globs: [README.md]\n  max_words: 450\nignore: [".agents/skills/**", ".claude/**", "app/**", "run/**"]\n');
+  const paragraph = 'The sample has one api, one web page, and one router; every listener binds port zero and reports what the kernel gave it, so no port is ever chosen in advance.';
+  writeFileSync(path.join(project, 'README.md'), `# Sample\n\n${paragraph}\n\nPlan: [forester](.agents/forester-plan.yml).\n`);
+  const first = run(['herbarium', 'check', '--project', project]);
+  assert.equal(first.status, 0, first.stdout);
+  assert.match(first.stdout, /links     1\/1 resolve/);
+  assert.match(first.stdout, /copies    0 exact · 0 near/);
+  writeFileSync(path.join(project, 'docs-copy.md'), `# Copy\n\n${paragraph}\n`);
+  const second = run(['herbarium', 'check', '--project', project]);
+  assert.equal(second.status, 1);
+  assert.match(second.stdout, /copies    [1-9]/);
+
   // F1: down, and the machine state never learned the sandbox's name.
   const out = await down(f.sandbox, f.env);
   assert.equal(out.removed, true);

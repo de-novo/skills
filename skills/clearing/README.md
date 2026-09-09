@@ -11,9 +11,9 @@ they do not hold.
 
 ## When to reach for it
 
-You type `/clearing`; the agent does not reach for it on its own. Reach for
-it when you have lost the thread of a long session, or when a new person
-joins mid-work. For the written record instead, use
+Only a person types `/clearing`; no agent fires it. The moment is when you
+have lost the thread of a long session, or when a new person joins
+mid-work. For the written record instead, use
 [understory](../understory/README.md).
 
 ## It's working if

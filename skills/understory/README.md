@@ -18,9 +18,10 @@ document links to it; what the document owns is the reading.
 
 ## When to reach for it
 
-A person asks for a shared document, a write-up, a map, or a status page of
-the work graph; or an agent reaches for it when a sprint needs a record.
-For the live screen instead, use Canopy (`de-novo skills canopy`).
+Someone wants the work graph as a page they can hand to a colleague, or a
+sprint has ended and needs its record; an agent reaches for it then, and a
+person types `/understory`. For the live screen instead, use Canopy
+(`de-novo skills canopy`).
 
 ## It's working if
 

@@ -74,4 +74,7 @@ last test runs `check` on this catalog itself, so the suite fails when the
 catalog's own documents drift. Reverting a count turns its test red. The
 real boundary for this round is that first run on the catalog: two true
 findings (one wrong-script file, one page over the cap for the wrong
-reason), both fixed, then zero.
+reason), both fixed, then zero. The second round's record, including six
+near copies the stricter check found in the catalog's own documents and a
+Codex session that reached for the skill without being told its name, is
+[evidence/2026-09-09-herbarium.md](evidence/2026-09-09-herbarium.md).

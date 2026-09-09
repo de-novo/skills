@@ -150,9 +150,9 @@ command by hand. The daemon is an optional verb, not the only way to refill.
 - **The project's budget wins; the local one is the fallback.** A committed
   `parallel` is followed as written. The local file is never committed and is
   read only when the plan sets none.
-- **A claim is not a lock.** `owns` constrains allocation, not the filesystem.
-- **Order is declared, not inferred.** No priority model, no estimate-based
-  scheduling.
+- The claim and ordering invariants (a claim is not a lock; order is
+  declared, not inferred) are stated once, in the skill's own invariants
+  section, and not repeated here.
 
 ## Not this
 
@@ -323,7 +323,7 @@ What this settles for Forester:
 | Local file | The budget file is gitignored, and no budget anywhere is an error rather than a silent default |
 | End to end | A real plan run in the playground sandbox, seats created by `assign --apply`, workers seated, the budget refilled after a completion |
 
-Revert each guard once to see red, and record how many went red.
+Guards are seen red the way the catalog's working rules require.
 
 ## First evidence to collect
 

@@ -408,9 +408,12 @@ export function seatReport(slug, seatId, status = 'done', environment = process.
   const { state } = readDryadState(slug, environment);
   const live = state.seats[seatId];
   const finished = readDryadFinished(slug, environment).seats.filter((seat) => seat.id === seatId);
-  const candidates = [live, ...finished].filter(Boolean);
+  // The live seat is the newest record; archived records follow, newest
+  // first. A report from a retried item's earlier seat must not outrank
+  // the seat that is working now.
+  const candidates = [live, ...finished.slice().reverse()].filter(Boolean);
   if (candidates.length === 0) fail(`seat ${seatId}: not in the registry or the finished archive of ${slug}.`);
-  for (const seat of candidates.reverse()) {
+  for (const seat of candidates) {
     const report = [...(seat.journal ?? [])].reverse().find((line) => line.event === 'report' && typeof line.detail === 'string' && (line.detail === status || line.detail.startsWith(`${status}:`)));
     if (report) return { at: report.at, detail: report.detail, by: seat.by ?? null };
   }
