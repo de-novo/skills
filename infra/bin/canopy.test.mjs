@@ -258,3 +258,44 @@ test('a long report note is cut on the card and never printed twice in one card'
   assert.equal((html.match(/NOTEMARK/g) ?? []).length, 1, 'the same note is not repeated on one card');
 
 });
+
+test('/chat/<slug>/<id> renders the seat\'s transcript as turns, escaped, and refuses a seat or transcript that is not there', async (t) => {
+  const f = fixture(t);
+  const server = await startCanopy({ ...f, port: 0 });
+  t.after(() => closeServer(server));
+  const url = `http://127.0.0.1:${server.address().port}`;
+  // Before any tool has named a transcript, the seat has no chat and the card has no link.
+  assert.equal((await fetch(url + '/chat/canopy-0/w1')).status, 404);
+  assert.doesNotMatch((await (await fetch(url)).text()).split('<script>')[0], /href="\/chat\//);
+  // A Claude Code transcript, as the tool writes it, and an events file that names it.
+  const transcript = path.join(f.root, 'w1.jsonl');
+  const at = new Date().toISOString();
+  writeFileSync(transcript, [
+    JSON.stringify({ type: 'custom-title', title: 'ignored' }),
+    JSON.stringify({ type: 'system', timestamp: at, message: { content: [{ type: 'text', text: 'ignored system note' }] } }),
+    JSON.stringify({ type: 'user', timestamp: at, message: { role: 'user', content: 'Add POST /notes <b>' } }),
+    JSON.stringify({ type: 'assistant', timestamp: at, message: { role: 'assistant', content: [{ type: 'text', text: 'Reading the api first.' }, { type: 'tool_use', id: 't1', name: 'Read', input: { file_path: 'app/api/server.mjs' } }] } }),
+    JSON.stringify({ type: 'user', timestamp: at, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: 'const server = createServer(...)' }] } }),
+    JSON.stringify({ type: 'assistant', timestamp: at, message: { role: 'assistant', content: [{ type: 'text', text: 'Done: POST /notes added.' }] } }),
+  ].join('\n') + '\n');
+  const events = path.join(f.environment.GROVE_STATE_DIR, 'dryads/events/canopy-0/w1.events');
+  mkdirSync(path.dirname(events), { recursive: true });
+  writeFileSync(events, JSON.stringify({ hook_event_name: 'PreToolUse', session_id: 's1', transcript_path: transcript, tool_name: 'Read', tool_input: { file_path: 'app/api/server.mjs' } }) + '\n');
+  const page = await fetch(url + '/chat/canopy-0/w1');
+  assert.equal(page.status, 200);
+  const html = await page.text();
+  assert.match(html, /<div class="turn user">.*Add POST \/notes &lt;b&gt;/s);
+  assert.match(html, /<div class="turn assistant">.*Reading the api first\./s);
+  assert.match(html, /<details class="tool"><summary>Read app\/api\/server\.mjs<\/summary>/);
+  assert.match(html, /<pre class="result">const server = createServer/);
+  assert.match(html, /Done: POST \/notes added\./);
+  assert.doesNotMatch(html, /ignored/);
+  assert.match(html, /now Read app\/api\/server\.mjs · running · 4 turns/);
+  // The card now links to it.
+  assert.match((await (await fetch(url)).text()).split('<script>')[0], /href="\/chat\/canopy-0\/w1">chat<\/a>/);
+  assert.equal((await fetch(url + '/chat/canopy-0/nope')).status, 404);
+  writeFileSync(events, JSON.stringify({ hook_event_name: 'PreToolUse', transcript_path: path.join(f.root, 'gone.jsonl'), tool_name: 'Read', tool_input: {} }) + '\n');
+  const gone = await fetch(url + '/chat/canopy-0/w1');
+  assert.equal(gone.status, 404);
+  assert.match(await gone.text(), /not there/);
+});
