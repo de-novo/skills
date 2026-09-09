@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { stringify } from 'yaml';
 
-import { checkHerbarium, globToRegExp, matchesAny, parseHerbariumCliArgs, parseHerbariumValues } from '../lib/herbarium.mjs';
+import { checkHerbarium, globToRegExp, headingSlugs, matchesAny, parseHerbariumCliArgs, parseHerbariumValues } from '../lib/herbarium.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CLI = path.join(HERE, 'cli.mjs');
@@ -70,7 +70,40 @@ test('check counts broken links, copies, another script, pages over the cap, and
   assert.deepEqual(result.findings.pages, []);
   // Only the active document's link into the archive counts; the archive pointing at itself does not.
   assert.deepEqual(result.findings.archive, [{ file: 'docs/design.md', target: 'docs/archive/old.md' }]);
-  assert.deepEqual(result.counts, { files: 4, links: 5, links_broken: 2, copies: 1, language: 1, pages: 1, pages_over: 0, archive_links: 1 });
+  assert.deepEqual(result.counts, { files: 4, links: 5, links_broken: 2, anchors: 0, anchors_broken: 0, copies: 1, near_copies: 0, language: 1, pages: 1, pages_over: 0, archive_links: 1 });
+});
+
+test('anchors resolve against the headings of the file they name, with the rendered slug rule', (t) => {
+  const root = fixture(t, {
+    'README.md': `# Home\n\nSee [rule](docs/a.md#the-one-rule), [gone](docs/a.md#no-such-heading), [self](#home), [self-gone](#nowhere), [code](docs/a.md#in-a-fence).\n`,
+    'docs/a.md': `# A\n\n## The one rule\n\n### With \`code\` and *emphasis*!\n\n\`\`\`\n# In a fence\n\`\`\`\n`,
+  });
+  assert.deepEqual([...headingSlugs(readFileSync(path.join(root, 'docs/a.md'), 'utf8'))], ['a', 'the-one-rule', 'with-code-and-emphasis']);
+  const result = checkHerbarium({ root, values: parseHerbariumValues(stringify(VALUES)) });
+  assert.deepEqual(result.findings.anchors.map((f) => f.target), ['docs/a.md#no-such-heading', '#nowhere', 'docs/a.md#in-a-fence']);
+  assert.equal(result.counts.anchors, 5);
+  assert.equal(result.counts.links, 3, 'a same-file anchor is not a link to a path');
+  assert.equal(result.ok, false);
+});
+
+test('a near copy is a run of fourteen words shared by two files after case and punctuation are dropped', (t) => {
+  const run = 'the seat reports its own state and nothing else tells the person what happened here';
+  const root = fixture(t, {
+    'README.md': `# Home\n\nShort.\n`,
+    'docs/a.md': `# A\n\nFirst: ${run}, and more.\n`,
+    'docs/b.md': `# B\n\nSecond, lightly edited: THE SEAT reports its own state; and nothing else tells the person what happened here!\n`,
+    'docs/c.md': `# C\n\n| ${run} in a table |\n\n\`\`\`\n${run}\n\`\`\`\n\nPointer line: ${run} [x](a.md)\n`,
+  });
+  const result = checkHerbarium({ root, values: parseHerbariumValues(stringify(VALUES)) });
+  assert.deepEqual(result.findings.copies, []);
+  assert.deepEqual(result.findings.near_copies.map((f) => f.files), [['docs/a.md', 'docs/b.md']]);
+  assert.equal(result.findings.near_copies[0].run.split(' ').length, 14);
+  assert.equal(result.ok, false);
+  // An exact copy of the same pair is reported once, as exact.
+  const exact = fixture(t, { 'docs/a.md': `# A\n\n${PROSE}\n`, 'docs/b.md': `# B\n\n${PROSE}\n` });
+  const both = checkHerbarium({ root: exact, values: parseHerbariumValues(stringify(VALUES)) });
+  assert.equal(both.findings.copies.length, 1);
+  assert.deepEqual(both.findings.near_copies, []);
 });
 
 test('a page is measured by its prose: a diagram in a fence is looked at, not read', (t) => {
@@ -91,7 +124,8 @@ test('the CLI: check prints counts, exits non-zero on a problem, and takes --pro
   const clean = spawnSync(process.execPath, [CLI, 'herbarium', 'check', '--project', root], { encoding: 'utf8' });
   assert.equal(clean.status, 0, clean.stderr);
   assert.match(clean.stdout, /links     1\/1 resolve/);
-  assert.match(clean.stdout, /copies    0/);
+  assert.match(clean.stdout, /copies    0 exact · 0 near/);
+  assert.match(clean.stdout, /anchors   0\/0 resolve/);
   assert.match(clean.stdout, /pages     1\/1 within 40 words/);
   writeFileSync(path.join(root, 'README.md'), `# Home\n\nSee [gone](docs/b.md).\n`);
   const broken = spawnSync(process.execPath, [CLI, 'herbarium', 'check', '--project', root, '--json'], { encoding: 'utf8' });
@@ -124,6 +158,7 @@ test('a symlinked mirror of a directory is not walked, so it cannot count as a s
 test('the catalog passes its own check', () => {
   const result = spawnSync(process.execPath, [CLI, 'herbarium', 'check', '--project', CATALOG], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stdout);
-  assert.match(result.stdout, /copies    0/);
+  assert.match(result.stdout, /copies    0 exact · 0 near/);
   assert.match(result.stdout, /language  0 files/);
+  assert.doesNotMatch(result.stdout, /anchors   0\/0/, 'the catalog links to headings, and they resolve');
 });

@@ -31,10 +31,8 @@ that will be wrong the next time its home changes; `check` counts those.
 
 ## Write
 
-1. **Name the kind.** Working rules, pattern, human page, long facts, design
-   note, evidence, cases, vocabulary, decision, record, or retired. The
-   reference says which house each kind has. A document that is two kinds
-   is two documents.
+1. **Name the kind.** The reference lists the eleven kinds and the house
+   each one has. A document that is two kinds is two documents.
 2. **Front-load the leading word** and the one defining constraint. A
    reader, human or agent, decides in the first line whether to keep
    reading; the pointer to this document, wherever it sits, uses the same

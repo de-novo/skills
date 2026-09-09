@@ -59,10 +59,10 @@ registry afterwards.
    died.** `up` printed `3/4 alive` and `status` printed 40 lines of `stopped`
    for one-shot invocations, so a normal sandbox read as a broken one. The
    guard now records the exit status, and the record makes the only
-   distinction it can support: `finished` recorded its own exit, whatever the
-   code, and `stopped` is gone having recorded nothing. A non-zero exit is not
-   a failure, because `overlay verify` requires the adapter to refuse five
-   calls and a refusal is a tool exiting non-zero on purpose. The first
+   distinction it can support (isolation rule 6 in the
+   [design](../playground-design.md), which owns the wording). A non-zero
+   exit is not a failure here, because `overlay verify` requires the adapter
+   to refuse five calls, and a refusal is a tool exiting non-zero on purpose. The first
    attempt at this fix counted those five refusals as deaths; running verify
    again is what caught it.
 3. **The process directory published its own staging file.** Records were

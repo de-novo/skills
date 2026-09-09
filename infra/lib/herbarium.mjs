@@ -14,6 +14,11 @@ import { parse } from 'yaml';
 export const VALUES_RELPATH = '.agents/herbarium.yml';
 const LANGUAGES = Object.freeze({ en: /[\p{Script=Hangul}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Cyrillic}\p{Script=Arabic}\p{Script=Thai}]/u });
 const COPY_MIN_CHARS = 80;
+// A near copy is this many consecutive words shared by two files, outside
+// code, tables, headings, and pointer lines. Long enough that a stock
+// phrase does not match; short enough that a pasted-then-edited paragraph
+// still does.
+const NEAR_COPY_WORDS = 14;
 const DEFAULT_MAX_WORDS = 450;
 const DEFAULT_IGNORE = ['node_modules/**', '.git/**'];
 
@@ -103,10 +108,38 @@ function walk(root, ignore) {
 
 // ---------------------------------------------------------------- check
 
-const LINK = /\]\(([^)\s#]+)(#[^)]*)?\)/g;
+const LINK = /\]\(([^)\s#]*)(#[^)]*)?\)/g;
+
+// GitHub's heading slug: lower-case, punctuation dropped, spaces to hyphens.
+// A heading inside a fence is code, not a heading; inline code in a heading
+// keeps its text in the slug, as the rendered page does.
+export function headingSlugs(text) {
+  const slugs = new Set();
+  for (const line of stripFences(text).split('\n')) {
+    const m = line.match(/^#{1,6}\s+(.+?)\s*#*\s*$/);
+    if (!m) continue;
+    const plain = m[1].replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[`*_~]/g, '');
+    slugs.add(plain.toLowerCase().trim().replace(/[^\p{L}\p{N}\s-]/gu, '').replace(/\s+/g, '-'));
+  }
+  return slugs;
+}
+
+function proseWords(text) {
+  const words = [];
+  for (const raw of stripCode(text).split('\n')) {
+    const line = raw.trim();
+    if (line.length === 0 || line.startsWith('#') || line.startsWith('|') || line.includes('](')) continue;
+    for (const w of line.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/)) if (w) words.push(w);
+  }
+  return words;
+}
+
+function stripFences(text) {
+  return text.replace(/```[\s\S]*?```/g, '');
+}
 
 function stripCode(text) {
-  return text.replace(/```[\s\S]*?```/g, '').replace(/`[^`\n]*`/g, '');
+  return stripFences(text).replace(/`[^`\n]*`/g, '');
 }
 
 // The five counts. Each is a list of findings so the text form can name
@@ -114,19 +147,41 @@ function stripCode(text) {
 export function checkHerbarium({ root, values }) {
   const files = walk(root, values.ignore);
   const publicFiles = files.filter((file) => matchesAny(file, values.public));
-  const findings = { links: [], copies: [], language: [], pages: [], archive: [] };
+  const findings = { links: [], anchors: [], copies: [], near_copies: [], language: [], pages: [], archive: [] };
   const texts = new Map(publicFiles.map((file) => [file, readFileSync(path.join(root, file), 'utf8')]));
+  const slugCache = new Map();
+  const slugsOf = (relative) => {
+    if (!slugCache.has(relative)) {
+      const absolute = path.join(root, relative);
+      slugCache.set(relative, existsSync(absolute) && statSync(absolute).isFile() ? headingSlugs(readFileSync(absolute, 'utf8')) : new Set());
+    }
+    return slugCache.get(relative);
+  };
   let linkCount = 0;
+  let anchorCount = 0;
 
   for (const [file, text] of texts) {
     const inArchive = matchesAny(file, values.archive);
     for (const match of stripCode(text).matchAll(LINK)) {
       const target = match[1];
+      const anchor = match[2] ? match[2].slice(1) : null;
       if (/^[a-z][a-z0-9+.-]*:/i.test(target)) continue;
-      linkCount += 1;
-      const resolved = path.normalize(path.join(path.dirname(file), target)).split(path.sep).join('/');
-      if (!existsSync(path.join(root, resolved))) findings.links.push({ file, target });
-      else if (!inArchive && matchesAny(resolved, values.archive)) findings.archive.push({ file, target: resolved });
+      if (target === '' && anchor == null) continue;
+      const resolved = target === '' ? file : path.normalize(path.join(path.dirname(file), target)).split(path.sep).join('/');
+      if (target !== '') {
+        linkCount += 1;
+        if (!existsSync(path.join(root, resolved))) {
+          findings.links.push({ file, target });
+          continue;
+        }
+        if (!inArchive && matchesAny(resolved, values.archive)) findings.archive.push({ file, target: resolved });
+      }
+      // An anchor is checked against the headings of the file it names,
+      // the way the rendered page would resolve it.
+      if (anchor != null && /\.md$/i.test(resolved)) {
+        anchorCount += 1;
+        if (!slugsOf(resolved).has(anchor.toLowerCase())) findings.anchors.push({ file, target: `${target}#${anchor}` });
+      }
     }
     if (LANGUAGES[values.language].test(text)) findings.language.push({ file });
     // The cap is on prose: a diagram or a command block in a fence is
@@ -154,17 +209,51 @@ export function checkHerbarium({ root, values }) {
     if (holders.length > 1) findings.copies.push({ line: line.slice(0, 100), files: holders });
   }
 
+  // A near copy: the same run of words in two files after case and
+  // punctuation are dropped, so a pasted paragraph that was lightly edited
+  // still shows. One finding per pair of files, with the first shared run.
+  const shingles = new Map();
+  for (const [file, text] of texts) {
+    const words = proseWords(text);
+    for (let i = 0; i + NEAR_COPY_WORDS <= words.length; i += 1) {
+      const key = words.slice(i, i + NEAR_COPY_WORDS).join(' ');
+      if (!shingles.has(key)) shingles.set(key, new Map());
+      const holders = shingles.get(key);
+      if (!holders.has(file)) holders.set(file, key);
+    }
+  }
+  const pairs = new Map();
+  for (const [key, holders] of shingles) {
+    if (holders.size < 2) continue;
+    const files = [...holders.keys()].sort();
+    for (let a = 0; a < files.length; a += 1) {
+      for (let b = a + 1; b < files.length; b += 1) {
+        const pair = `${files[a]}\n${files[b]}`;
+        if (!pairs.has(pair)) pairs.set(pair, { files: [files[a], files[b]], run: key, runs: 0 });
+        pairs.get(pair).runs += 1;
+      }
+    }
+  }
+  const exact = new Set(findings.copies.flatMap((c) => c.files.slice().sort().map((f, i, all) => all.slice(0, i).map((g) => `${g}\n${f}`)).flat()));
+  for (const entry of pairs.values()) {
+    if (exact.has(entry.files.join('\n'))) continue;
+    findings.near_copies.push({ files: entry.files, run: entry.run, runs: entry.runs });
+  }
+
   const counts = {
     files: publicFiles.length,
     links: linkCount,
     links_broken: findings.links.length,
+    anchors: anchorCount,
+    anchors_broken: findings.anchors.length,
     copies: findings.copies.length,
+    near_copies: findings.near_copies.length,
     language: findings.language.length,
     pages: publicFiles.filter((file) => matchesAny(file, values.pages.globs)).length,
     pages_over: findings.pages.length,
     archive_links: findings.archive.length,
   };
-  const ok = counts.links_broken === 0 && counts.copies === 0 && counts.language === 0 && counts.pages_over === 0;
+  const ok = counts.links_broken === 0 && counts.anchors_broken === 0 && counts.copies === 0 && counts.near_copies === 0 && counts.language === 0 && counts.pages_over === 0;
   return { ok, counts, findings };
 }
 
@@ -218,13 +307,16 @@ export function formatCheck(result, root) {
     `■ ${path.basename(root)} — herbarium check`,
     `  files     ${c.files} public`,
     `  links     ${c.links - c.links_broken}/${c.links} resolve`,
-    `  copies    ${c.copies}`,
+    `  anchors   ${c.anchors - c.anchors_broken}/${c.anchors} resolve`,
+    `  copies    ${c.copies} exact · ${c.near_copies} near (${NEAR_COPY_WORDS} words)`,
     `  language  ${c.language} file${c.language === 1 ? '' : 's'} in another script`,
     `  pages     ${c.pages - c.pages_over}/${c.pages} within ${result.max_words} words`,
     `  archive   ${c.archive_links} link${c.archive_links === 1 ? '' : 's'} from active documents (shown, not judged)`,
   ];
   for (const f of result.findings.links) lines.push(`  broken    ${f.file} -> ${f.target}`);
+  for (const f of result.findings.anchors) lines.push(`  anchor    ${f.file} -> ${f.target}`);
   for (const f of result.findings.copies) lines.push(`  copy      ${f.files.join(' · ')}: "${f.line}"`);
+  for (const f of result.findings.near_copies) lines.push(`  near      ${f.files.join(' · ')} (${f.runs} run${f.runs === 1 ? '' : 's'}): "${f.run}"`);
   for (const f of result.findings.language) lines.push(`  script    ${f.file}`);
   for (const f of result.findings.pages) lines.push(`  long      ${f.file} ${f.words} words (cap ${f.max})`);
   for (const f of result.findings.archive) lines.push(`  archive   ${f.file} -> ${f.target}`);
@@ -244,11 +336,12 @@ export function herbariumHelp(cli = 'de-novo skills') {
 
 usage:
   ${cli} herbarium check [--project ROOT] [--json]
-      counts, over the project's public surfaces: relative links that resolve,
-      prose copied between files, files in another script, human pages over
-      the word cap, links from active documents into the archive.
-      Non-zero when a link is broken, a copy exists, a script is wrong, or a
-      page is over the cap.
+      counts, over the project's public surfaces: relative links and their
+      anchors that resolve, prose copied between files (exact lines, and runs
+      of ${NEAR_COPY_WORDS} words after case and punctuation are dropped), files in
+      another script, human pages over the word cap, links from active
+      documents into the archive. Non-zero on a broken link or anchor, a
+      copy, a wrong script, or a page over the cap.
 
 The houses come from ${VALUES_RELPATH}. Pattern: skills/herbarium/SKILL.md.`;
 }
