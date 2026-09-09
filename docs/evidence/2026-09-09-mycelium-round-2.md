@@ -99,6 +99,15 @@ proposers racing leave twelve whole lines. Full suite `npm test`: 264/264.
   not news. The fold now records `changed_at` on every line that touches
   a row.
 
+## Made permanent
+
+The arc above was typed by hand three times across two days, and the hand
+script was wrong twice (a shell that did not split a command variable; a
+flag passed to the wrong verb). It is now `infra/bin/mycelium-arc.test.mjs`
+in the suite: a sandbox, a real seat, the same writes and reads, `down`,
+and the machine-state check. Reverting the judges gate or the Understory
+pointer turns it red (1 each).
+
 ## Not measured
 
 A second machine; a log larger than memory; automatic propose on

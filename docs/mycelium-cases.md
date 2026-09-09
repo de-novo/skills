@@ -20,6 +20,9 @@ Each row has one of four marks:
 
 The marks are dated claims about the second-round tree, not guarantees.
 A row that changed in the second round says so in its mechanism column.
+Since 2026-09-09 the sandbox arc behind the **measured** rows is a test,
+`infra/bin/mycelium-arc.test.mjs`, so `npm test` and CI execute it on
+every change instead of a person retyping it after a merge.
 
 ## A. One fact's life
 
