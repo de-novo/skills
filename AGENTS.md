@@ -114,8 +114,10 @@ npm test          # node --test 'infra/bin/*.test.mjs'
 ```
 
 The runner prints how many tests ran. Docker is not required for validate /
-init tests. Do not start or stop shared engines to land a docs or parser
-change.
+init tests, nor for the playground sandbox arcs the suite runs
+(`infra/bin/playground.test.mjs`, `infra/bin/mycelium-arc.test.mjs`): those
+seat a real Dryad worker in a throwaway sandbox and tear it down. Do not
+start or stop shared engines to land a docs or parser change.
 
 Every PR must preserve its execution evidence in the PR description. Record
 the candidate SHA and target, the exact commands that ran, the observed and
