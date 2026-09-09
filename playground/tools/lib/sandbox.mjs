@@ -14,9 +14,27 @@ const STOP_TIMEOUT_MS = 10_000;
 const POLL_INTERVAL_MS = 50;
 const PROBE_TIMEOUT_MS = 2_000;
 
-// <sandbox>/project/tools/lib/sandbox.mjs — the layout the design fixes.
+// <sandbox>/project/tools/lib/sandbox.mjs is the layout the design fixes,
+// but a Dryad seat runs this same file from <sandbox>/seats/<id>/tools/lib,
+// and there the parent directory is `seats`, not the sandbox. The marker
+// `up` writes into the project's .agents names the sandbox itself, and a
+// seat's worktree carries that marker, so it is the authority; the parent
+// directory is only the fallback for a checkout that has no marker.
 export const PROJECT_ROOT = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
-export const SANDBOX_ROOT = path.dirname(PROJECT_ROOT);
+export const SANDBOX_ROOT = sandboxRootOf(PROJECT_ROOT);
+
+function sandboxRootOf(projectRoot) {
+  const marker = path.join(projectRoot, '.agents', 'playground.json');
+  if (existsSync(marker)) {
+    try {
+      const { sandbox } = JSON.parse(readFileSync(marker, 'utf8'));
+      if (typeof sandbox === 'string' && sandbox.length > 0) return path.resolve(sandbox);
+    } catch {
+      // An unreadable marker is not a sandbox address; fall through.
+    }
+  }
+  return path.dirname(projectRoot);
+}
 
 export class Refusal extends Error {}
 
