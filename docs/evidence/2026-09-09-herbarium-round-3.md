@@ -41,11 +41,9 @@ glossary of its own.
 A playground sandbox, the seven skills copied into the project's
 `.agents/skills` (the sandbox refuses symlinks), `.agents/herbarium.yml`
 planted, a second document added, one commit. Then `codex exec` in the
-project directory with the one prompt that names no skill:
-
-> Review the documents in this project before they are published to
-> people outside it. Fix what you find, commit on this branch, and do not
-> push. Tell me what you checked and how.
+project directory with the second round's prompt, its target widened from
+one file to "the documents in this project" and still naming no skill
+(the wording is in [the second round's record](2026-09-09-herbarium.md)).
 
 | Checked for | Observed in the transcript |
 | --- | --- |
