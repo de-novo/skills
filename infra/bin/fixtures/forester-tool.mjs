@@ -29,7 +29,10 @@ process.stdin.on('data', (chunk) => {
     event('Stop');
     process.exit(2);
   }
-  event('PostToolUse');
+  // A real tool's hooks carry the tool and its target; serve turns that
+  // into the session's "doing" line.
+  event('PreToolUse', { tool_name: 'Write', tool_input: { file_path: 'done.txt' } });
+  event('PostToolUse', { tool_name: 'Write', tool_input: { file_path: 'done.txt' } });
   writeFileSync(path.join(process.cwd(), 'done.txt'), `${task}\n`);
   const report = spawnSync(process.execPath, [CLI, 'dryad', 'report', process.env.DRYAD_ID, '--status', 'done', '--note', 'fixture finished'], { encoding: 'utf8', env: process.env });
   process.stdout.write(`\r\nreport exit ${report.status}\r\n`);

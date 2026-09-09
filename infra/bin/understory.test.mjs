@@ -20,7 +20,7 @@ const MOMENT = {
   budget: { parallel: 2, source: 'local' },
   counts: { done: 0, active: 1, failed: 0, blocked: 2, ready: 1 },
   items: [
-    { id: 'define-shape', state: 'active', why: 'seat working', task: 'x', owns: ['docs/reference/**'], depends_on: [], tool: null, attempts: 0, max_attempts: 1, seat: { id: 'define-shape', status: 'working' }, session: { state: 'needs-input' } },
+    { id: 'define-shape', state: 'active', why: 'seat working', task: 'x', owns: ['docs/reference/**'], depends_on: [], tool: null, attempts: 0, max_attempts: 1, seat: { id: 'define-shape', status: 'working' }, session: { state: 'needs-input', doing: 'Edit docs/reference.md' } },
     { id: 'api-endpoint', state: 'blocked', why: 'waits for define-shape', task: 'x', owns: ['src/api/**'], depends_on: ['define-shape'], tool: 'codex', attempts: 0, max_attempts: 1, seat: null, session: null },
     { id: 'web-panel', state: 'blocked', why: 'waits for define-shape', task: 'x', owns: ['src/web/**'], depends_on: ['define-shape'], tool: null, attempts: 0, max_attempts: 2, seat: null, session: null },
     { id: 'docs-pass', state: 'ready', why: 'no dependencies', task: 'x', owns: ['docs/**'], depends_on: [], tool: null, attempts: 0, max_attempts: 1, seat: null, session: null },
@@ -54,7 +54,7 @@ test('the graph has one coloured node per item, an edge per dependency, and a do
 test('the reading says, per item, what a person should take from it', () => {
   const rows = understoryReading(MOMENT);
   assert.deepEqual(rows.map((row) => [row.id, row.line]), [
-    ['define-shape', 'someone is working on it and the session is waiting for a person'],
+    ['define-shape', 'someone is working on it and the session is waiting for a person, now Edit docs/reference.md'],
     ['api-endpoint', 'cannot start yet: waits for define-shape'],
     ['web-panel', 'cannot start yet: waits for define-shape'],
     ['docs-pass', 'could start, but claim docs/** intersects docs/reference/** of define-shape (active)'],

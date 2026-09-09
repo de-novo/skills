@@ -46,8 +46,12 @@ project has no overlays. If `DRYAD_ID` is unset, this section does not apply.
    your changed services, and `finish` destroys the env later. Shared-only
    services stay on baseline.
 3. Report your own state. `report --status blocked --note …` when stuck,
-   `report --status working --note …` at each real turn of the work. Nothing
-   else tells the human what happened.
+   `report --status working --note …` at three moments at least: before the
+   first edit (what you are about to change), before verification (what
+   you will run), and before the commit (what changed). One line each,
+   present tense. When Forester's `serve` holds your session, the person
+   also sees your tool stream ("now Edit app/api/server.mjs"); your notes
+   say *why*, which the stream cannot.
 4. When done: commit on your branch, run `report --status done`, and stop.
    Do not push, merge, or call `finish`. Those belong to the human.
 5. Before `report --status done`, check whether your tool exposes a session

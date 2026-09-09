@@ -347,7 +347,7 @@ const VERBS = Object.freeze({
   plan: { flags: ['json'], options: ['project'] },
   next: { flags: ['json'], options: ['project'] },
   assign: { flags: ['apply', 'json'], options: ['project'] },
-  status: { flags: ['json'], options: ['project'] },
+  status: { flags: ['json', 'watch'], options: ['project'] },
   serve: { flags: [], options: ['project'] },
   attach: { flags: [], options: ['project'], positional: 'seat id' },
   hooks: { flags: ['apply', 'remove', 'json'], options: [] },
@@ -358,7 +358,7 @@ export function parseForesterCliArgs(args) {
   if (verb == null || verb === 'help' || verb === '--help' || verb === '-h') return { help: true };
   if (!(verb in VERBS)) fail(`unknown command ${JSON.stringify(verb)}.`);
   const spec = VERBS[verb];
-  const options = { help: false, verb, project: null, json: false, apply: false, remove: false, id: null };
+  const options = { help: false, verb, project: null, json: false, watch: false, apply: false, remove: false, id: null };
   for (let index = 0; index < input.length; index += 1) {
     const arg = input[index];
     if (!arg.startsWith('--')) {
@@ -507,6 +507,14 @@ export function readSessions(slug, environment = process.env) {
   return { file, pid: doc.pid, socket: doc.socket, alive, seats: doc.seats };
 }
 
+// "3s", "2m", "1h": how long ago an ISO moment was, for a reader's eye.
+export function ageOf(iso, at = Date.now()) {
+  const seconds = Math.max(0, Math.round((at - Date.parse(iso)) / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+  return `${Math.round(seconds / 3600)}h`;
+}
+
 function sessionLines(loaded) {
   const sessions = loaded.sessions;
   if (sessions == null) return ['  serve    none'];
@@ -514,7 +522,8 @@ function sessionLines(loaded) {
   const rows = Object.entries(sessions.seats);
   const lines = [`  serve    pid ${sessions.pid} · sessions ${rows.length}`];
   for (const [id, session] of rows) {
-    lines.push(`    ${id}  ${session.tool}  ${session.state}${session.exit != null ? ' ' + session.exit : ''}`);
+    const doing = session.doing == null ? '' : `  · ${session.doing}${session.doing_since ? ` (${ageOf(session.doing_since)})` : ''}`;
+    lines.push(`    ${id}  ${session.tool}  ${session.state}${session.exit != null ? ' ' + session.exit : ''}${doing}`);
   }
   return lines;
 }
@@ -551,6 +560,17 @@ export async function runForester({ options, environment = process.env, cwd = pr
     const { runAttach, runServe } = await import('./forester-serve.mjs');
     return options.verb === 'serve' ? runServe({ options, environment, cwd }) : runAttach({ options, environment, cwd });
   }
+  if (options.verb === 'status' && options.watch) {
+    if (options.json) fail('--watch prints the text form; drop --json.');
+    // One screen, redrawn every two seconds: state, what each session is
+    // doing, and the reports, without a browser. Ctrl-C ends it.
+    for (;;) {
+      process.stdout.write('\x1b[2J\x1b[H');
+      runStatusVerb(loadForester({ project: options.project, environment, cwd }), options);
+      console.log(`  ${new Date().toISOString()} · every 2s · Ctrl-C to stop`);
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 2000);
+    }
+  }
   const loaded = loadForester({ project: options.project, environment, cwd });
   switch (options.verb) {
     case 'plan':
@@ -573,7 +593,7 @@ usage:
   ${cli} forester plan   [--json] [--project ROOT]   every item: done, active, ready, blocked, failed, and why
   ${cli} forester next   [--json] [--project ROOT]   what assign would seat now; changes nothing
   ${cli} forester assign [--apply] [--json] [--project ROOT]
-  ${cli} forester status [--json] [--project ROOT]   slots filled, items waiting, live sessions
+  ${cli} forester status [--json | --watch] [--project ROOT]   slots filled, items waiting, live sessions and what each is doing; --watch redraws every 2s
   ${cli} forester serve  [--project ROOT]            keep the budget filled and hold each seat's real session (foreground)
   ${cli} forester attach ID [--project ROOT]         view and type into one session; Ctrl-] detaches
   ${cli} forester hooks  [--apply | --remove --apply] [--json]   one marked entry in each installed tool's hook store
