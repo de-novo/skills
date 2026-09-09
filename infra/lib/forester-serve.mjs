@@ -270,6 +270,7 @@ export class ForesterServe {
     // Understory read; serve is one launcher among others. A fresh file
     // per launch: a previous session's SessionEnd must not read as this
     // one's exit.
+    record.worktree = seat.worktree;
     record.events = seatEventsPath(this.project.slug, item.id, this.environment);
     mkdirSync(path.dirname(record.events), { recursive: true, mode: 0o700 });
     writeFileSync(record.events, '');
@@ -319,7 +320,7 @@ export class ForesterServe {
     if (state != null && state !== session.state) session.state = state;
     // The doing line changes when the tool stream does; its clock starts
     // when it changes, so a reader sees how long the session has been on it.
-    const doing = doingFromEvents(text);
+    const doing = doingFromEvents(text, { base: session.worktree ?? null });
     if (doing !== session.doing) {
       session.doing = doing;
       session.doing_since = doing == null ? null : now();

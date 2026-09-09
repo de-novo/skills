@@ -103,7 +103,7 @@ Grove already know all of it:
 | `changes` | per seat | `{ base, committed: [{path, status}], uncommitted: [{path, status}], counts: { committed, uncommitted, ahead }, truncated }` from `git diff --name-status <base>..HEAD` and `git status --porcelain` in the seat's worktree. The lists stop at 200 entries with `truncated: true`; the counts stay whole. `null` when the worktree is missing |
 | `worktrees` | project | `[{ path, branch, head, seat, baseline }]` from the baseline's `git worktree list --porcelain`. `seat` is the seat id holding that path, or `null` — somebody works in parallel and Dryad does not know it. `changes` is computed for seats only: reading another person's worktree is not Dryad's business |
 | `overlaps` | project | `[{ path, seats: [id, …] }]` for every path two or more of the listed seats have committed or uncommitted. Shown, never judged — who merges first is a person's call |
-| `activity` | per seat | `{ state, doing, changed_at, events }` from the seat's events file: `state` is `running`, `idle`, `needs-input`, or `exited` from the last hook event; `doing` is the last tool event's name and target (`Edit app/api/server.mjs`); `changed_at` is the file's last write. `null` until a session has written. The text form appends `· now <doing>` to the seat line |
+| `activity` | per seat | `{ state, doing, changed_at, events, transcript, session_id }` from the seat's events file: `state` is `running`, `idle`, `needs-input`, or `exited` from the last hook event; `doing` is the last tool event's name and target (`Edit app/api/server.mjs`); `changed_at` is the file's last write; `transcript` and `session_id` are what the tool's own hook payload named (Claude Code names both in every payload; a tool that does not leaves them `null`). `null` until a session has written. The text form appends `· now <doing>` to the seat line |
 
 `--project ROOT` names the baseline checkout. Omitted, Dryad uses
 `DRYAD_PROJECT`, then the nearest `.agents/dryad-profile.yml` above the cwd.
@@ -144,6 +144,14 @@ Older status JSON still renders the available seat cards and omits missing
 fields. Sessions remain plain text.
 Finished seats expand to show their journals. Failed or timed-out commands
 appear as errors while other projects remain visible.
+
+A seat card whose activity names a transcript links to `/chat/<slug>/<id>`:
+the session's own transcript read where the tool left it and shown as a
+chat, the person's turns and the agent's, each tool call one line that
+opens to its input and result, newest at the bottom, refreshed every five
+seconds. Nothing is copied; the page reads the file the tool named and
+shows only seats the front page shows. A seat whose tool named no
+transcript, or whose transcript is gone, answers 404 and says which.
 
 Canopy never reads registry files directly, launches workers, writes reports,
 changes worktrees, renews leases, or mutates environments or shared engines.

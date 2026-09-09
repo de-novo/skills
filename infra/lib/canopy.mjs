@@ -2,6 +2,7 @@
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { readTranscript } from './seat-events.mjs';
 import { fileURLToPath } from 'node:url';
 
 const CLI = fileURLToPath(new URL('../bin/cli.mjs', import.meta.url));
@@ -174,7 +175,7 @@ export function renderState(state) {
     if (!Number.isFinite(seconds)) return '';
     return seconds < 60 ? `${seconds}s ago` : seconds < 3600 ? `${Math.floor(seconds / 60)}m ago` : seconds < 86400 ? `${Math.floor(seconds / 3600)}h ago` : `${Math.floor(seconds / 86400)}d ago`;
   };
-  const card = (seat, grove, archived = false) => {
+  const card = (seat, grove, archived = false, slug = null) => {
     const pending = (grove?.pending ?? []).filter(item => item.env === seat.env).map(item => item.liveness ?? 'unknown');
     const envState = [...new Set([seat.env ?? 'none', seat.env_state, ...pending].filter(Boolean))].join(' ');
     const files = seat.files;
@@ -182,7 +183,7 @@ export function renderState(state) {
       <h3>${esc(seat.id)} · ${esc(seat.by ?? '—')}${seat.last ? ` · <time datetime="${esc(seat.last.at)}" title="${esc(seat.last.at)}">${esc(elapsed(seat.last.at))}</time>` : ''}</h3>
       ${seat.task ? `<p class="task">${esc(seat.task.split(/\r?\n/)[0])}</p>` : ''}
       <p class="status">${esc(seat.status)}${seat.report ? ` · ${esc(clip(seat.report.detail))}` : ''}</p>
-      ${seat.activity ? `<p class="doing">now ${esc(seat.activity.doing ?? seat.activity.state ?? '')}${seat.activity.state && seat.activity.doing ? ` · ${esc(seat.activity.state)}` : ''}${seat.activity.changed_at ? ` · ${esc(elapsed(seat.activity.changed_at))}` : ''}</p>` : ''}
+      ${seat.activity ? `<p class="doing">now ${esc(seat.activity.doing ?? seat.activity.state ?? '')}${seat.activity.state && seat.activity.doing ? ` · ${esc(seat.activity.state)}` : ''}${seat.activity.changed_at ? ` · ${esc(elapsed(seat.activity.changed_at))}` : ''}${seat.activity.transcript && slug && !archived ? ` · <a href="/chat/${encodeURIComponent(slug)}/${encodeURIComponent(seat.id)}">chat</a>` : ''}</p>` : ''}
       <p>env ${esc(envState)}${seat.hosts.length ? ' → ' + seat.hosts.map(host => `${host.attached ? link(host.text) : `${esc(host.text)} <span class="muted">(unattached)</span>`}${host.service ? ` <span class="muted">${esc(host.service)}</span>` : ''}`).join(' · ') : ''}</p>
       ${seat.entries.length ? `<p class="skills">skills · ${Object.entries(seat.verbs).map(([verb, count]) => `${esc(verb)} ${count}`).join(' · ')}<br><span class="muted">last ${esc(seat.last.event)} · ${esc(seat.last.at)}${seat.last.detail && seat.last.detail !== seat.report?.detail ? ` · ${esc(clip(seat.last.detail))}` : ''}</span></p>` : ''}
       ${files ? `<div class="files"><p>files · +${esc(files.committed)} committed · ${esc(files.open)} open</p><ul>${files.rows.slice(0, 12).map(file => `<li${file.overlap ? ' class="shared"' : ''}>${file.overlap ? '<span title="Overlapping path">⚠</span> ' : ''}${esc(file.path)} <span class="muted">${esc(file.labels.join(' · '))}</span></li>`).join('')}</ul>${files.rows.length > 12 ? `<p class="muted">${files.rows.length - 12} more files</p>` : ''}${files.truncated ? `<p class="muted">Source file list truncated; counts include omitted entries.</p>` : ''}</div>` : ''}
@@ -197,7 +198,7 @@ export function renderState(state) {
     const grove = project.grove;
     const gc = grove?.counts;
     const groveLine = grove?.inactive ? 'overlay inactive' : grove?.error ? esc(grove.error) : `environments ${shown(gc?.environments)} · attachments ${shown(gc?.attachments)} · pending ${shown(gc?.pending)}${(grove?.pending ?? []).map(item => ` · ${esc(item.env)} ${esc(item.verb)} ${esc(item.liveness ?? 'unknown')}`).join('')} · stale ${shown(gc?.stale)} · drift ${shown(gc?.drift)}`;
-    return `<section><h2>${esc(project.slug)} — ${esc(counts)}</h2><p class="grove">Grove · ${groveLine}</p>${(project.problems ?? []).map(problem => `<p class="problem">problem · ${esc(problem)}</p>`).join('')}<p class="root">${esc(project.root)}</p><div class="cards">${view.seats.map(seat => card(seat, grove)).join('')}${view.unseated.map(tree => `<article class="card unseated"><h3>${esc(tree.branch ?? 'detached HEAD')}</h3><p>Not a seat</p><p>${esc(tree.path)}</p><p>HEAD ${esc(tree.head)}</p></article>`).join('')}</div>${view.overlaps.map(item => `<p class="overlap">⚠ overlap · ${esc(item.path)} · ${item.seats.map(esc).join(' · ')}</p>`).join('')}<details data-project="${esc(project.root)}"><summary>finished ${view.finished.length}</summary><div class="cards">${view.finished.map(seat => card(seat, grove, true)).join('')}</div></details></section>`;
+    return `<section><h2>${esc(project.slug)} — ${esc(counts)}</h2><p class="grove">Grove · ${groveLine}</p>${(project.problems ?? []).map(problem => `<p class="problem">problem · ${esc(problem)}</p>`).join('')}<p class="root">${esc(project.root)}</p><div class="cards">${view.seats.map(seat => card(seat, grove, false, project.slug)).join('')}${view.unseated.map(tree => `<article class="card unseated"><h3>${esc(tree.branch ?? 'detached HEAD')}</h3><p>Not a seat</p><p>${esc(tree.path)}</p><p>HEAD ${esc(tree.head)}</p></article>`).join('')}</div>${view.overlaps.map(item => `<p class="overlap">⚠ overlap · ${esc(item.path)} · ${item.seats.map(esc).join(' · ')}</p>`).join('')}<details data-project="${esc(project.root)}"><summary>finished ${view.finished.length}</summary><div class="cards">${view.finished.map(seat => card(seat, grove, true)).join('')}</div></details></section>`;
   }).join('')}`;
 }
 
@@ -205,6 +206,47 @@ export function renderPage(state) {
   return TEMPLATE.replace('/* CANOPY_RENDERER */', () => renderState.toString())
     .replace('<!-- CANOPY_STATE -->', () => renderState(state))
     .replace('<!-- CANOPY_UPDATED -->', () => state.updated_at);
+}
+
+// Helpers for pages rendered outside renderState's clock.
+const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const ago = at => {
+  const seconds = Math.max(0, Math.floor((Date.now() - Date.parse(at)) / 1000));
+  if (!Number.isFinite(seconds)) return '';
+  return seconds < 60 ? `${seconds}s ago` : seconds < 3600 ? `${Math.floor(seconds / 60)}m ago` : `${Math.floor(seconds / 3600)}h ago`;
+};
+
+// The chat page: the seat's transcript as a person reads it. Only what the
+// transcript holds, escaped, newest at the bottom; a tool call is one line
+// that opens to its input and result.
+export function renderChat({ slug, id, activity, turns }) {
+  const turn = (t) => {
+    if (t.role === 'tool') {
+      return `<details class="tool"><summary>${escapeHtml(t.name)}${t.target ? ` ${escapeHtml(t.target)}` : ''}${t.result == null ? ' …' : ''}</summary>${t.input ? `<pre class="input">${escapeHtml(t.input)}</pre>` : ''}${t.result != null ? `<pre class="result">${escapeHtml(t.result)}</pre>` : ''}</details>`;
+    }
+    return `<div class="turn ${escapeHtml(t.role)}"><span class="who">${t.role === 'user' ? 'person' : 'agent'}</span>${t.at ? `<time datetime="${escapeHtml(t.at)}" title="${escapeHtml(t.at)}">${escapeHtml(ago(t.at))}</time>` : ''}<p>${escapeHtml(t.text)}</p></div>`;
+  };
+  return `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="5"><title>${escapeHtml(slug)} · ${escapeHtml(id)} · chat</title><style>
+  body{font:14px/1.5 -apple-system,system-ui,sans-serif;margin:0;background:#111;color:#eee}header{position:sticky;top:0;background:#111;padding:.75rem 1rem;border-bottom:1px solid #333}header a{color:#9cf;margin-right:1rem}
+  main{max-width:56rem;margin:0 auto;padding:1rem}.turn{margin:.6rem 0;padding:.6rem .8rem;border-radius:.6rem;white-space:pre-wrap;word-break:break-word}.turn.user{background:#1e2a3a;margin-left:15%}.turn.assistant{background:#1d1d1d;margin-right:15%}
+  .who{font-size:12px;color:#9a9a9a;margin-right:.5rem}time{font-size:12px;color:#777}.turn p{margin:.25rem 0 0}details.tool{margin:.2rem 0 .2rem 1rem;color:#bbb;font-family:ui-monospace,monospace;font-size:12.5px}details.tool pre{white-space:pre-wrap;word-break:break-all;background:#161616;padding:.5rem;border-radius:.4rem;max-height:20rem;overflow:auto}pre.result{color:#9c9}
+  </style><header><a href="/">Canopy</a><strong>${escapeHtml(slug)} · ${escapeHtml(id)}</strong>${activity?.doing ? ` · now ${escapeHtml(activity.doing)}` : ''}${activity?.state ? ` · ${escapeHtml(activity.state)}` : ''} · ${turns.length} turns · refresh 5s</header><main>${turns.map(turn).join('')}${turns.length === 0 ? '<p class="who">No conversation yet.</p>' : ''}</main>`;
+}
+
+// /chat/<slug>/<id>: the seat is found in the same report the front page
+// reads, so the page cannot show a seat the front page does not.
+async function chatPage(pathname, options) {
+  const match = pathname.match(/^\/chat\/([^/]+)\/([^/]+)$/);
+  if (!match) return null;
+  const [slug, id] = [decodeURIComponent(match[1]), decodeURIComponent(match[2])];
+  const report = await collectState(options);
+  const project = (report.projects ?? []).find((p) => p.slug === slug);
+  const seat = (project?.seats ?? []).find((s) => s.id === id);
+  if (!seat) return { status: 404, body: 'No such seat.' };
+  if (!seat.activity?.transcript) return { status: 404, body: 'This seat\'s tool has not named a transcript.' };
+  const turns = readTranscript(seat.activity.transcript, { base: seat.worktree ?? null });
+  if (turns == null) return { status: 404, body: 'The transcript the tool named is not there.' };
+  return { status: 200, body: renderChat({ slug, id, activity: seat.activity, turns }) };
 }
 
 export async function startCanopy({ port = 7420, ...options } = {}) {
@@ -216,6 +258,15 @@ export async function startCanopy({ port = 7420, ...options } = {}) {
     res.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'");
     if (req.method !== 'GET') {
       res.writeHead(405, { Allow: 'GET' }).end('Read-only: use GET.');
+      return;
+    }
+    if (req.url.startsWith('/chat/')) {
+      try {
+        const page = await chatPage(req.url.split('?')[0], options);
+        res.writeHead(page?.status ?? 404, { 'Content-Type': page?.status === 200 ? 'text/html; charset=utf-8' : 'text/plain; charset=utf-8' }).end(page?.body ?? 'Not found.');
+      } catch (error) {
+        res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' }).end(error.message);
+      }
       return;
     }
     if (req.url !== '/' && req.url !== '/api/state') {

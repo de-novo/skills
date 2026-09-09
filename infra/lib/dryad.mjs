@@ -1077,7 +1077,7 @@ function runStatus({ options, project, environment }) {
       hostnames = probe.hostnames.map((row) => ({ ...row, attached: live?.has(row.service) ?? false }));
       if (probe.error != null) problems.push(`${id}: ${probe.error}`);
     }
-    return { id, seat, present, ahead, envState, hostnames, changes, paths, activity: seatActivity(project.slug, id, environment) };
+    return { id, seat, present, ahead, envState, hostnames, changes, paths, activity: seatActivity(project.slug, id, environment, { worktree: seat.worktree }) };
   });
   if (options.id == null && tracked != null) {
     const seated = new Set(entries.map(([, seat]) => seat.env).filter(Boolean));
