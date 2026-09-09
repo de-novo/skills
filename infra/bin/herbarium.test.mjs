@@ -70,7 +70,7 @@ test('check counts broken links, copies, another script, pages over the cap, and
   assert.deepEqual(result.findings.pages, []);
   // Only the active document's link into the archive counts; the archive pointing at itself does not.
   assert.deepEqual(result.findings.archive, [{ file: 'docs/design.md', target: 'docs/archive/old.md' }]);
-  assert.deepEqual(result.counts, { files: 4, links: 5, links_broken: 2, anchors: 0, anchors_broken: 0, copies: 1, near_copies: 0, language: 1, pages: 1, pages_over: 0, archive_links: 1 });
+  assert.deepEqual(result.counts, { files: 4, links: 5, links_broken: 2, anchors: 0, anchors_broken: 0, copies: 1, near_copies: 0, similar: 0, language: 1, pages: 1, pages_over: 0, archive_links: 1 });
 });
 
 test('anchors resolve against the headings of the file they name, with the rendered slug rule', (t) => {
@@ -124,7 +124,7 @@ test('the CLI: check prints counts, exits non-zero on a problem, and takes --pro
   const clean = spawnSync(process.execPath, [CLI, 'herbarium', 'check', '--project', root], { encoding: 'utf8' });
   assert.equal(clean.status, 0, clean.stderr);
   assert.match(clean.stdout, /links     1\/1 resolve/);
-  assert.match(clean.stdout, /copies    0 exact · 0 near/);
+  assert.match(clean.stdout, /copies    0 exact · 0 near \(14 words\) · 0 similar/);
   assert.match(clean.stdout, /anchors   0\/0 resolve/);
   assert.match(clean.stdout, /pages     1\/1 within 40 words/);
   writeFileSync(path.join(root, 'README.md'), `# Home\n\nSee [gone](docs/b.md).\n`);
@@ -144,6 +144,29 @@ test('the CLI: check prints counts, exits non-zero on a problem, and takes --pro
   assert.equal(parseHerbariumCliArgs(['check', '--project', '/x', '--json']).json, true);
 });
 
+test('a similar paragraph is a paraphrase that kept the bones: shown, not judged, and never for a pair already reported', (t) => {
+  const original = 'The seat reports its own state through the report verb, and nothing else tells the person what happened; a seat with no done report is not done, whatever its process did, and the human decides when to merge and when to finish.';
+  // Every fourteenth word or sooner is changed, so no near-copy run survives; most 4-grams do.
+  const paraphrase = 'The seat reports its own state through the report command, and nothing else tells the reader what happened; a seat with no done report is never done, whatever its process did, and the person decides when to merge and stop.';
+  const unrelated = 'Grove prints names and starts no listener; every project keeps one baseline and overlays only the services a task changed, and the shared engines are isolated by database and prefix rather than by port number.';
+  const root = fixture(t, {
+    'README.md': `# Home\n\nShort.\n`,
+    'docs/a.md': `# A\n\n${original}\n`,
+    'docs/b.md': `# B\n\n${paraphrase}\n`,
+    'docs/c.md': `# C\n\n${unrelated}\n`,
+  });
+  const result = checkHerbarium({ root, values: parseHerbariumValues(stringify(VALUES)) });
+  assert.deepEqual(result.findings.similar.map((f) => f.files), [['docs/a.md', 'docs/b.md']]);
+  assert.ok(result.findings.similar[0].score >= 0.5);
+  assert.equal(result.ok, true, 'similar is shown, not judged');
+  assert.match(spawnSync(process.execPath, [CLI, 'herbarium', 'check', '--project', root], { encoding: 'utf8' }).stdout, /1 similar \(shown, not judged\)[\s\S]*similar   docs\/a.md · docs\/b.md \(0\.\d+\)/);
+  // The same pair holding an exact copy is reported once, as the copy.
+  writeFileSync(path.join(root, 'docs/b.md'), `# B\n\n${original}\n`);
+  const exact = checkHerbarium({ root, values: parseHerbariumValues(stringify(VALUES)) });
+  assert.equal(exact.findings.copies.length, 1);
+  assert.deepEqual(exact.findings.similar, []);
+});
+
 test('a symlinked mirror of a directory is not walked, so it cannot count as a second holder of the same prose', (t) => {
   const root = fixture(t, { 'docs/a.md': `# A\n\n${PROSE}\n` });
   symlinkSync(path.join(root, 'docs'), path.join(root, 'mirror'));
@@ -158,7 +181,7 @@ test('a symlinked mirror of a directory is not walked, so it cannot count as a s
 test('the catalog passes its own check', () => {
   const result = spawnSync(process.execPath, [CLI, 'herbarium', 'check', '--project', CATALOG], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stdout);
-  assert.match(result.stdout, /copies    0 exact · 0 near/);
+  assert.match(result.stdout, /copies    0 exact · 0 near \(14 words\) · 0 similar/);
   assert.match(result.stdout, /language  0 files/);
   assert.doesNotMatch(result.stdout, /anchors   0\/0/, 'the catalog links to headings, and they resolve');
 });
