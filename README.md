@@ -91,7 +91,20 @@ stopping machine infra. Those are a person's, by decision.
 
 ## Install
 
-Two routes; pick one.
+[![skills.sh](https://skills.sh/b/de-novo/skills)](https://skills.sh/de-novo/skills)
+
+Three routes; pick one.
+
+**With the skills CLI**, into any agent that reads skills (Claude Code,
+Codex, Cursor, and the rest). The files land in your project as copies
+you own:
+
+```bash
+npx skills@latest add de-novo/skills
+```
+
+Pick the skills you want, or `--skill '*'` for all seven. Pull newer
+versions with `npx skills update`.
 
 **As a Claude Code plugin.** The skills arrive as a managed bundle. From
 inside a session:
@@ -104,10 +117,10 @@ inside a session:
 **As a checkout.** Clone, then `npm install && npm link`; the skills load
 through `.agents/skills/` symlinks and `de-novo skills` is on your PATH.
 
-The CLI comes only with the checkout today. A plugin install gives you the
-five skills; the verbs they name (`de-novo skills …`) need the checkout
-linked once on the machine. The skills say what to run; the checkout is
-what runs it.
+The CLI comes only with the checkout today. The first two routes give you
+the seven skills; the verbs they name (`de-novo skills …`) need the
+checkout linked once on the machine. The skills say what to run; the
+checkout is what runs it.
 
 ## Skills
 
