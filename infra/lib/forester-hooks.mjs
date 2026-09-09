@@ -21,15 +21,19 @@ function homeOf(environment) {
   return environment.HOME || homedir();
 }
 
-// Every command is the same shape: with FORESTER_EVENTS set, append one
-// JSON line naming the event; otherwise consume stdin and do nothing.
+// Every command is the same shape: with FORESTER_EVENTS naming a file
+// under Forester's own state directory, append one JSON line naming the
+// event; otherwise consume stdin and do nothing. The directory test is
+// what keeps a global hook from being an append-anywhere primitive: a
+// process that sets FORESTER_EVENTS to some other path gets nothing.
 // `payload` tools already send a JSON object that names the event, so it is
 // appended as is; the others get a line written here.
 function hookCommand(event, { payload }) {
   const append = payload
     ? 'cat >> "$FORESTER_EVENTS" && printf \'\\n\' >> "$FORESTER_EVENTS"'
     : `printf '{"hook_event_name":"${event}"}\\n' >> "$FORESTER_EVENTS"`;
-  return `# ${HOOK_MARKER}\nif [ -n "$FORESTER_EVENTS" ]; then ${append}; else cat >/dev/null 2>&1 || :; fi`;
+  const inside = 'case "$FORESTER_EVENTS" in "${GROVE_STATE_DIR:-$HOME/.dev-infra}"/foresters/*) true ;; *) false ;; esac';
+  return `# ${HOOK_MARKER}\nif [ -n "$FORESTER_EVENTS" ] && ${inside}; then ${append}; else cat >/dev/null 2>&1 || :; fi`;
 }
 
 const CLAUDE_LIKE_EVENTS = ['UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop', 'StopFailure', 'SessionEnd', 'Notification'];

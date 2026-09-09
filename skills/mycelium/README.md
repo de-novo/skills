@@ -42,6 +42,12 @@ Beside Forester, not inside it: two graphs, one read-only seam
 (`propose --from-seat`). Understory points at its ids. Root map:
 [How the skills fit](../../README.md#how-the-skills-fit).
 
+## What it does to your machine
+
+| Writes | Downloads | Runs | Undo |
+| --- | --- | --- | --- |
+| One append-only log per project under `~/.dev-infra/mycelium/`, and a lock file beside it while a write is in flight | Nothing | Nothing; it reads Dryad's registry for `--from-seat` | Nothing is deleted; a wrong fact is amended or invalidated with a reason |
+
 ## Apply to a project
 
 1. Write `.agents/mycelium.yml` with the domains and the first types.

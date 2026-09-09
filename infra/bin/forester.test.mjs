@@ -397,13 +397,24 @@ test('hooks installs one marked entry per event in each tool store, keeps the pe
   assert.deepEqual(Object.keys(codex.hooks), ['Stop', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PermissionRequest']);
   const grok = JSON.parse(readFileSync(path.join(home, '.grok/hooks/de-novo-forester.json'), 'utf8'));
   assert.deepEqual(Object.keys(grok.hooks), ['UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop', 'StopFailure', 'SessionEnd', 'Notification']);
-  // Every command is gated: without FORESTER_EVENTS it consumes stdin and exits 0.
+  // Every command is gated: without FORESTER_EVENTS it consumes stdin and
+  // exits 0, and with FORESTER_EVENTS outside Forester's state directory it
+  // writes nothing, so a global hook is not an append-anywhere primitive.
+  mkdirSync(path.join(home, '.dev-infra/foresters/slug'), { recursive: true });
+  mkdirSync(path.join(home, 'override/foresters/slug'), { recursive: true });
   for (const command of [cursor.hooks.stop[1].command, codex.hooks.Stop[1].hooks[0].command]) {
-    const gated = spawnSync('sh', ['-c', command], { input: '{"x":1}', env: { PATH: process.env.PATH }, encoding: 'utf8' });
+    const gated = spawnSync('sh', ['-c', command], { input: '{"x":1}', env: { PATH: process.env.PATH, HOME: home }, encoding: 'utf8' });
     assert.equal(gated.status, 0);
-    const events = path.join(home, 'events.log');
-    spawnSync('sh', ['-c', command], { input: '{"hook_event_name":"Stop"}', env: { PATH: process.env.PATH, FORESTER_EVENTS: events }, encoding: 'utf8' });
-    assert.match(readFileSync(events, 'utf8'), /"hook_event_name":"Stop"/);
+    const inside = path.join(home, '.dev-infra/foresters/slug/w1.events');
+    spawnSync('sh', ['-c', command], { input: '{"hook_event_name":"Stop"}', env: { PATH: process.env.PATH, HOME: home, FORESTER_EVENTS: inside }, encoding: 'utf8' });
+    assert.match(readFileSync(inside, 'utf8'), /"hook_event_name":"Stop"/);
+    const outside = path.join(home, 'events.log');
+    const refused = spawnSync('sh', ['-c', command], { input: '{"hook_event_name":"Stop"}', env: { PATH: process.env.PATH, HOME: home, FORESTER_EVENTS: outside }, encoding: 'utf8' });
+    assert.equal(refused.status, 0);
+    assert.equal(existsSync(outside), false, 'a path outside the state directory is not written');
+    const overridden = path.join(home, 'override/foresters/slug/w1.events');
+    spawnSync('sh', ['-c', command], { input: '{"hook_event_name":"Stop"}', env: { PATH: process.env.PATH, HOME: home, GROVE_STATE_DIR: path.join(home, 'override'), FORESTER_EVENTS: overridden }, encoding: 'utf8' });
+    assert.match(readFileSync(overridden, 'utf8'), /"hook_event_name":"Stop"/, 'GROVE_STATE_DIR moves the allowed root with it');
   }
 
   // Idempotent: a second apply changes nothing; a remove takes back only ours.

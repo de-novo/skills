@@ -104,6 +104,12 @@ The ground. Dryad seats stand on it; Forester never touches it directly;
 the machine backend lives in this catalog's `infra/`, not in the project.
 Root map: [How the skills fit](../../README.md#how-the-skills-fit).
 
+## What it does to your machine
+
+| Writes | Downloads | Runs | Undo |
+| --- | --- | --- | --- |
+| Machine engines as Docker containers on the `dev-infra` network, only on `infra up` or `setup`; overlay envs through the project's own adapter; the overlay registry under `~/.dev-infra/overlays/` | The engine images the compose catalog names, only on `infra up` | The project's own `runtime.commands` (status, up, overlay) and Docker for the engines | `overlay destroy` per env; there is no `down` on purpose, a person stops shared engines with Docker |
+
 ## Apply to a project
 
 Install the CLI once per machine in the catalog checkout (`npm install &&

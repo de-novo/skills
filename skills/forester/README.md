@@ -39,6 +39,12 @@ The first step after a goal: it feeds Dryad, Understory draws its graph,
 Mycelium keeps the decisions the grilling locked. Root map:
 [How the skills fit](../../README.md#how-the-skills-fit).
 
+## What it does to your machine
+
+| Writes | Downloads | Runs | Undo |
+| --- | --- | --- | --- |
+| Seats through Dryad; a snapshot and per-session events files under `~/.dev-infra/foresters/`; for Claude Code a per-session settings file and the seat path's trust entry in `~/.claude.json`; with `hooks --apply` only, one marked entry per event in the global hook stores of Codex, Grok, Cursor, and OpenCode, each gated to fire only when `FORESTER_EVENTS` names a file under that state directory | `@lydell/node-pty`, an optional npm dependency, only for `serve` | The tool command templates in `forester.local.yml`, in a pseudo-terminal, with the task line passed as one argv element and no shell in between | `hooks --remove --apply` takes back exactly the marked entries; Ctrl-C on `serve` closes every session and removes its snapshot and socket |
+
 ## Apply to a project
 
 1. The project has `.agents/dryad-profile.yml` (and usually Grove's

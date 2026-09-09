@@ -214,10 +214,10 @@ export function checkHerbarium({ root, values }) {
       }
     }
     if (LANGUAGES[values.language].test(text)) findings.language.push({ file });
-    // The cap is on prose: a diagram or a command block in a fence is
-    // looked at, not read, and does not count.
+    // The cap is on prose: a diagram or a command block in a fence, and a
+    // table, are looked at, not read, and do not count.
     if (matchesAny(file, values.pages.globs)) {
-      const words = stripCode(text).split(/\s+/).filter(Boolean).length;
+      const words = stripCode(text).split('\n').filter((line) => !line.trim().startsWith('|')).join('\n').split(/\s+/).filter(Boolean).length;
       if (words > values.pages.max_words) findings.pages.push({ file, words, max: values.pages.max_words });
     }
   }

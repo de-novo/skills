@@ -106,10 +106,10 @@ test('a near copy is a run of fourteen words shared by two files after case and 
   assert.deepEqual(both.findings.near_copies, []);
 });
 
-test('a page is measured by its prose: a diagram in a fence is looked at, not read', (t) => {
+test('a page is measured by its prose: a diagram in a fence or a table is looked at, not read', (t) => {
   const many = Array.from({ length: 60 }, (_, i) => `word${i}`).join(' ');
   const root = fixture(t, {
-    'README.md': `# Home\n\nA short page.\n\n\`\`\`\n${many}\n\`\`\`\n`,
+    'README.md': `# Home\n\nA short page.\n\n\`\`\`\n${many}\n\`\`\`\n\n| a | b |\n| --- | --- |\n| ${many} | ${many} |\n`,
     'docs/long.md': `# Long\n`,
   });
   const values = parseHerbariumValues(stringify({ ...VALUES, pages: { globs: ['README.md', 'docs/long.md'], max_words: 40 } }));
