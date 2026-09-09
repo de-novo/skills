@@ -53,7 +53,9 @@ writing a document an agent runs, and one verb that counts drift; it names
 what was borrowed and from where. Landed 2026-09-09; the second round
 (anchors, near copies, a sandbox project's first check, and a Codex session
 reaching for the skill unprompted) is recorded in
-[evidence](evidence/2026-09-09-herbarium.md).
+[evidence](evidence/2026-09-09-herbarium.md); the third (paraphrase
+similarity, a cold reader of the cases note, Codex inside a sandbox project)
+in [evidence](evidence/2026-09-09-herbarium-round-3.md).
 
 [Playground design](playground-design.md) records the sandbox rules for the
 sample project the catalog ships: one directory holds everything, no machine

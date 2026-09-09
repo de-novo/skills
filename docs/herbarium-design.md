@@ -77,4 +77,6 @@ findings (one wrong-script file, one page over the cap for the wrong
 reason), both fixed, then zero. The second round's record, including six
 near copies the stricter check found in the catalog's own documents and a
 Codex session that reached for the skill without being told its name, is
-[evidence/2026-09-09-herbarium.md](evidence/2026-09-09-herbarium.md).
+[evidence/2026-09-09-herbarium.md](evidence/2026-09-09-herbarium.md);
+the third round, with the similar-paragraph count and a reader who was not
+here, is [evidence/2026-09-09-herbarium-round-3.md](evidence/2026-09-09-herbarium-round-3.md).
