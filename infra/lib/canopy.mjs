@@ -183,7 +183,7 @@ export function renderState(state) {
       <h3>${esc(seat.id)} · ${esc(seat.by ?? '—')}${seat.last ? ` · <time datetime="${esc(seat.last.at)}" title="${esc(seat.last.at)}">${esc(elapsed(seat.last.at))}</time>` : ''}</h3>
       ${seat.task ? `<p class="task">${esc(seat.task.split(/\r?\n/)[0])}</p>` : ''}
       <p class="status">${esc(seat.status)}${seat.report ? ` · ${esc(clip(seat.report.detail))}` : ''}</p>
-      ${seat.activity ? `<p class="doing">now ${esc(seat.activity.doing ?? seat.activity.state ?? '')}${seat.activity.state && seat.activity.doing ? ` · ${esc(seat.activity.state)}` : ''}${seat.activity.changed_at ? ` · ${esc(elapsed(seat.activity.changed_at))}` : ''}${seat.activity.transcript && slug && !archived ? ` · <a href="/chat/${encodeURIComponent(slug)}/${encodeURIComponent(seat.id)}">chat</a>` : ''}</p>` : ''}
+      ${seat.activity ? `<p class="doing">now ${esc(seat.activity.doing ?? seat.activity.state ?? '')}${seat.activity.state && seat.activity.doing ? ` · ${esc(seat.activity.state)}` : ''}${seat.activity.changed_at ? ` · ${esc(elapsed(seat.activity.changed_at))}` : ''}${seat.activity.transcript && slug && !archived ? ` · <a href="/chat/${encodeURIComponent(slug)}/${encodeURIComponent(seat.id)}">chat</a>` : ''}${slug && !archived && seat.worktree_present !== false ? ` · <a href="/diff/${encodeURIComponent(slug)}/${encodeURIComponent(seat.id)}">diff</a>` : ''}</p>` : slug && !archived && seat.worktree_present !== false ? `<p class="doing"><a href="/diff/${encodeURIComponent(slug)}/${encodeURIComponent(seat.id)}">diff</a></p>` : ''}
       <p>env ${esc(envState)}${seat.hosts.length ? ' → ' + seat.hosts.map(host => `${host.attached ? link(host.text) : `${esc(host.text)} <span class="muted">(unattached)</span>`}${host.service ? ` <span class="muted">${esc(host.service)}</span>` : ''}`).join(' · ') : ''}</p>
       ${seat.entries.length ? `<p class="skills">skills · ${Object.entries(seat.verbs).map(([verb, count]) => `${esc(verb)} ${count}`).join(' · ')}<br><span class="muted">last ${esc(seat.last.event)} · ${esc(seat.last.at)}${seat.last.detail && seat.last.detail !== seat.report?.detail ? ` · ${esc(clip(seat.last.detail))}` : ''}</span></p>` : ''}
       ${files ? `<div class="files"><p>files · +${esc(files.committed)} committed · ${esc(files.open)} open</p><ul>${files.rows.slice(0, 12).map(file => `<li${file.overlap ? ' class="shared"' : ''}>${file.overlap ? '<span title="Overlapping path">⚠</span> ' : ''}${esc(file.path)} <span class="muted">${esc(file.labels.join(' · '))}</span></li>`).join('')}</ul>${files.rows.length > 12 ? `<p class="muted">${files.rows.length - 12} more files</p>` : ''}${files.truncated ? `<p class="muted">Source file list truncated; counts include omitted entries.</p>` : ''}</div>` : ''}
@@ -230,7 +230,41 @@ export function renderChat({ slug, id, activity, turns }) {
   body{font:14px/1.5 -apple-system,system-ui,sans-serif;margin:0;background:#111;color:#eee}header{position:sticky;top:0;background:#111;padding:.75rem 1rem;border-bottom:1px solid #333}header a{color:#9cf;margin-right:1rem}
   main{max-width:56rem;margin:0 auto;padding:1rem}.turn{margin:.6rem 0;padding:.6rem .8rem;border-radius:.6rem;white-space:pre-wrap;word-break:break-word}.turn.user{background:#1e2a3a;margin-left:15%}.turn.assistant{background:#1d1d1d;margin-right:15%}
   .who{font-size:12px;color:#9a9a9a;margin-right:.5rem}time{font-size:12px;color:#777}.turn p{margin:.25rem 0 0}details.tool{margin:.2rem 0 .2rem 1rem;color:#bbb;font-family:ui-monospace,monospace;font-size:12.5px}details.tool pre{white-space:pre-wrap;word-break:break-all;background:#161616;padding:.5rem;border-radius:.4rem;max-height:20rem;overflow:auto}pre.result{color:#9c9}
-  </style><header><a href="/">Canopy</a><strong>${escapeHtml(slug)} · ${escapeHtml(id)}</strong>${activity?.doing ? ` · now ${escapeHtml(activity.doing)}` : ''}${activity?.state ? ` · ${escapeHtml(activity.state)}` : ''} · ${turns.length} turns · refresh 5s</header><main>${turns.map(turn).join('')}${turns.length === 0 ? '<p class="who">No conversation yet.</p>' : ''}</main>`;
+  </style><header><a href="/">Canopy</a><strong>${escapeHtml(slug)} · ${escapeHtml(id)}</strong>${activity?.doing ? ` · now ${escapeHtml(activity.doing)}` : ''}${activity?.state ? ` · ${escapeHtml(activity.state)}` : ''} · ${turns.length} turns · <a href="/diff/${encodeURIComponent(slug)}/${encodeURIComponent(id)}">diff</a> · refresh 5s</header><main>${turns.map(turn).join('')}${turns.length === 0 ? '<p class="who">No conversation yet.</p>' : ''}</main>`;
+}
+
+// The diff page: the seat's work as `dryad diff --json` reports it, one
+// fold per file, additions and deletions coloured, nothing interpreted.
+export function renderDiff({ slug, id, report }) {
+  const files = [];
+  for (const chunk of report.patch.split(/^(?=diff --git )/m)) {
+    if (!chunk.trim()) continue;
+    const name = (chunk.match(/^diff --git a\/(\S+) b\//) ?? [])[1] ?? 'file';
+    const body = chunk.split('\n').map((line) => {
+      const cls = line.startsWith('+++') || line.startsWith('---') ? 'meta' : line.startsWith('+') ? 'add' : line.startsWith('-') ? 'del' : line.startsWith('@@') ? 'hunk' : '';
+      return `<span class="${cls}">${escapeHtml(line)}</span>`;
+    }).join('');
+    files.push(`<details class="file" open><summary>${escapeHtml(name)}</summary><pre>${body}</pre></details>`);
+  }
+  return `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="5"><title>${escapeHtml(slug)} · ${escapeHtml(id)} · diff</title><style>
+  body{font:14px/1.5 -apple-system,system-ui,sans-serif;margin:0;background:#111;color:#eee}header{position:sticky;top:0;background:#111;padding:.75rem 1rem;border-bottom:1px solid #333}header a{color:#9cf;margin-right:1rem}
+  main{max-width:64rem;margin:0 auto;padding:1rem}details.file{margin:.6rem 0;border:1px solid #333;border-radius:.5rem}details.file summary{padding:.4rem .8rem;cursor:pointer;background:#1a1a1a;font-family:ui-monospace,monospace}
+  pre{margin:0;padding:.6rem .8rem;font:12.5px/1.45 ui-monospace,monospace;white-space:pre-wrap;word-break:break-all}pre span{display:block;min-height:1.45em}.add{color:#8fd18f;background:#12261a}.del{color:#f0908f;background:#2a1414}.hunk{color:#9cf}.meta{color:#888}
+  .note{color:#9a9a9a}
+  </style><header><a href="/">Canopy</a><a href="/chat/${encodeURIComponent(slug)}/${encodeURIComponent(id)}">chat</a><strong>${escapeHtml(slug)} · ${escapeHtml(id)}</strong> · ${files.length} file${files.length === 1 ? '' : 's'} changed since ${escapeHtml(String(report.base).slice(0, 12))}${report.truncated ? ' · patch truncated' : ''} · refresh 5s</header><main>${files.join('')}${(report.untracked ?? []).length ? `<p class="note">untracked: ${report.untracked.map(escapeHtml).join(', ')}</p>` : ''}${files.length === 0 && !(report.untracked ?? []).length ? '<p class="note">No changes yet.</p>' : ''}</main>`;
+}
+
+async function diffPage(pathname, options) {
+  const match = pathname.match(/^\/diff\/([^/]+)\/([^/]+)$/);
+  if (!match) return null;
+  const [slug, id] = [decodeURIComponent(match[1]), decodeURIComponent(match[2])];
+  const report = await collectState(options);
+  const project = (report.projects ?? []).find((p) => p.slug === slug);
+  const seat = (project?.seats ?? []).find((s) => s.id === id);
+  if (!seat) return { status: 404, body: 'No such seat.' };
+  const diff = await cliJson(['dryad', 'diff', id, '--project', project.root, '--json'], options);
+  if (diff.error || diff.patch == null) return { status: 404, body: diff.error ?? 'No diff for this seat.' };
+  return { status: 200, body: renderDiff({ slug, id, report: diff }) };
 }
 
 // /chat/<slug>/<id>: the seat is found in the same report the front page
@@ -260,9 +294,9 @@ export async function startCanopy({ port = 7420, ...options } = {}) {
       res.writeHead(405, { Allow: 'GET' }).end('Read-only: use GET.');
       return;
     }
-    if (req.url.startsWith('/chat/')) {
+    if (req.url.startsWith('/chat/') || req.url.startsWith('/diff/')) {
       try {
-        const page = await chatPage(req.url.split('?')[0], options);
+        const page = await (req.url.startsWith('/diff/') ? diffPage : chatPage)(req.url.split('?')[0], options);
         res.writeHead(page?.status ?? 404, { 'Content-Type': page?.status === 200 ? 'text/html; charset=utf-8' : 'text/plain; charset=utf-8' }).end(page?.body ?? 'Not found.');
       } catch (error) {
         res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' }).end(error.message);

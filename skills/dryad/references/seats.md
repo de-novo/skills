@@ -81,6 +81,7 @@ de-novo skills dryad plan   ID (--task TEXT | --task-file PATH) [--worktree PATH
 de-novo skills dryad seat   ID [--json | --env | --shell | --task]
 de-novo skills dryad report ID --status working|blocked|done [--note TEXT] [--session REF]
 de-novo skills dryad status [ID] [--json] [--finished]
+de-novo skills dryad diff   ID [--json]
 de-novo skills dryad finish ID [--apply]
 de-novo skills dryad projects [--json]
 ```
@@ -91,6 +92,7 @@ de-novo skills dryad projects [--json]
 | seat | always read-only: the seat for a launcher | — |
 | report | always writes the worker's status and a journal line | — |
 | status | always read-only: counts and problems; non-zero on any problem. Counts every worktree of the repository (`worktrees n (m unseated)`) and the paths two seats both hold (`overlaps n`, then one `overlap <path> <id> · <id>` line each). With `overlay.create_on: attach` a seat's env shows `unattached` until its first attach and is not a problem. Another seat's in-flight overlay mutation is shown as `in-flight`, not counted as a problem; a stalled one is. An overlap is a fact, not a problem: it never changes the exit code | — |
+| diff | always read-only: the seat's whole difference from its base as one patch (`git diff <base>` in the worktree, so committed and uncommitted alike), then `untracked: <path>` lines; `--json` prints `{ id, worktree, base, head, patch, untracked, truncated }`, the patch capped at 512 KiB | — |
 | finish | prints what would be destroyed or removed | `overlay destroy`, remove a clean Dryad-created worktree, move the seat and its journal to `<slug>.finished.yml`; branches kept |
 | projects | always read-only, machine-wide (no project needed): one counted line per indexed project — root, present or missing, `seats n`, `finished n`, `overlay on|off`; `--json` prints `{ projects: [ { slug, root, root_present, seats, finished, overlay, updated_at } ] }`; a missing index prints `projects 0` | — |
 
@@ -144,6 +146,11 @@ Older status JSON still renders the available seat cards and omits missing
 fields. Sessions remain plain text.
 Finished seats expand to show their journals. Failed or timed-out commands
 appear as errors while other projects remain visible.
+
+Every live seat card links to `/diff/<slug>/<id>`: the seat's work as
+`dryad diff --json` reports it, one fold per file, additions and deletions
+coloured, untracked files named, refreshed every five seconds; the chat
+page and the diff page link to each other.
 
 A seat card whose activity names a transcript links to `/chat/<slug>/<id>`:
 the session's own transcript read where the tool left it and shown as a

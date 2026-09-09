@@ -636,6 +636,7 @@ const VERBS = Object.freeze({
   seat: { positionals: [1, 1], options: ['project'], flags: ['json', 'env', 'shell', 'task'] },
   report: { positionals: [1, 1], options: ['status', 'note', 'session', 'project'], flags: [] },
   status: { positionals: [0, 1], options: ['project'], flags: ['json', 'finished'] },
+  diff: { positionals: [1, 1], options: ['project'], flags: ['json'] },
   finish: { positionals: [1, 1], options: ['project'], flags: ['apply'] },
   projects: { positionals: [0, 0], options: [], flags: ['json'] },
 });
@@ -1032,6 +1033,38 @@ function runFinishedStatus({ options, project, environment }) {
   return 0;
 }
 
+// The seat's work as a patch: everything its worktree holds that its base
+// does not, committed and uncommitted alike, plus the untracked files git
+// would not diff. Read-only; capped so a dashboard cannot be buried.
+const DIFF_LIMIT = 512 * 1024;
+
+function runDiff({ options, project, environment }) {
+  const { state } = readDryadState(project.slug, environment);
+  const seat = seatOf(state, options.id);
+  if (!existsSync(seat.worktree)) fail(`seat ${options.id}: worktree missing at ${seat.worktree}.`);
+  const head = git(['rev-parse', 'HEAD'], seat.worktree);
+  const patch = git(['diff', seat.base, '--'], seat.worktree);
+  const untracked = git(['ls-files', '--others', '--exclude-standard'], seat.worktree);
+  if (head.status !== 0 || patch.status !== 0 || untracked.status !== 0) fail(`seat ${options.id}: git failed in ${seat.worktree}: ${(patch.stderr || head.stderr || untracked.stderr).trim()}`);
+  const truncated = patch.stdout.length > DIFF_LIMIT;
+  const report = {
+    id: options.id,
+    worktree: seat.worktree,
+    base: seat.base,
+    head: head.stdout.trim(),
+    patch: truncated ? patch.stdout.slice(0, DIFF_LIMIT) : patch.stdout,
+    untracked: untracked.stdout.split('\n').filter(Boolean),
+    truncated,
+  };
+  if (options.json) console.log(JSON.stringify(report, null, 2));
+  else {
+    process.stdout.write(report.patch);
+    for (const file of report.untracked) console.log(`untracked: ${file}`);
+    if (truncated) console.log(`(patch truncated at ${DIFF_LIMIT} bytes)`);
+  }
+  return 0;
+}
+
 function runStatus({ options, project, environment }) {
   if (options.finished) return runFinishedStatus({ options, project, environment });
   const { state } = readDryadState(project.slug, environment);
@@ -1290,6 +1323,8 @@ export function runDryad({ options, environment = process.env, cwd = process.cwd
       return runReport({ options, project, environment });
     case 'status':
       return runStatus({ options, project, environment });
+    case 'diff':
+      return runDiff({ options, project, environment });
     case 'finish':
       return runFinish({ options, project, environment });
     default:
@@ -1305,6 +1340,7 @@ usage:
   ${cli} dryad seat   ID [--json | --env | --shell | --task] [--project ROOT]
   ${cli} dryad report ID --status working|blocked|done [--note TEXT] [--session REF] [--project ROOT]
   ${cli} dryad status [ID] [--json] [--finished] [--project ROOT]
+  ${cli} dryad diff ID [--json] [--project ROOT]    the seat's work as a patch against its base, committed or not, plus untracked files
   ${cli} dryad finish ID [--project ROOT] [--apply]
   ${cli} dryad projects [--json]
 
