@@ -37,7 +37,12 @@ log of assertions per project, each with valid time, confidence, domain, source,
 and agent, folded into the graph of what the project holds true. Workers
 propose; a person or the named judge commits or invalidates. The only seam to
 Forester is read-only: a seat's done report may be proposed as a fact. Landed
-2026-09-08.
+2026-09-08. [Mycelium cases](mycelium-cases.md) walks every situation a
+shared fact store meets in a multi-worker sprint, marks each as measured,
+tested, pattern, or gap at `7047aa0`, and names the second round: declared
+predicates with cardinality, a lock around commit, and the reading verbs.
+That round landed 2026-09-09 with its own
+[evidence](evidence/2026-09-09-mycelium-round-2.md).
 
 [Playground design](playground-design.md) records the sandbox rules for the
 sample project the catalog ships: one directory holds everything, no machine

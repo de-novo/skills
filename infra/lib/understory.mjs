@@ -6,6 +6,7 @@
 import { readFileSync } from 'node:fs';
 
 import { foresterJson, loadForester } from './forester.mjs';
+import { VALUES_RELPATH as MYCELIUM_VALUES, loadMycelium, query as myceliumQuery } from './mycelium.mjs';
 
 const STATE_ORDER = ['done', 'active', 'ready', 'blocked', 'failed'];
 // One fill per state. Chosen so done recedes and the two states that need a
@@ -162,6 +163,26 @@ function loadJson(options, environment, cwd) {
   return foresterJson(loadForester({ project: options.project, environment, cwd }));
 }
 
+// The pointer to what was proven: for each item, the ids of the active
+// Mycelium facts whose subject is that item. Read through the same query
+// the CLI exposes, never restated; a project without a values file gets
+// none, and --from (a saved plan) has no project to ask.
+export function factsByItem(rows, { project, environment, cwd }) {
+  const out = new Map();
+  let loaded;
+  try {
+    loaded = loadMycelium({ project, environment, cwd });
+  } catch (error) {
+    if (new RegExp(`values not found: .*${MYCELIUM_VALUES.replace('.', '\\.')}$`).test(error.message)) return out;
+    throw error;
+  }
+  for (const row of rows) {
+    const ids = myceliumQuery(loaded.assertions, { status: 'active', s: row.id }).map((fact) => fact.id);
+    if (ids.length > 0) out.set(row.id, ids);
+  }
+  return out;
+}
+
 export function runUnderstory({ options, environment = process.env, cwd = process.cwd() }) {
   const json = loadJson(options, environment, cwd);
   if (options.verb === 'graph') {
@@ -169,12 +190,14 @@ export function runUnderstory({ options, environment = process.env, cwd = proces
     return 0;
   }
   const rows = understoryReading(json);
+  const facts = options.from != null ? new Map() : factsByItem(rows, { project: options.project, environment, cwd });
+  for (const row of rows) row.facts = facts.get(row.id) ?? [];
   if (options.json) {
     console.log(JSON.stringify({ summary: understorySummary(json), reading: rows }, null, 2));
     return 0;
   }
   const width = Math.max(...rows.map((row) => row.id.length));
-  console.log([understorySummary(json), ...rows.map((row) => `  ${row.id.padEnd(width)}  ${row.state.padEnd(7)}  ${row.line}`)].join('\n'));
+  console.log([understorySummary(json), ...rows.map((row) => `  ${row.id.padEnd(width)}  ${row.state.padEnd(7)}  ${row.line}${row.facts.length ? `  · facts ${row.facts.join(', ')}` : ''}`)].join('\n'));
   return 0;
 }
 

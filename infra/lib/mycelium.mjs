@@ -5,7 +5,7 @@
 // point-in-time query. It never decides what is true: propose is any
 // worker's, commit and invalidate are a person's or the judge's.
 //
-//   .agents/mycelium.yml               the project's domains, entity types, and judges (tracked)
+//   .agents/mycelium.yml               the project's domains, entity types, predicates, and judges (tracked)
 //   <state>/mycelium/<slug>.jsonl      the log (machine-local, like Dryad's registry)
 import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
@@ -13,11 +13,16 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import { parse } from 'yaml';
 
-import { loadDryadProject, readDryadFinished, readDryadState, resolveDryadProject } from './dryad.mjs';
+import { acquireStateLock, loadDryadProject, readDryadFinished, readDryadState, resolveDryadProject } from './dryad.mjs';
 
 export const VALUES_RELPATH = '.agents/mycelium.yml';
 export const LOG_VERSION = 1;
 export const STATUSES = Object.freeze(['staging', 'active', 'invalid']);
+export const CARDINALITIES = Object.freeze(['one', 'many']);
+// The predicate --from-seat writes. Always declared, many: a seat reports
+// more than once. A values file may not redeclare it.
+export const REPORTED = 'reported';
+const LOCK_WAIT_MS = 2000;
 const TOKEN = /^[a-z0-9][a-z0-9._-]{0,62}$/;
 // A writer id: seat:<id>, human:<name>, agent:<name>, or any short handle.
 const WRITER = /^[a-z0-9][a-z0-9._:@-]{0,78}$/;
@@ -45,8 +50,8 @@ function isoOrFail(value, what) {
 export function parseMyceliumValues(yamlText, source = 'mycelium.yml') {
   const doc = parse(yamlText);
   if (!doc || typeof doc !== 'object' || Array.isArray(doc)) fail(`${source}: expected a mapping.`);
-  const known = new Set(['version', 'domains', 'types', 'judges']);
-  for (const key of Object.keys(doc)) if (!known.has(key)) fail(`${source}: unknown key "${key}"; allowed: version, domains, types, judges.`);
+  const known = new Set(['version', 'domains', 'types', 'predicates', 'judges']);
+  for (const key of Object.keys(doc)) if (!known.has(key)) fail(`${source}: unknown key "${key}"; allowed: version, domains, types, predicates, judges.`);
   if (doc.version !== 1) fail(`${source}: version must be 1.`);
   const list = (name, pattern, what) => {
     const value = doc[name];
@@ -55,10 +60,22 @@ export function parseMyceliumValues(yamlText, source = 'mycelium.yml') {
     if (new Set(value).size !== value.length) fail(`${source}: ${name} has a duplicate.`);
     return value;
   };
+  // predicates: a map of name → one|many. one: a subject holds a single
+  // object at a time, so a second object is a conflict. many: another edge.
+  const predicates = doc.predicates;
+  if (!predicates || typeof predicates !== 'object' || Array.isArray(predicates) || Object.keys(predicates).length === 0) {
+    fail(`${source}: predicates must be a non-empty map of name: one|many.`);
+  }
+  for (const [name, value] of Object.entries(predicates)) {
+    if (!TOKEN.test(name)) fail(`${source}: predicate ${JSON.stringify(name)} must be a lower-case token.`);
+    if (name === REPORTED) fail(`${source}: predicate "${REPORTED}" is built in (many) and may not be redeclared.`);
+    if (!CARDINALITIES.includes(value)) fail(`${source}: predicate ${name} must be one or many, got ${JSON.stringify(value)}.`);
+  }
   return {
     version: 1,
     domains: list('domains', TOKEN, 'a lower-case token'),
     types: list('types', TOKEN, 'a lower-case token'),
+    predicates: { ...predicates, [REPORTED]: 'many' },
     judges: doc.judges == null ? null : list('judges', WRITER, 'a writer id such as human:name or seat:id'),
   };
 }
@@ -93,6 +110,7 @@ export function makeAssertion(input, values) {
   out.id = input.id ?? `a-${randomUUID().replaceAll('-', '').slice(0, 10)}`;
   out.s = text('s');
   out.p = text('p');
+  if (!(out.p in values.predicates)) fail(`predicate ${JSON.stringify(out.p)} is not in ${VALUES_RELPATH} predicates (${Object.keys(values.predicates).join(', ')}).`);
   out.o = text('o');
   out.s_type = text('s_type');
   out.o_type = text('o_type', { required: false });
@@ -166,28 +184,34 @@ export function foldLog(events) {
   for (const event of events) {
     switch (event.op) {
       case 'propose':
-        assertions.set(event.assertion.id, { ...event.assertion });
+        // changed_at is the transaction time of the last line that touched
+        // the row; --since reads it, so a change to an old fact is news.
+        assertions.set(event.assertion.id, { ...event.assertion, changed_at: event.assertion.tx_at ?? event.at });
         break;
       case 'commit': {
         const target = assertions.get(event.id);
-        if (target) target.status = 'active';
+        if (target) {
+          target.status = 'active';
+          target.supersedes = event.supersedes ?? [];
+          target.changed_at = event.at;
+        }
         // A superseded fact stopped holding when its replacement began to
         // hold; an amended fact never held, so its interval is empty.
         for (const id of event.supersedes ?? []) {
           const old = assertions.get(id);
           if (!old) continue;
           const closeAt = target && target.valid_from >= old.valid_from ? target.valid_from : event.at;
-          Object.assign(old, { status: 'invalid', valid_to: closeAt, invalid_reason: `superseded by ${event.id}` });
+          Object.assign(old, { status: 'invalid', valid_to: closeAt, invalid_reason: `superseded by ${event.id}`, changed_at: event.at });
         }
         if (event.amends != null) {
           const old = assertions.get(event.amends);
-          if (old) Object.assign(old, { status: 'invalid', valid_to: old.valid_from, invalid_reason: `amended by ${event.id}` });
+          if (old) Object.assign(old, { status: 'invalid', valid_to: old.valid_from, invalid_reason: `amended by ${event.id}`, changed_at: event.at });
         }
         break;
       }
       case 'invalidate': {
         const target = assertions.get(event.id);
-        if (target) Object.assign(target, { status: 'invalid', valid_to: event.at, invalid_reason: event.reason });
+        if (target) Object.assign(target, { status: 'invalid', valid_to: event.at, invalid_reason: event.reason, changed_at: event.at });
         break;
       }
       default:
@@ -199,45 +223,76 @@ export function foldLog(events) {
 
 // ---------------------------------------------------------- transitions
 
+// Every write re-reads the log under the same file lock Dryad uses, so the
+// check and the append are one step; two committers cannot both pass the
+// conflict check on the same stale fold.
+function withLog(file, fn) {
+  const release = acquireStateLock(file, LOCK_WAIT_MS);
+  try {
+    const assertions = foldLog(readLog(file));
+    return fn(assertions);
+  } finally {
+    release();
+  }
+}
+
 export function propose({ file, assertion, by }) {
-  appendEvent(file, { at: now(), op: 'propose', by, assertion });
+  withLog(file, () => appendEvent(file, { at: now(), op: 'propose', by, assertion }));
   return assertion;
 }
 
+// amend reads its target inside the lock so the copy is of the fact as it
+// is at that instant, not as it was when the caller last looked.
+export function proposeAmendment({ file, id, overrides, values, by }) {
+  return withLog(file, (assertions) => {
+    const assertion = amendment(assertions, id, overrides, values);
+    appendEvent(file, { at: now(), op: 'propose', by, assertion });
+    return assertion;
+  });
+}
+
 // An active fact with the same domain, subject, and predicate but another
-// object is a conflict. It is refused unless the caller supersedes, which
-// invalidates the older fact in the same event so no moment has both.
-export function commitPlan({ assertions, id }) {
+// object is a conflict when the predicate is declared one. It is refused
+// unless the caller supersedes, which invalidates the older fact in the
+// same event so no moment has both. For a many predicate a second object
+// is another edge. The same object is a duplicate for both.
+export function commitPlan({ assertions, id, values }) {
   const target = assertions.get(id);
   if (!target) fail(`${id}: no such assertion.`);
   if (target.status !== 'staging') fail(`${id}: is ${target.status}, only staging can be committed.`);
+  const cardinality = values.predicates[target.p];
+  if (cardinality == null) fail(`${id}: predicate ${JSON.stringify(target.p)} is no longer in ${VALUES_RELPATH} predicates; amend it or declare the predicate.`);
   const conflicts = [];
   const amends = target.amends != null && assertions.get(target.amends)?.status !== 'invalid' ? target.amends : null;
   for (const other of assertions.values()) {
     if (other.id === id || other.id === amends || other.status !== 'active') continue;
     if (other.domain !== target.domain || other.s !== target.s || other.p !== target.p) continue;
     if (other.o === target.o) fail(`${id}: ${other.id} already states ${target.s} ${target.p} ${target.o} in ${target.domain}.`);
-    conflicts.push(other.id);
+    if (cardinality === 'one') conflicts.push(other.id);
   }
-  return { target, conflicts, amends };
+  return { target, conflicts, amends, cardinality };
 }
 
-export function commit({ file, assertions, id, by, supersede = false }) {
-  const { target, conflicts, amends } = commitPlan({ assertions, id });
-  if (conflicts.length > 0 && !supersede) {
-    fail(`${id}: conflicts with active ${conflicts.join(', ')} on ${target.s} ${target.p} in ${target.domain}; pass --supersede to invalidate them, or invalidate ${id}.`);
-  }
-  appendEvent(file, { at: now(), op: 'commit', by, id, supersedes: conflicts, amends });
-  return { target, superseded: conflicts, amended: amends };
+export function commit({ file, values, id, by, supersede = false }) {
+  return withLog(file, (assertions) => {
+    const { target, conflicts, amends } = commitPlan({ assertions, id, values });
+    if (conflicts.length > 0 && !supersede) {
+      fail(`${id}: conflicts with active ${conflicts.join(', ')} on ${target.s} ${target.p} in ${target.domain}; pass --supersede to invalidate them, or invalidate ${id}.`);
+    }
+    appendEvent(file, { at: now(), op: 'commit', by, id, supersedes: conflicts, amends });
+    return { target, superseded: conflicts, amended: amends };
+  });
 }
 
-export function invalidate({ file, assertions, id, by, reason }) {
-  const target = assertions.get(id);
-  if (!target) fail(`${id}: no such assertion.`);
-  if (target.status === 'invalid') fail(`${id}: is already invalid.`);
-  if (typeof reason !== 'string' || reason.length === 0) fail('invalidate requires --reason.');
-  appendEvent(file, { at: now(), op: 'invalidate', by, id, reason });
-  return target;
+export function invalidate({ file, id, by, reason }) {
+  return withLog(file, (assertions) => {
+    const target = assertions.get(id);
+    if (!target) fail(`${id}: no such assertion.`);
+    if (target.status === 'invalid') fail(`${id}: is already invalid.`);
+    if (typeof reason !== 'string' || reason.length === 0) fail('invalidate requires --reason.');
+    appendEvent(file, { at: now(), op: 'invalidate', by, id, reason });
+    return target;
+  });
 }
 
 // ---------------------------------------------------------------- query
@@ -247,6 +302,7 @@ export function invalidate({ file, assertions, id, by, reason }) {
 // not they have since been invalidated. Staging never answers --at.
 export function query(assertions, filter = {}) {
   const at = filter.at == null ? null : isoOrFail(filter.at, '--at');
+  const since = filter.since == null ? null : isoOrFail(filter.since, '--since');
   const rows = [];
   for (const row of assertions.values()) {
     if (at != null) {
@@ -256,6 +312,9 @@ export function query(assertions, filter = {}) {
     } else if (filter.status != null && row.status !== filter.status) {
       continue;
     }
+    // --since is transaction time: what was written or changed after a
+    // moment, whatever its validity, so a returning worker reads only the new.
+    if (since != null && !((row.changed_at ?? row.tx_at) >= since)) continue;
     if (filter.s != null && row.s !== filter.s) continue;
     if (filter.p != null && row.p !== filter.p) continue;
     if (filter.o != null && row.o !== filter.o) continue;
@@ -266,6 +325,54 @@ export function query(assertions, filter = {}) {
   }
   rows.sort((a, b) => (a.tx_at < b.tx_at ? -1 : a.tx_at > b.tx_at ? 1 : 0));
   return rows;
+}
+
+// The chain a fact belongs to: back through what it amends or supersedes,
+// forward through what amended or superseded it. Ordered oldest first.
+export function trace(assertions, id) {
+  if (!assertions.has(id)) fail(`${id}: no such assertion.`);
+  const seen = new Set();
+  const back = (current) => {
+    if (seen.has(current)) return;
+    seen.add(current);
+    const row = assertions.get(current);
+    if (!row) return;
+    for (const prior of [row.amends, ...(row.supersedes ?? [])].filter(Boolean)) back(prior);
+  };
+  const forward = (current) => {
+    for (const row of assertions.values()) {
+      if (seen.has(row.id)) continue;
+      if (row.amends === current || (row.supersedes ?? []).includes(current)) {
+        seen.add(row.id);
+        forward(row.id);
+      }
+    }
+  };
+  back(id);
+  for (const start of [...seen]) forward(start);
+  const rows = [...seen].map((key) => assertions.get(key)).filter(Boolean);
+  // Chain order, not clock order: a correction follows what it corrects
+  // even when both were written in the same millisecond.
+  const depth = new Map();
+  const depthOf = (row) => {
+    if (depth.has(row.id)) return depth.get(row.id);
+    depth.set(row.id, 0);
+    const priors = [row.amends, ...(row.supersedes ?? [])].filter(Boolean).map((key) => assertions.get(key)).filter(Boolean);
+    const value = priors.length === 0 ? 0 : 1 + Math.max(...priors.map(depthOf));
+    depth.set(row.id, value);
+    return value;
+  };
+  rows.sort((a, b) => depthOf(a) - depthOf(b) || (a.tx_at < b.tx_at ? -1 : a.tx_at > b.tx_at ? 1 : 0));
+  return rows.map((row) => ({
+    ...row,
+    link: row.amends ? `amends ${row.amends}` : row.supersedes?.length ? `supersedes ${row.supersedes.join(', ')}` : row.invalid_reason ? row.invalid_reason : 'origin',
+  }));
+}
+
+// One line per fact in the shape a Dryad seat brief takes: paste the block
+// and the worker starts from ids, not from a chat.
+export function brief(rows) {
+  return rows.map((row) => `- ${row.id}  ${row.s} ${row.p} ${row.o}  (${row.domain}, ${row.confidence.toFixed(2)}, ${row.source})`).join('\n');
 }
 
 export function counts(assertions) {
@@ -290,28 +397,34 @@ export function loadMycelium({ project = null, environment = process.env, cwd = 
   return { project: dryad, valuesFile, values, file, assertions };
 }
 
-// The Forester seam: a seat that reported done becomes a staging fact
-// whose source is that report, live or in the finished archive. Nothing
-// is committed here; the report is a claim until someone promotes it.
-export function seatDoneReport(slug, seatId, environment = process.env) {
+export const SEAT_REPORTS = Object.freeze(['done', 'blocked']);
+
+// The Forester seam: a seat that reported done or blocked becomes a
+// staging fact whose source is that report, live or in the finished
+// archive. Nothing is committed here; the report is a claim until someone
+// promotes it.
+export function seatReport(slug, seatId, status = 'done', environment = process.env) {
+  if (!SEAT_REPORTS.includes(status)) fail(`--report must be one of ${SEAT_REPORTS.join(', ')}.`);
   const { state } = readDryadState(slug, environment);
   const live = state.seats[seatId];
   const finished = readDryadFinished(slug, environment).seats.filter((seat) => seat.id === seatId);
   const candidates = [live, ...finished].filter(Boolean);
   if (candidates.length === 0) fail(`seat ${seatId}: not in the registry or the finished archive of ${slug}.`);
   for (const seat of candidates.reverse()) {
-    const report = [...(seat.journal ?? [])].reverse().find((line) => line.event === 'report' && typeof line.detail === 'string' && line.detail.startsWith('done'));
+    const report = [...(seat.journal ?? [])].reverse().find((line) => line.event === 'report' && typeof line.detail === 'string' && (line.detail === status || line.detail.startsWith(`${status}:`)));
     if (report) return { at: report.at, detail: report.detail, by: seat.by ?? null };
   }
-  fail(`seat ${seatId}: has no done report; it cannot be proposed as a fact.`);
+  fail(`seat ${seatId}: has no ${status} report; it cannot be proposed as a fact.`);
 }
+
+export const seatDoneReport = (slug, seatId, environment) => seatReport(slug, seatId, 'done', environment);
 
 // -------------------------------------------------------------------- cli
 
 const VERBS = Object.freeze({
   propose: {
     positionals: [0, 0],
-    options: ['project', 'by', 's', 'p', 'o', 's-type', 'o-type', 'domain', 'confidence', 'source', 'model', 'valid-from', 'from-seat'],
+    options: ['project', 'by', 's', 'p', 'o', 's-type', 'o-type', 'domain', 'confidence', 'source', 'model', 'valid-from', 'from-seat', 'report'],
     flags: ['json'],
   },
   amend: {
@@ -321,7 +434,8 @@ const VERBS = Object.freeze({
   },
   commit: { positionals: [1, 1], options: ['project', 'by'], flags: ['supersede', 'json'] },
   invalidate: { positionals: [1, 1], options: ['project', 'by', 'reason'], flags: ['json'] },
-  query: { positionals: [0, 0], options: ['project', 's', 'p', 'o', 'domain', 'status', 'type', 'at', 'below'], flags: ['json', 'ids'] },
+  query: { positionals: [0, 0], options: ['project', 's', 'p', 'o', 'domain', 'status', 'type', 'at', 'below', 'since'], flags: ['json', 'ids', 'all', 'brief'] },
+  trace: { positionals: [1, 1], options: ['project'], flags: ['json'] },
   status: { positionals: [0, 0], options: ['project'], flags: ['json'] },
 });
 
@@ -358,7 +472,9 @@ export function parseMyceliumCliArgs(args) {
   if (verb === 'propose') {
     if (options.from_seat != null) {
       for (const name of ['s', 'p', 'o', 'source', 'valid_from']) if (options[name] != null) fail(`--from-seat sets --${name.replaceAll('_', '-')} from the seat's report; do not pass both.`);
+      if (options.report != null && !SEAT_REPORTS.includes(options.report)) fail(`--report must be one of ${SEAT_REPORTS.join(', ')}.`);
     } else {
+      if (options.report != null) fail('--report goes with --from-seat.');
       for (const name of ['s', 'p', 'o', 'source']) if (options[name] == null) fail(`propose requires --${name}.`);
     }
     if (options.s_type == null) fail('propose requires --s-type.');
@@ -367,7 +483,8 @@ export function parseMyceliumCliArgs(args) {
   if (verb === 'invalidate' && options.reason == null) fail('invalidate requires --reason.');
   if (verb === 'query' && options.status != null && !STATUSES.includes(options.status)) fail(`--status must be one of ${STATUSES.join(', ')}.`);
   if (verb === 'query' && options.at != null && options.status != null) fail('pass --at or --status, not both.');
-  if (verb === 'query' && options.json && options.ids) fail('pass --json or --ids, not both.');
+  if (verb === 'query' && options.all && (options.status != null || options.at != null)) fail('--all takes every status; do not pass --status or --at with it.');
+  if (verb === 'query' && [options.json, options.ids, options.brief].filter(Boolean).length > 1) fail('pass one of --json, --ids, --brief.');
   return options;
 }
 
@@ -426,8 +543,8 @@ export function runMycelium({ options, environment = process.env, cwd = process.
       const by = who();
       let input = { ...fields(options), agent_id: by };
       if (options.from_seat != null) {
-        const report = seatDoneReport(project.slug, options.from_seat, environment);
-        input = { ...input, s: options.from_seat, p: 'reported', o: report.detail, source: `dryad seat ${options.from_seat} report at ${report.at}`, valid_from: report.at };
+        const report = seatReport(project.slug, options.from_seat, options.report ?? 'done', environment);
+        input = { ...input, s: options.from_seat, p: REPORTED, o: report.detail, source: `dryad seat ${options.from_seat} report at ${report.at}`, valid_from: report.at };
       }
       const assertion = propose({ file, assertion: makeAssertion(input, values), by });
       if (options.json) console.log(JSON.stringify(assertion, null, 2));
@@ -436,37 +553,48 @@ export function runMycelium({ options, environment = process.env, cwd = process.
     }
     case 'amend': {
       const by = who();
-      const assertion = propose({ file, assertion: amendment(assertions, options.positionals[0], { ...fields(options), agent_id: by }, values), by });
+      const assertion = proposeAmendment({ file, id: options.positionals[0], overrides: { ...fields(options), agent_id: by }, values, by });
       if (options.json) console.log(JSON.stringify(assertion, null, 2));
       else console.log(`■ ${project.slug} — proposed ${assertion.id} (staging), amends ${assertion.amends}\n${line(assertion)}`);
       return 0;
     }
     case 'commit': {
       const by = assertJudge(values, who());
-      const { target, superseded, amended } = commit({ file, assertions, id: options.positionals[0], by, supersede: options.supersede });
+      const { target, superseded, amended } = commit({ file, values, id: options.positionals[0], by, supersede: options.supersede });
       if (options.json) console.log(JSON.stringify({ id: target.id, status: 'active', superseded, amended }, null, 2));
       else console.log(`■ ${project.slug} — committed ${target.id} (active)${superseded.length ? `, superseded ${superseded.join(', ')}` : ''}${amended ? `, amended ${amended}` : ''}`);
       return 0;
     }
     case 'invalidate': {
       const by = assertJudge(values, who());
-      const target = invalidate({ file, assertions, id: options.positionals[0], by, reason: options.reason });
+      const target = invalidate({ file, id: options.positionals[0], by, reason: options.reason });
       if (options.json) console.log(JSON.stringify({ id: target.id, status: 'invalid', reason: options.reason }, null, 2));
       else console.log(`■ ${project.slug} — invalidated ${target.id}: ${options.reason}`);
       return 0;
     }
     case 'query': {
-      const filter = { s: options.s, p: options.p, o: options.o, domain: options.domain, type: options.type, at: options.at };
+      const filter = { s: options.s, p: options.p, o: options.o, domain: options.domain, type: options.type, at: options.at, since: options.since };
       if (options.below != null) {
         filter.below = Number(options.below);
         if (!Number.isFinite(filter.below)) fail(`--below must be a number, got ${JSON.stringify(options.below)}.`);
       }
-      if (options.at == null) filter.status = options.status ?? 'active';
+      if (options.at == null && !options.all) filter.status = options.status ?? 'active';
       const rows = query(assertions, filter);
       if (options.json) console.log(JSON.stringify(rows, null, 2));
       else if (options.ids) {
         for (const row of rows) console.log(row.id);
-      } else console.log([`■ ${project.slug} — ${rows.length} assertion${rows.length === 1 ? '' : 's'}${options.at ? ` held at ${filter.at}` : ` (${filter.status})`}`, ...rows.map(line)].join('\n'));
+      } else if (options.brief) {
+        if (rows.length > 0) console.log(brief(rows));
+      } else {
+        const scope = options.at ? ` held at ${isoOrFail(options.at, '--at')}` : options.all ? ' (every status)' : ` (${filter.status})`;
+        console.log([`■ ${project.slug} — ${rows.length} assertion${rows.length === 1 ? '' : 's'}${scope}${options.since ? ` since ${isoOrFail(options.since, '--since')}` : ''}`, ...rows.map(line)].join('\n'));
+      }
+      return 0;
+    }
+    case 'trace': {
+      const rows = trace(assertions, options.positionals[0]);
+      if (options.json) console.log(JSON.stringify(rows, null, 2));
+      else console.log([`■ ${project.slug} — ${rows.length} in the chain of ${options.positionals[0]}`, ...rows.map((row) => `${line(row)}\n      ${row.link}`)].join('\n'));
       return 0;
     }
     case 'status': {
@@ -478,6 +606,7 @@ export function runMycelium({ options, environment = process.env, cwd = process.
           `  log       ${file}`,
           `  domains   ${values.domains.join(', ')}`,
           `  types     ${values.types.join(', ')}`,
+          `  predicates ${Object.entries(values.predicates).map(([name, card]) => `${name}(${card})`).join(', ')}`,
           `  judges    ${values.judges == null ? 'anyone named (no judges declared)' : values.judges.join(', ')}`,
           `  assertions ${c.total} · active ${c.active} · staging ${c.staging} · invalid ${c.invalid}`,
           `  staging below 0.5: ${c.staging_below_half}`,
@@ -497,20 +626,21 @@ export function myceliumHelp(cli = 'de-novo skills') {
 usage:
   ${cli} mycelium propose --s S --p P --o O --s-type T [--o-type T] --domain D --source SRC
                           [--confidence 0..1] [--model M] [--valid-from ISO] [--by WHO] [--json]
-  ${cli} mycelium propose --from-seat ID --s-type T --domain D [--by WHO]
-                                                  a seat's done report as a staging fact
+  ${cli} mycelium propose --from-seat ID --s-type T --domain D [--report done|blocked] [--by WHO]
+                                                  a seat's done (or blocked) report as a staging fact
   ${cli} mycelium amend <id> [--o O] [--confidence C] [--source SRC] [...any envelope field] [--by WHO]
                                                   a corrected copy, staging; committing it closes the original
   ${cli} mycelium commit <id> [--supersede] [--by WHO]   staging → active; refuses a conflict unless --supersede
   ${cli} mycelium invalidate <id> --reason TEXT [--by WHO]   active → invalid, valid_to = now
-  ${cli} mycelium query [--s S] [--p P] [--o O] [--domain D] [--type T] [--below 0.5]
-                        [--status staging|active|invalid | --at ISO] [--json | --ids]
+  ${cli} mycelium query [--s S] [--p P] [--o O] [--domain D] [--type T] [--below 0.5] [--since ISO]
+                        [--status staging|active|invalid | --at ISO | --all] [--json | --ids | --brief]
+  ${cli} mycelium trace <id> [--json]             the chain: what it amends or supersedes, and what did that to it
   ${cli} mycelium status [--json]                 counts, the log path, the project's vocabulary
 
 Every verb takes --project ROOT; without it the Dryad profile above the
 current directory names the project. The writer is --by, else the seat
 DRYAD_ID names, else the seat whose worktree holds the current directory.
-Domains, entity types, and the judges
-who may commit and invalidate come from ${VALUES_RELPATH}.
+Domains, entity types, predicates (one|many), and the judges who may
+commit and invalidate come from ${VALUES_RELPATH}.
 Pattern: skills/mycelium/SKILL.md.`;
 }

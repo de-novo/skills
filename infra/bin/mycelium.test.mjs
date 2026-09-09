@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -10,6 +10,7 @@ import { stringify } from 'yaml';
 import {
   amendment,
   assertJudge,
+  brief,
   commit,
   commitPlan,
   counts,
@@ -19,15 +20,21 @@ import {
   parseMyceliumCliArgs,
   parseMyceliumValues,
   propose,
+  proposeAmendment,
   query,
   readLog,
   seatAt,
   seatDoneReport,
+  seatReport,
+  trace,
 } from '../lib/mycelium.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CLI = path.join(HERE, 'cli.mjs');
-const VALUES = { version: 1, domains: ['sprint', 'auth'], types: ['issue', 'decision', 'check', 'seat'] };
+const PREDICATES = { 'caused-by': 'one', 'done-when': 'one', 'depends-on': 'many', b: 'one' };
+const VALUES = { version: 1, domains: ['sprint', 'auth'], types: ['issue', 'decision', 'check', 'seat'], predicates: PREDICATES };
+// What the CLI sees after parsing: reported is added as a built-in predicate.
+const PARSED = parseMyceliumValues(stringify(VALUES));
 
 // A disposable baseline with a Dryad profile that carries its own slug (no
 // Grove profile, as this catalog itself does), a vocabulary, and its own
@@ -52,7 +59,7 @@ function fixture(t, { values = VALUES } = {}) {
 }
 
 function fact(overrides = {}) {
-  return makeAssertion({ s: 'issue-12', p: 'caused-by', o: 'stale cache', s_type: 'issue', domain: 'auth', source: 'src/auth/cache.ts:40', agent_id: 'seat:a', ...overrides }, VALUES);
+  return makeAssertion({ s: 'issue-12', p: 'caused-by', o: 'stale cache', s_type: 'issue', domain: 'auth', source: 'src/auth/cache.ts:40', agent_id: 'seat:a', ...overrides }, PARSED);
 }
 
 // -------------------------------------------------------------- values
@@ -74,6 +81,16 @@ test('the values file is a whitelist: unknown keys, empty lists, and bad tokens 
   assert.equal(assertJudge(ok, 'seat:anyone'), 'seat:anyone');
   assert.equal(assertJudge(judged, 'human:jane'), 'human:jane');
   assert.throws(() => assertJudge(judged, 'seat:w1'), /seat:w1 is not a judge of this project \(judges: human:jane, agent:judge\)/);
+  // predicates: a required map of name → one|many; reported is built in.
+  assert.equal(ok.predicates['depends-on'], 'many');
+  assert.equal(ok.predicates.reported, 'many');
+  const { predicates, ...noPredicates } = VALUES;
+  assert.throws(() => parseMyceliumValues(stringify(noPredicates)), /predicates must be a non-empty map of name: one\|many/);
+  assert.throws(() => parseMyceliumValues(stringify({ ...VALUES, predicates: {} })), /predicates must be a non-empty map/);
+  assert.throws(() => parseMyceliumValues(stringify({ ...VALUES, predicates: ['caused-by'] })), /predicates must be a non-empty map/);
+  assert.throws(() => parseMyceliumValues(stringify({ ...VALUES, predicates: { 'Caused-By': 'one' } })), /predicate "Caused-By" must be a lower-case token/);
+  assert.throws(() => parseMyceliumValues(stringify({ ...VALUES, predicates: { 'caused-by': 'single' } })), /predicate caused-by must be one or many, got "single"/);
+  assert.throws(() => parseMyceliumValues(stringify({ ...VALUES, predicates: { reported: 'one' } })), /predicate "reported" is built in \(many\) and may not be redeclared/);
 });
 
 // ------------------------------------------------------------ envelope
@@ -89,6 +106,7 @@ test('an assertion needs subject, predicate, object, a declared type and domain,
   for (const name of ['s', 'p', 'o', 's_type', 'domain', 'source', 'agent_id']) {
     assert.throws(() => fact({ [name]: null }), new RegExp(`${name} is required`), name);
   }
+  assert.throws(() => fact({ p: 'caused_by' }), /predicate "caused_by" is not in \.agents\/mycelium\.yml predicates \(caused-by, done-when, depends-on, b, reported\)/);
   assert.throws(() => fact({ s_type: 'module' }), /s_type "module" is not in \.agents\/mycelium\.yml types/);
   assert.throws(() => fact({ o_type: 'module' }), /o_type "module" is not in/);
   assert.throws(() => fact({ domain: 'payments' }), /domain "payments" is not in \.agents\/mycelium\.yml domains/);
@@ -104,7 +122,7 @@ test('an assertion needs subject, predicate, object, a declared type and domain,
 test('an amendment copies the original, changes only what was passed, and names what it amends', () => {
   const original = fact({ confidence: 0.4, valid_from: '2026-09-01T00:00:00Z' });
   const graph = new Map([[original.id, original]]);
-  const fixed = amendment(graph, original.id, { o: 'stale session cache', agent_id: 'human:jane' }, VALUES);
+  const fixed = amendment(graph, original.id, { o: 'stale session cache', agent_id: 'human:jane' }, PARSED);
   assert.notEqual(fixed.id, original.id);
   assert.equal(fixed.amends, original.id);
   assert.equal(fixed.o, 'stale session cache');
@@ -114,11 +132,11 @@ test('an amendment copies the original, changes only what was passed, and names 
   assert.equal(fixed.valid_from, original.valid_from);
   assert.equal(fixed.agent_id, 'human:jane');
   assert.equal(fixed.status, 'staging');
-  assert.throws(() => amendment(graph, original.id, { agent_id: 'human:jane' }, VALUES), /nothing to change/);
-  assert.throws(() => amendment(graph, 'a-nope', { o: 'x', agent_id: 'human:jane' }, VALUES), /a-nope: no such assertion/);
-  assert.throws(() => amendment(graph, original.id, { s_type: 'module', agent_id: 'human:jane' }, VALUES), /s_type "module" is not in/);
+  assert.throws(() => amendment(graph, original.id, { agent_id: 'human:jane' }, PARSED), /nothing to change/);
+  assert.throws(() => amendment(graph, 'a-nope', { o: 'x', agent_id: 'human:jane' }, PARSED), /a-nope: no such assertion/);
+  assert.throws(() => amendment(graph, original.id, { s_type: 'module', agent_id: 'human:jane' }, PARSED), /s_type "module" is not in/);
   graph.set(original.id, { ...original, status: 'invalid' });
-  assert.throws(() => amendment(graph, original.id, { o: 'x', agent_id: 'human:jane' }, VALUES), /is invalid; propose a new fact instead/);
+  assert.throws(() => amendment(graph, original.id, { o: 'x', agent_id: 'human:jane' }, PARSED), /is invalid; propose a new fact instead/);
 });
 
 // ----------------------------------------------------------------- fold
@@ -131,16 +149,16 @@ test('the graph is the fold of the log: propose, commit with supersede, invalida
   assert.equal(graph.size, 2);
   assert.equal(graph.get(a.id).status, 'staging');
 
-  commit({ file: f.log, assertions: graph, id: a.id, by: 'human' });
+  commit({ file: f.log, values: PARSED, id: a.id, by: 'human' });
   graph = foldLog(readLog(f.log));
   assert.equal(graph.get(a.id).status, 'active');
 
   // Same subject and predicate, another object: a conflict, refused.
-  assert.throws(() => commit({ file: f.log, assertions: graph, id: b.id, by: 'human' }), new RegExp(`${b.id}: conflicts with active ${a.id}`));
+  assert.throws(() => commit({ file: f.log, values: PARSED, id: b.id, by: 'human' }), new RegExp(`${b.id}: conflicts with active ${a.id}`));
   // And nothing was written by the refusal.
   assert.equal(readLog(f.log).length, 3);
 
-  const { superseded } = commit({ file: f.log, assertions: graph, id: b.id, by: 'human', supersede: true });
+  const { superseded } = commit({ file: f.log, values: PARSED, id: b.id, by: 'human', supersede: true });
   assert.deepEqual(superseded, [a.id]);
   graph = foldLog(readLog(f.log));
   assert.equal(graph.get(b.id).status, 'active');
@@ -152,16 +170,16 @@ test('the graph is the fold of the log: propose, commit with supersede, invalida
   // The same object again is a duplicate, not a conflict.
   const c = propose({ file: f.log, assertion: fact({ o: 'clock skew' }), by: 'seat:c' });
   graph = foldLog(readLog(f.log));
-  assert.throws(() => commitPlan({ assertions: graph, id: c.id }), new RegExp(`${b.id} already states issue-12 caused-by clock skew in auth`));
-  assert.throws(() => commit({ file: f.log, assertions: graph, id: b.id, by: 'human' }), /is active, only staging can be committed/);
+  assert.throws(() => commitPlan({ assertions: graph, id: c.id, values: PARSED }), new RegExp(`${b.id} already states issue-12 caused-by clock skew in auth`));
+  assert.throws(() => commit({ file: f.log, values: PARSED, id: b.id, by: 'human' }), /is active, only staging can be committed/);
 
-  invalidate({ file: f.log, assertions: graph, id: b.id, by: 'human', reason: 'fixed in #41' });
+  invalidate({ file: f.log, id: b.id, by: 'human', reason: 'fixed in #41' });
   graph = foldLog(readLog(f.log));
   assert.equal(graph.get(b.id).status, 'invalid');
   assert.equal(graph.get(b.id).invalid_reason, 'fixed in #41');
-  assert.throws(() => invalidate({ file: f.log, assertions: graph, id: b.id, by: 'human', reason: 'again' }), /is already invalid/);
-  assert.throws(() => invalidate({ file: f.log, assertions: graph, id: c.id, by: 'human', reason: '' }), /invalidate requires --reason/);
-  assert.throws(() => invalidate({ file: f.log, assertions: graph, id: 'a-nope', by: 'human', reason: 'x' }), /a-nope: no such assertion/);
+  assert.throws(() => invalidate({ file: f.log, id: b.id, by: 'human', reason: 'again' }), /is already invalid/);
+  assert.throws(() => invalidate({ file: f.log, id: c.id, by: 'human', reason: '' }), /invalidate requires --reason/);
+  assert.throws(() => invalidate({ file: f.log, id: 'a-nope', by: 'human', reason: 'x' }), /a-nope: no such assertion/);
 
   // Every line carries the log version; a line without it is refused.
   const lines = readFileSync(f.log, 'utf8').trim().split('\n');
@@ -176,15 +194,15 @@ test('committing an amendment closes the original with an empty interval, so no 
   const f = fixture(t);
   const original = propose({ file: f.log, assertion: fact({ valid_from: '2026-09-01T00:00:00Z' }), by: 'seat:a' });
   let graph = foldLog(readLog(f.log));
-  commit({ file: f.log, assertions: graph, id: original.id, by: 'human:jane' });
+  commit({ file: f.log, values: PARSED, id: original.id, by: 'human:jane' });
   graph = foldLog(readLog(f.log));
-  const fixed = propose({ file: f.log, assertion: amendment(graph, original.id, { o: 'stale session cache', agent_id: 'human:jane' }, VALUES), by: 'human:jane' });
+  const fixed = propose({ file: f.log, assertion: amendment(graph, original.id, { o: 'stale session cache', agent_id: 'human:jane' }, PARSED), by: 'human:jane' });
   graph = foldLog(readLog(f.log));
   // Same subject and predicate, another object: for an amendment that is the point, not a conflict.
-  const plan = commitPlan({ assertions: graph, id: fixed.id });
+  const plan = commitPlan({ assertions: graph, id: fixed.id, values: PARSED });
   assert.deepEqual(plan.conflicts, []);
   assert.equal(plan.amends, original.id);
-  const result = commit({ file: f.log, assertions: graph, id: fixed.id, by: 'human:jane' });
+  const result = commit({ file: f.log, values: PARSED, id: fixed.id, by: 'human:jane' });
   assert.equal(result.amended, original.id);
   graph = foldLog(readLog(f.log));
   assert.equal(graph.get(fixed.id).status, 'active');
@@ -195,16 +213,16 @@ test('committing an amendment closes the original with an empty interval, so no 
   // A staging original is closed the same way; an amendment of an amendment names the latest.
   const draft = propose({ file: f.log, assertion: fact({ s: 'issue-13', o: 'typo' }), by: 'seat:a' });
   graph = foldLog(readLog(f.log));
-  const draftFixed = propose({ file: f.log, assertion: amendment(graph, draft.id, { o: 'type', agent_id: 'seat:a' }, VALUES), by: 'seat:a' });
+  const draftFixed = propose({ file: f.log, assertion: amendment(graph, draft.id, { o: 'type', agent_id: 'seat:a' }, PARSED), by: 'seat:a' });
   graph = foldLog(readLog(f.log));
-  commit({ file: f.log, assertions: graph, id: draftFixed.id, by: 'human:jane' });
+  commit({ file: f.log, values: PARSED, id: draftFixed.id, by: 'human:jane' });
   graph = foldLog(readLog(f.log));
   assert.equal(graph.get(draft.id).status, 'invalid');
   assert.equal(graph.get(draftFixed.id).status, 'active');
   // An amendment that moves onto another active fact's subject and predicate is still a conflict.
-  const moved = propose({ file: f.log, assertion: amendment(graph, draftFixed.id, { s: 'issue-12', agent_id: 'seat:a' }, VALUES), by: 'seat:a' });
+  const moved = propose({ file: f.log, assertion: amendment(graph, draftFixed.id, { s: 'issue-12', agent_id: 'seat:a' }, PARSED), by: 'seat:a' });
   graph = foldLog(readLog(f.log));
-  assert.throws(() => commit({ file: f.log, assertions: graph, id: moved.id, by: 'human:jane' }), new RegExp(`${moved.id}: conflicts with active ${fixed.id}`));
+  assert.throws(() => commit({ file: f.log, values: PARSED, id: moved.id, by: 'human:jane' }), new RegExp(`${moved.id}: conflicts with active ${fixed.id}`));
   assert.equal(graph.get(draftFixed.id).status, 'active');
 });
 
@@ -216,9 +234,9 @@ test('query filters exactly, and --at answers what was held at a moment over com
   const later = propose({ file: f.log, assertion: fact({ o: 'clock skew', valid_from: '2026-09-05T00:00:00Z' }), by: 'seat:b' });
   const other = propose({ file: f.log, assertion: fact({ s: 'sprint-3', p: 'done-when', o: 'login passes local QA', s_type: 'decision', domain: 'sprint', confidence: 0.3 }), by: 'seat:c' });
   let graph = foldLog(readLog(f.log));
-  commit({ file: f.log, assertions: graph, id: early.id, by: 'human' });
+  commit({ file: f.log, values: PARSED, id: early.id, by: 'human' });
   graph = foldLog(readLog(f.log));
-  commit({ file: f.log, assertions: graph, id: later.id, by: 'human', supersede: true });
+  commit({ file: f.log, values: PARSED, id: later.id, by: 'human', supersede: true });
   graph = foldLog(readLog(f.log));
 
   assert.deepEqual(query(graph, { status: 'active' }).map((row) => row.id), [later.id]);
@@ -263,7 +281,7 @@ test('the CLI parser knows each verb, its flags, and what propose must be given'
   assert.throws(() => parseMyceliumCliArgs(['query', '--status', 'done']), /--status must be one of staging, active, invalid/);
   assert.throws(() => parseMyceliumCliArgs(['query', '--status', 'active', '--at', '2026-09-08T00:00:00Z']), /pass --at or --status, not both/);
   assert.equal(parseMyceliumCliArgs(['query', '--ids']).ids, true);
-  assert.throws(() => parseMyceliumCliArgs(['query', '--ids', '--json']), /pass --json or --ids, not both/);
+  assert.throws(() => parseMyceliumCliArgs(['query', '--ids', '--json']), /pass one of --json, --ids, --brief/);
   assert.equal(parseMyceliumCliArgs(['status', '--project', '/x']).project, '/x');
 });
 
@@ -384,6 +402,104 @@ test('a seat working in its own worktree is the writer, with no --by and no DRYA
   assert.ok(ids.stdout.trim().split('\n').every((line) => /^a-[0-9a-f]{10}$/.test(line)));
 });
 
+test('a many predicate takes a second object as another edge; a one predicate takes it as a conflict; duplicates are refused for both', (t) => {
+  const f = fixture(t);
+  const edge1 = propose({ file: f.log, assertion: fact({ s: 'web-panel', p: 'depends-on', o: 'define-shape', o_type: 'issue' }), by: 'seat:a' });
+  const edge2 = propose({ file: f.log, assertion: fact({ s: 'web-panel', p: 'depends-on', o: 'api-endpoint', o_type: 'issue' }), by: 'seat:a' });
+  const dup = propose({ file: f.log, assertion: fact({ s: 'web-panel', p: 'depends-on', o: 'api-endpoint', o_type: 'issue' }), by: 'seat:b' });
+  commit({ file: f.log, values: PARSED, id: edge1.id, by: 'human' });
+  const second = commit({ file: f.log, values: PARSED, id: edge2.id, by: 'human' });
+  assert.deepEqual(second.superseded, []);
+  let graph = foldLog(readLog(f.log));
+  assert.deepEqual(query(graph, { status: 'active', s: 'web-panel' }).map((row) => row.o), ['define-shape', 'api-endpoint']);
+  assert.throws(() => commit({ file: f.log, values: PARSED, id: dup.id, by: 'human' }), new RegExp(`${edge2.id} already states web-panel depends-on api-endpoint`));
+  // The predicate was removed from the vocabulary after the proposal: refused at commit, not silently promoted.
+  const narrowed = { ...VALUES, predicates: { 'caused-by': 'one' } };
+  const late = propose({ file: f.log, assertion: fact({ s: 'web-panel', p: 'depends-on', o: 'docs-pass', o_type: 'issue' }), by: 'seat:a' });
+  assert.throws(() => commit({ file: f.log, values: parseMyceliumValues(stringify(narrowed)), id: late.id, by: 'human' }), /predicate "depends-on" is no longer in/);
+  graph = foldLog(readLog(f.log));
+  assert.equal(graph.get(late.id).status, 'staging');
+});
+
+test('commit takes the log lock: two committers racing on one predicate leave exactly one active, and n proposers leave n whole lines', async (t) => {
+  const f = fixture(t);
+  const a = f.json(['propose', '--s', 'issue-12', '--p', 'caused-by', '--o', 'stale cache', '--s-type', 'issue', '--domain', 'auth', '--source', 'f', '--by', 'seat:a']);
+  const b = f.json(['propose', '--s', 'issue-12', '--p', 'caused-by', '--o', 'clock skew', '--s-type', 'issue', '--domain', 'auth', '--source', 'f', '--by', 'seat:b']);
+  const race = (id) => new Promise((resolve) => {
+    const child = spawn(process.execPath, [CLI, 'mycelium', 'commit', id, '--by', 'human'], { cwd: f.baseline, env: f.environment });
+    let stderr = '';
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.on('close', (code) => resolve({ code, stderr }));
+  });
+  const results = await Promise.all([race(a.id), race(b.id), race(a.id), race(b.id)]);
+  const won = results.filter((result) => result.code === 0);
+  assert.equal(won.length, 1, JSON.stringify(results));
+  assert.ok(results.filter((result) => /conflicts with active/.test(result.stderr)).length >= 1, JSON.stringify(results));
+  assert.deepEqual(f.json(['query']).length, 1);
+  assert.equal(existsSync(`${f.log}.lock`), false);
+
+  const proposers = Array.from({ length: 12 }, (_, index) => new Promise((resolve) => {
+    const child = spawn(process.execPath, [CLI, 'mycelium', 'propose', '--s', `issue-${index}`, '--p', 'depends-on', '--o', 'x'.repeat(200), '--s-type', 'issue', '--domain', 'auth', '--source', 'f', '--by', `seat:p${index}`], { cwd: f.baseline, env: f.environment });
+    child.on('close', (code) => resolve(code));
+  }));
+  const codes = await Promise.all(proposers);
+  assert.deepEqual(codes, Array(12).fill(0));
+  const lines = readFileSync(f.log, 'utf8').split('\n').filter(Boolean);
+  assert.equal(lines.length, 2 + 4 - 3 + 12);
+  assert.ok(lines.every((line) => JSON.parse(line).v === 1));
+  assert.equal(foldLog(readLog(f.log)).size, 14);
+});
+
+test('query --all, --since, --brief and trace read the chain a fact belongs to', (t) => {
+  const f = fixture(t);
+  const first = propose({ file: f.log, assertion: fact({ valid_from: '2026-09-01T00:00:00Z', tx_at: '2026-09-01T10:00:00.000Z' }), by: 'seat:a' });
+  commit({ file: f.log, values: PARSED, id: first.id, by: 'human' });
+  const fixed = proposeAmendment({ file: f.log, id: first.id, overrides: { confidence: 0.9, agent_id: 'human:jane' }, values: PARSED, by: 'human:jane' });
+  commit({ file: f.log, values: PARSED, id: fixed.id, by: 'human:jane' });
+  const newer = propose({ file: f.log, assertion: fact({ o: 'clock skew', valid_from: '2026-09-05T00:00:00Z' }), by: 'seat:b' });
+  commit({ file: f.log, values: PARSED, id: newer.id, by: 'human', supersede: true });
+  const unrelated = propose({ file: f.log, assertion: fact({ s: 'sprint-3', p: 'done-when', o: 'x', s_type: 'decision', domain: 'sprint' }), by: 'seat:c' });
+  const graph = foldLog(readLog(f.log));
+
+  assert.deepEqual(query(graph, {}).map((row) => row.id).sort(), [first.id, fixed.id, newer.id, unrelated.id].sort());
+  assert.deepEqual(query(graph, { status: 'active' }).map((row) => row.id), [newer.id]);
+  // --since is the time of the last line that touched a row: the first fact
+  // was written on Sep 1 but amended now, so it is news; a fact left alone
+  // since Sep 1 is not.
+  const sinceSep2 = query(graph, { since: '2026-09-02T00:00:00Z' }).map((row) => row.id);
+  assert.ok(sinceSep2.includes(first.id), 'amended since counts as changed');
+  const untouched = propose({ file: f.log, assertion: fact({ s: 'issue-1', o: 'old news', tx_at: '2026-09-01T09:00:00.000Z' }), by: 'seat:a' });
+  const again = foldLog(readLog(f.log));
+  assert.equal(again.get(untouched.id).changed_at, '2026-09-01T09:00:00.000Z');
+  assert.ok(!query(again, { since: '2026-09-02T00:00:00Z' }).map((row) => row.id).includes(untouched.id));
+  assert.equal(query(graph, { since: '2100-01-01T00:00:00Z' }).length, 0);
+  assert.throws(() => query(graph, { since: 'lately' }), /--since must be an ISO-8601 date-time/);
+
+  const chain = trace(graph, newer.id);
+  assert.deepEqual(chain.map((row) => [row.id, row.link]), [
+    [first.id, `amended by ${fixed.id}`],
+    [fixed.id, `amends ${first.id}`],
+    [newer.id, `supersedes ${fixed.id}`],
+  ]);
+  assert.deepEqual(trace(graph, first.id).map((row) => row.id), chain.map((row) => row.id));
+  assert.deepEqual(trace(graph, unrelated.id).map((row) => [row.id, row.link]), [[unrelated.id, 'origin']]);
+  assert.throws(() => trace(graph, 'a-nope'), /a-nope: no such assertion/);
+
+  const text = brief(query(graph, { status: 'active' }));
+  assert.equal(text, `- ${newer.id}  issue-12 caused-by clock skew  (auth, 0.50, src/auth/cache.ts:40)`);
+
+  const cli = f.run(['query', '--all']);
+  assert.match(cli.stdout, /5 assertions \(every status\)/);
+  assert.equal(f.run(['query', '--brief', '--s', 'issue-12']).stdout.trim(), text);
+  assert.equal(f.run(['query', '--brief', '--s', 'nobody']).stdout, '');
+  const traced = f.run(['trace', newer.id]);
+  assert.match(traced.stdout, new RegExp(`3 in the chain of ${newer.id}`));
+  assert.match(traced.stdout, new RegExp(`supersedes ${fixed.id}`));
+  assert.throws(() => parseMyceliumCliArgs(['query', '--all', '--status', 'active']), /--all takes every status/);
+  assert.throws(() => parseMyceliumCliArgs(['query', '--brief', '--ids']), /pass one of --json, --ids, --brief/);
+  assert.throws(() => parseMyceliumCliArgs(['trace']), /trace takes exactly 1 positional argument/);
+});
+
 // ------------------------------------------------------- forester seam
 
 test('propose --from-seat turns a seat\'s done report into a staging fact, and refuses a seat that has not reported done', (t) => {
@@ -401,7 +517,11 @@ test('propose --from-seat turns a seat\'s done report into a staging fact, and r
           { at: '2026-09-08T02:00:00.000Z', actor: 'seat', event: 'report', detail: 'working: halfway' },
           { at: '2026-09-08T03:00:00.000Z', actor: 'seat', event: 'report', detail: 'done: endpoint returns the shape, 4/4 tests' },
         ]),
-        'web-panel': seat('working', [{ at: '2026-09-08T01:00:00.000Z', actor: 'seat', event: 'report', detail: 'working' }]),
+        'web-panel': seat('blocked', [
+          { at: '2026-09-08T01:00:00.000Z', actor: 'seat', event: 'report', detail: 'working' },
+          { at: '2026-09-08T01:15:00.000Z', actor: 'seat', event: 'report', detail: 'done-ish: not the word' },
+          { at: '2026-09-08T01:30:00.000Z', actor: 'seat', event: 'report', detail: 'blocked: waits for the shape' },
+        ]),
       },
     })
   );
@@ -411,6 +531,11 @@ test('propose --from-seat turns a seat\'s done report into a staging fact, and r
   );
 
   assert.deepEqual(seatDoneReport('mycelium-test', 'docs-pass', f.environment), { at: '2026-09-08T03:30:00.000Z', detail: 'done', by: 'codex' });
+  assert.deepEqual(seatReport('mycelium-test', 'web-panel', 'blocked', f.environment), { at: '2026-09-08T01:30:00.000Z', detail: 'blocked: waits for the shape', by: 'codex' });
+  assert.throws(() => seatReport('mycelium-test', 'api-endpoint', 'blocked', f.environment), /seat api-endpoint: has no blocked report/);
+  assert.throws(() => seatReport('mycelium-test', 'web-panel', 'working', f.environment), /--report must be one of done, blocked/);
+  // 'done-ish' does not match done: the report is the status, or the status and a colon.
+  assert.throws(() => seatReport('mycelium-test', 'web-panel', 'done', f.environment), /has no done report/);
   assert.throws(() => seatDoneReport('mycelium-test', 'web-panel', f.environment), /seat web-panel: has no done report/);
   assert.throws(() => seatDoneReport('mycelium-test', 'nobody', f.environment), /seat nobody: not in the registry or the finished archive/);
 
@@ -424,6 +549,12 @@ test('propose --from-seat turns a seat\'s done report into a staging fact, and r
   const refused = f.run(['propose', '--from-seat', 'web-panel', '--s-type', 'seat', '--domain', 'sprint', '--by', 'human']);
   assert.equal(refused.status, 1);
   assert.match(refused.stderr, /has no done report/);
+  const blocked = f.json(['propose', '--from-seat', 'web-panel', '--report', 'blocked', '--s-type', 'seat', '--domain', 'sprint', '--by', 'human']);
+  assert.equal(blocked.o, 'blocked: waits for the shape');
+  assert.equal(blocked.p, 'reported');
+  assert.equal(blocked.valid_from, '2026-09-08T01:30:00.000Z');
+  assert.throws(() => parseMyceliumCliArgs(['propose', '--from-seat', 'w', '--report', 'working', '--s-type', 'seat', '--domain', 'sprint']), /--report must be one of done, blocked/);
+  assert.throws(() => parseMyceliumCliArgs(['propose', '--s', 'a', '--p', 'b', '--o', 'c', '--source', 'f', '--report', 'done', '--s-type', 'seat', '--domain', 'sprint']), /--report goes with --from-seat/);
   // The registry itself was only read.
-  assert.match(readFileSync(path.join(f.root, 'state/dryads/mycelium-test.yml'), 'utf8'), /status: working/);
+  assert.match(readFileSync(path.join(f.root, 'state/dryads/mycelium-test.yml'), 'utf8'), /status: blocked/);
 });

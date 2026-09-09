@@ -67,12 +67,16 @@ proposed as a fact. Mycelium never writes the plan or a seat.
 
 ## Not in this round
 
-- Two writers appending in the same instant. `appendFileSync` of one short
-  line is atomic on the file systems this catalog runs on; the
-  read-then-append in `commit` is not, and a lost commit under contention
-  has not been measured.
+The case-by-case walk, with what each round carries, is
+[mycelium-cases.md](mycelium-cases.md).
+
+- Two writers appending in the same instant. Closed in the second round:
+  every write re-reads the log under the file lock Dryad's registry uses,
+  and a race of four committers on a `one` predicate leaves one active
+  (`infra/bin/mycelium.test.mjs`).
 - A second machine. The log is machine-local like Dryad's registry.
-- A query language. Filters are exact matches and one moment.
+- A query language. Filters are exact matches, one moment (`--at`), one
+  change horizon (`--since`), and one chain (`trace`).
 - A hook that proposes on `dryad report --status done` without a person
   running `propose --from-seat`. The seam exists; the automation is a later
   decision because it changes what a seat is allowed to write.
