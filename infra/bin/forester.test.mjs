@@ -18,7 +18,7 @@ import {
   parseForesterPlan,
   resolveBudget,
 } from '../lib/forester.mjs';
-import { claudeSettings, launchCommand, screenAsksForInput, seedClaudeTrust, stateFromEvents } from '../lib/forester-serve.mjs';
+import { claudeSettings, doingFromEvents, launchCommand, screenAsksForInput, seedClaudeTrust, stateFromEvents } from '../lib/forester-serve.mjs';
 import { HOOK_MARKER, applyHooks, hookStores, renderStore } from '../lib/forester-hooks.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -179,7 +179,7 @@ test('item states and allocation are a pure function of plan, seats, and budget'
 });
 
 test('cli args accept the seven verbs, and only attach takes a positional', () => {
-  assert.deepEqual(parseForesterCliArgs(['assign', '--apply', '--project', '/p']), { help: false, verb: 'assign', project: '/p', json: false, apply: true, remove: false, id: null });
+  assert.deepEqual(parseForesterCliArgs(['assign', '--apply', '--project', '/p']), { help: false, verb: 'assign', project: '/p', json: false, watch: false, apply: true, remove: false, id: null });
   assert.equal(parseForesterCliArgs(['attach', 'web-panel']).id, 'web-panel');
   assert.throws(() => parseForesterCliArgs(['attach']), /attach requires a seat id/);
   assert.throws(() => parseForesterCliArgs(['attach', 'a', 'b']), /attach takes one seat id/);
@@ -257,6 +257,14 @@ test('a seat finished without done spends an attempt; failed shows in status and
   assert.match(f.bad(['forester', 'status']).stdout, /outside  1 seat not in the plan  stray/);
 });
 
+test('status --watch is a flag of status alone and never with --json', () => {
+  assert.equal(parseForesterCliArgs(['status', '--watch']).watch, true);
+  assert.throws(() => parseForesterCliArgs(['plan', '--watch']), /--watch is not valid for plan/);
+  const result = spawnSync(process.execPath, [CLI, 'forester', 'status', '--watch', '--json', '--project', '/nowhere'], { encoding: 'utf8' });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /--watch prints the text form; drop --json/);
+});
+
 test('launch templates, Claude hook settings, event states, and trust seeding', (t) => {
   const tool = { command: ['claude', '{task}', '--model', 'x'] };
   assert.deepEqual(launchCommand({ toolName: 'claude', tool, task: 'do it', settingsFile: '/s.json' }), { file: 'claude', args: ['do it', '--model', 'x', '--settings', '/s.json'], tool: 'claude' });
@@ -268,6 +276,14 @@ test('launch templates, Claude hook settings, event states, and trust seeding', 
   assert.match(settings.hooks.Stop[0].hooks[0].command, /cat >> '\/tmp\/it'\\''s\.events'/);
 
   assert.equal(stateFromEvents(''), null);
+  // The doing line is the last tool event's name and target; other events do not touch it.
+  assert.equal(doingFromEvents(''), null);
+  assert.equal(doingFromEvents('{"hook_event_name":"UserPromptSubmit"}\n'), null);
+  assert.equal(doingFromEvents('{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{"file_path":"app/api/server.mjs"}}\n'), 'Edit app/api/server.mjs');
+  assert.equal(doingFromEvents('{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"node tools/overlay.mjs   attach w1 api\\n--apply"}}\n{"hook_event_name":"Stop"}\n'), 'Bash node tools/overlay.mjs attach w1 api --apply');
+  assert.equal(doingFromEvents('{"hook_event_name":"PostToolUse","tool_name":"Read","tool_input":{"file_path":"a.md"}}\n{"hook_event_name":"PreToolUse","tool_name":"Grep","tool_input":{"pattern":"seat"}}\n'), 'Grep seat');
+  assert.equal(doingFromEvents('{"hookEventName":"preToolUse","toolName":"Skill","toolInput":{"skill":"mycelium"}}\n'), 'Skill mycelium');
+  assert.equal(doingFromEvents('{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"' + 'x'.repeat(200) + '"}}\n').length, 'Bash '.length + 80);
   assert.equal(stateFromEvents('{"hook_event_name":"UserPromptSubmit"}\n'), 'running');
   assert.equal(stateFromEvents('{"hook_event_name":"UserPromptSubmit"}\n{"hook_event_name":"Stop"}\n'), 'idle');
   assert.equal(stateFromEvents('{"hook_event_name":"Stop"}\n{"hook_event_name":"Notification","notification_type":"idle_prompt"}\n'), 'needs-input');
@@ -353,6 +369,11 @@ test('serve seats the budget, holds real sessions, relays a viewer, and refills 
   await until(() => { const s = Object.fromEntries(sessions()); return s['define-shape'] === 'closed' && s['api-endpoint'] === 'needs-input'; }, 'slot refilled with api-endpoint after define-shape reported done');
   const after = f.json(['forester', 'status']);
   assert.equal(after.items.find((item) => item.id === 'define-shape').state, 'done');
+  // What the session was doing came from its tool events, not from the worker's report.
+  const closed = after.items.find((item) => item.id === 'define-shape').session;
+  assert.equal(closed.doing, 'Write done.txt');
+  assert.match(closed.doing_since, /^\d{4}-\d{2}-\d{2}T/);
+  assert.match(f.good(['forester', 'status']).stdout, /define-shape  fixture  closed \d+  · Write done\.txt \(\d+[smh]\)/);
   assert.deepEqual(after.slots, { active: 1, free: 0, parallel: 1 });
   // A closed session has nothing to attach to; the daemon says so by name.
   assert.match(f.bad(['forester', 'attach', 'define-shape']).stderr, /no live session for "define-shape"/);

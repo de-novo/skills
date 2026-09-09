@@ -88,6 +88,33 @@ const EVENT_STATES = Object.freeze({
 
 // The state the last meaningful event implies, or null when the file says
 // nothing yet. A Notification counts only when it is a prompt for a person.
+// What the session is doing right now, read from the last tool event the
+// hooks wrote: the tool's name and its target (a path, a command, a
+// pattern), never the worker's own account of itself. Null until a tool
+// has been used. The payload keys are Claude Code's; Codex and OpenCode
+// send the same names, Cursor's hook maps to them.
+export function doingFromEvents(text) {
+  let doing = null;
+  for (const line of text.split('\n')) {
+    if (line.trim().length === 0) continue;
+    let event;
+    try {
+      event = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    const name = canonicalEvent(event.hook_event_name ?? event.hookEventName);
+    if (name !== 'PreToolUse' && name !== 'PostToolUse') continue;
+    const tool = event.tool_name ?? event.toolName;
+    if (typeof tool !== 'string' || tool.length === 0) continue;
+    const input = event.tool_input ?? event.toolInput ?? {};
+    const target = [input.file_path, input.command, input.pattern, input.skill, input.url]
+      .find((value) => typeof value === 'string' && value.length > 0);
+    doing = target == null ? tool : `${tool} ${target.replace(/\s+/g, ' ').slice(0, 80)}`;
+  }
+  return doing;
+}
+
 export function stateFromEvents(text) {
   let state = null;
   for (const line of text.split('\n')) {
@@ -362,6 +389,13 @@ export class ForesterServe {
     }
     const state = stateFromEvents(text);
     if (state != null && state !== session.state) session.state = state;
+    // The doing line changes when the tool stream does; its clock starts
+    // when it changes, so a reader sees how long the session has been on it.
+    const doing = doingFromEvents(text);
+    if (doing !== session.doing) {
+      session.doing = doing;
+      session.doing_since = doing == null ? null : now();
+    }
     if (state == null && session.state === 'starting' && screenAsksForInput(session.scrollback)) session.state = 'needs-input';
     if (state == null && session.state === 'needs-input' && !screenAsksForInput(session.scrollback)) session.state = 'starting';
   }
@@ -369,6 +403,9 @@ export class ForesterServe {
   close(id, reason) {
     const session = this.sessions.get(id);
     if (session == null || session.pty == null) return;
+    // Read the events one last time, so the closed record keeps what the
+    // session was doing when its seat reported done.
+    this.refresh(session);
     session.closing = true;
     session.state = 'closed';
     session.note = reason;
@@ -381,7 +418,7 @@ export class ForesterServe {
   snapshotSeats() {
     const seats = {};
     for (const [id, session] of this.sessions) {
-      seats[id] = { tool: session.tool, state: session.state, since: session.since, pid: session.pid, exit: session.exit, events: session.events, note: session.note };
+      seats[id] = { tool: session.tool, state: session.state, since: session.since, pid: session.pid, exit: session.exit, events: session.events, note: session.note, doing: session.doing ?? null, doing_since: session.doing_since ?? null };
     }
     return seats;
   }

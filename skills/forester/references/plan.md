@@ -100,7 +100,7 @@ everything under `src/`. Conservative on purpose.
 de-novo skills forester plan   [--json] [--project ROOT]
 de-novo skills forester next   [--json] [--project ROOT]
 de-novo skills forester assign [--apply] [--json] [--project ROOT]
-de-novo skills forester status [--json] [--project ROOT]
+de-novo skills forester status [--json | --watch] [--project ROOT]
 de-novo skills forester serve  [--project ROOT]
 de-novo skills forester attach ID [--project ROOT]
 de-novo skills forester hooks  [--apply | --remove --apply] [--json]
@@ -111,7 +111,7 @@ de-novo skills forester hooks  [--apply | --remove --apply] [--json]
 | plan | one line per item: id, state, why; then `items n · done a · active b · ready c · blocked d · failed e` | — |
 | next | `assign <id>` and `hold <id> <reason>` lines, then `would assign k/free; changes nothing` | — |
 | assign | same as next | runs `dryad plan <id> --task <task> --by forester --apply` for each chosen item; prints `assigned k/n · slots a/parallel`; non-zero if any seat failed to plan |
-| status | `slots a/parallel`, `waiting r ready · b blocked`, `done d/n`, `failed f`, `outside n` seats the plan does not name, and `serve` with one line per live session; non-zero when any item is failed | — |
+| status | `slots a/parallel`, `waiting r ready · b blocked`, `done d/n`, `failed f`, `outside n` seats the plan does not name, and `serve` with one line per live session: tool, state, and what it is doing with its age; non-zero when any item is failed. `--watch` redraws the text form every two seconds until Ctrl-C | — |
 | serve | foreground daemon: every poll it does what `assign --apply` does, starts the tool of each active item as a real interactive session in a pseudo-terminal it holds, reads the tool's hook events, closes a session whose seat reported done, and serves `attach`. Ctrl-C closes every session and removes its snapshot and socket. Refuses to start when another serve runs for the project | — |
 | attach | connects to one live session: recent output is replayed, keys go to the tool, Ctrl-] detaches and the session keeps running. A closed session is refused by name | — |
 | hooks | one row per tool store: `codex`, `grok`, `cursor-agent`, `opencode`; whether it is present, installed, or absent, and what `--apply` would do. A tool whose home is missing is skipped. `--remove --apply` takes back exactly the marked entries | writes one marked entry per event into each present store, keeping the person's own entries, atomically; a store that is not JSON is refused by name |
@@ -121,7 +121,7 @@ de-novo skills forester hooks  [--apply | --remove --apply] [--json]
 `serve` records a snapshot at `~/.dev-infra/foresters/<slug>.yml`
 (`GROVE_STATE_DIR/foresters/` under the override) with its pid, its socket,
 and one record per session: `tool`, `state`, `since`, `pid`, `exit`,
-`events`, `note`. `status` reads it and shows `stale snapshot` when that pid
+`events`, `note`, `doing`, `doing_since`. `doing` is the last tool event's name and target (`Edit app/api/server.mjs`, `Bash node tools/overlay.mjs attach …`), read from the session's hook events and never from the worker's own report; `doing_since` is when it last changed. `status` prints it after the state with its age. `status` reads it and shows `stale snapshot` when that pid
 is gone. The socket is a short hashed name under the OS temp dir, because a
 unix socket path is capped near 100 bytes.
 
@@ -167,6 +167,6 @@ cwd. A Dryad profile is required because seats are Dryad seats.
 
 `--json` on any verb prints `{ project, budget: { parallel, source }, counts,
 items: [{ id, state, why, task, owns, depends_on, tool, attempts,
-max_attempts, seat, session }], next: [id], held: [{ id, reason }], slots: {
+max_attempts, seat, session: { tool, state, since, pid, exit, events, note, doing, doing_since } | null }], next: [id], held: [{ id, reason }], slots: {
 active, free, parallel }, seats_outside_plan: [id], serve: { pid, alive,
 socket } | null }`. `assign --apply --json` adds `assigned` and `failed`.

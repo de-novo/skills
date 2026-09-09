@@ -79,11 +79,15 @@ export function understoryReading(json) {
       case 'done':
         line = `finished (${item.why})`;
         break;
-      case 'active':
+      case 'active': {
+        // What the session is doing comes from its tool stream, so the line
+        // can say "editing app/api/server.mjs" without asking the worker.
+        const doing = item.session?.doing ? `, now ${item.session.doing}` : '';
         line = item.session?.state === 'needs-input'
-          ? `someone is working on it and the session is waiting for a person`
-          : `someone is working on it${item.session?.state ? ` (session ${item.session.state})` : ''}`;
+          ? `someone is working on it and the session is waiting for a person${doing}`
+          : `someone is working on it${item.session?.state ? ` (session ${item.session.state})` : ''}${doing}`;
         break;
+      }
       case 'ready': {
         const hold = (json.held ?? []).find((entry) => entry.id === item.id);
         line = json.next?.includes(item.id)

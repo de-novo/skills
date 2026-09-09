@@ -43,7 +43,7 @@ the item names one, and the session state when serve holds one.
 | State | Line |
 | --- | --- |
 | done | `finished (why)` |
-| active | `someone is working on it (session …)`, or `… and the session is waiting for a person` |
+| active | `someone is working on it (session …)`, or `… and the session is waiting for a person`; when serve holds the session, `, now <tool> <target>` from its last tool event |
 | ready | `would be assigned now`, or `could start, but <hold reason>`, or `could start` |
 | blocked | `cannot start yet: waits for …` |
 | failed | `gave up: <why>` |
