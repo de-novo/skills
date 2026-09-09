@@ -6,6 +6,8 @@ description: >-
   SKILL.md vs README vs examples, wiring .agents load paths, updating the
   catalog README table, or when the user runs /catalog. Not for planting
   Grove on a consuming project — that is grove.
+metadata:
+  internal: true    # repo-only: the skills CLI hides it unless INSTALL_INTERNAL_SKILLS=1
 ---
 
 # Catalog
