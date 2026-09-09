@@ -443,6 +443,26 @@ test('plan without --apply creates nothing; with --apply it creates a worktree s
   assert.equal(activity.doing, 'Edit src/x.ts');
   assert.match(activity.changed_at, /^\d{4}-/);
   assert.match(f.good(['status']).stdout, /w1 .*· now Edit src\/x\.ts/);
+  // diff: the seat's whole difference from its base, as a patch, plus untracked files.
+  const empty = JSON.parse(f.good(['diff', 'w1', '--json']).stdout);
+  assert.equal(empty.patch, '');
+  assert.deepEqual(empty.untracked, []);
+  assert.equal(empty.base, json.base);
+  // Change a file the base tracks, and add one it does not.
+  const tracked = spawnSync('git', ['ls-files'], { cwd: f.seatPath('w1'), encoding: 'utf8' }).stdout.split('\n').filter(Boolean)[0];
+  writeFileSync(path.join(f.seatPath('w1'), tracked), readFileSync(path.join(f.seatPath('w1'), tracked), 'utf8') + 'refunds\n');
+  writeFileSync(path.join(f.seatPath('w1'), 'new.txt'), 'untracked\n');
+  const diff = JSON.parse(f.good(['diff', 'w1', '--json']).stdout);
+  assert.match(diff.patch, new RegExp(`^diff --git a/${tracked.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')} b/`, 'm'));
+  assert.match(diff.patch, /^\+refunds$/m);
+  assert.deepEqual(diff.untracked, ['new.txt']);
+  assert.equal(diff.truncated, false);
+  assert.match(f.good(['diff', 'w1']).stdout, /\+refunds[\s\S]*untracked: new\.txt/);
+  assert.throws(() => parseDryadCliArgs(['diff']), /diff requires a seat id/);
+  // Leave the seat as finish expects it: clean.
+  spawnSync('git', ['checkout', '--', tracked], { cwd: f.seatPath('w1'), encoding: 'utf8' });
+  rmSync(path.join(f.seatPath('w1'), 'new.txt'));
+  assert.equal(JSON.parse(f.good(['diff', 'w1', '--json']).stdout).patch, '');
   assert.equal(json.task, 'add refund endpoint');
   assert.equal(existsSync(json.skill), true, 'the seat points at a skill file that exists');
   assert.equal(f.good(['seat', 'w1', '--task']).stdout, 'add refund endpoint\n');

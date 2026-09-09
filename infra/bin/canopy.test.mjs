@@ -299,3 +299,26 @@ test('/chat/<slug>/<id> renders the seat\'s transcript as turns, escaped, and re
   assert.equal(gone.status, 404);
   assert.match(await gone.text(), /not there/);
 });
+
+test('/diff/<slug>/<id> shows the seat\'s patch from dryad diff, per file, escaped, and links both ways with the chat page', async (t) => {
+  const f = fixture(t);
+  const server = await startCanopy({ ...f, port: 0 });
+  t.after(() => closeServer(server));
+  const url = `http://127.0.0.1:${server.address().port}`;
+  const seatRoot = path.join(f.root, 'seats-0', 'w1');
+  writeFileSync(path.join(seatRoot, 'notes.md'), '# notes\n\n<script>alert(1)</script> added\n');
+  const page = await fetch(url + '/diff/canopy-0/w1');
+  assert.equal(page.status, 200);
+  const html = await page.text();
+  assert.match(html, /untracked: notes\.md/, 'a new file is untracked until git knows it');
+  assert.doesNotMatch(html, /<script>alert/);
+  const tracked = spawnSync('git', ['-C', seatRoot, 'add', 'notes.md'], { encoding: 'utf8' });
+  assert.equal(tracked.status, 0, tracked.stderr);
+  const staged = await (await fetch(url + '/diff/canopy-0/w1')).text();
+  assert.match(staged, /<summary>notes\.md<\/summary>/);
+  assert.match(staged, /<span class="add">\+&lt;script&gt;alert\(1\)&lt;\/script&gt; added<\/span>/);
+  assert.match(staged, /1 file changed since/);
+  assert.match(staged, /href="\/chat\/canopy-0\/w1"/);
+  assert.match((await (await fetch(url)).text()).split('<script>')[0], /href="\/diff\/canopy-0\/w1">diff<\/a>/);
+  assert.equal((await fetch(url + '/diff/canopy-0/nope')).status, 404);
+});
