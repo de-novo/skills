@@ -163,7 +163,8 @@ export function renderCodexTrust(currentText, records, { remove = false } = {}) 
   // Every block of ours is one leading newline and three lines, so taking
   // them back returns the file to its bytes. A file that did not end in a
   // newline gets one before the first block and keeps it after removal.
-  let text = (currentText ?? '').replace(TRUST_BLOCK, '');
+  // An orphan marker (a block cut short by hand) is dropped with the blocks.
+  let text = (currentText ?? '').replace(TRUST_BLOCK, '').replace(new RegExp(`\\n# ${TRUST_MARKER}\\n(?=\\n|$)`, 'g'), '');
   if (remove) return text;
   const additions = records.filter((record) => !text.includes(tomlKey(record.key)));
   if (additions.length === 0) return text;
@@ -248,7 +249,13 @@ function renderClaudeLike(text, store, { remove }) {
   for (const event of store.events) {
     const groups = Array.isArray(hooks[event]) ? hooks[event].filter((group) => !isOurs(group)) : [];
     if (!remove) {
-      groups.push({ matcher: '', hooks: [{ type: 'command', command: hookCommand(event, store), timeout: 10 }] });
+      // Codex hashes a group's matcher into the handler's trust identity for
+      // the tool events, so an empty matcher key is a different hook from
+      // no matcher key: the TUI showed "3 hooks are new or changed" for
+      // entries with `matcher: ""` whose trust had been recorded without it
+      // (2026-09-10). Codex entries carry no matcher key at all.
+      const group = { hooks: [{ type: 'command', command: hookCommand(event, store), timeout: 10 }] };
+      groups.push(store.tool === 'codex' ? group : { matcher: '', ...group });
     }
     if (groups.length === 0) delete hooks[event];
     else hooks[event] = groups;
