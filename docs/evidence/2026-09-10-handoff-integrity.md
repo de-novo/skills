@@ -178,3 +178,22 @@ node infra/bin/cli.mjs herbarium check                                  links 23
 Not measured: whether an agent reading the new Forester text asks fewer
 questions on a complete brief; that is the evaluation package's to
 measure with a cold session.
+
+## WP-08: look before anything runs
+
+`infra/lib/doctor.mjs`, `de-novo skills doctor [--project ROOT] [--json]`
+and `capabilities [--json]`: catalog version and Node, optional deps,
+executables on PATH, each values file as ready, missing, invalid,
+unsupported, or unknown with the parser's own words, skill copies
+compared with the catalog's text, the gates a person owns, and the next
+step per gap. `package.json` now names `version` and `engines.node`
+(`>=24`, the range the suite has run on); the plugin manifest's version
+is tested equal to it.
+
+```text
+node --test infra/bin/doctor.test.mjs   4/4 (a tree digest of the project and state directory is equal before and after doctor)
+```
+
+Not measured: a machine without git or without node_modules (the rows
+exist; the states were produced only by the present machine); npm
+publishing, which stays a separate choice.

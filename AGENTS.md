@@ -24,6 +24,7 @@ Remote: `git@github.com:de-novo/skills.git`. CLI: `de-novo skills` (alias `de-no
 | Engine catalog | `infra/docker-compose.yml` (profile = engine id; grove.* labels) |
 | Machine infra commands | `de-novo skills infra` (`infra/bin/cli.mjs`) |
 | CLI | `infra/bin/cli.mjs` |
+| Doctor and capabilities (read-only entry point) | `infra/lib/doctor.mjs` only |
 | Profile parse + invariants | `infra/lib/profile.mjs` only |
 | Dryad profile schema + CLI | `skills/dryad/references/seats.md` |
 | Dryad profile parse + seat registry | `infra/lib/dryad.mjs` only |

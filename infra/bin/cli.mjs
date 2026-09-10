@@ -33,6 +33,7 @@ import {
   runOverlayLifecycle,
 } from '../lib/overlay.mjs';
 import { dryadHelp, parseDryadCliArgs, recordSeatCliEvent, runDryad } from '../lib/dryad.mjs';
+import { doctorHelp, runDoctor } from '../lib/doctor.mjs';
 import { runCanopy } from '../lib/canopy.mjs';
 import { foresterHelp, parseForesterCliArgs, runForester } from '../lib/forester.mjs';
 import { parseUnderstoryCliArgs, runUnderstory, understoryHelp } from '../lib/understory.mjs';
@@ -436,6 +437,10 @@ machine (Grove-central — compose + addressing.yml):
   ${CLI} infra provision (mysql|pg) <name>
   ${CLI} infra k3d connect --cluster NAME
 
+first:
+  ${CLI} doctor [--project ROOT] [--json]   what this machine and project have; read-only, exit 1 on an invalid values file
+  ${CLI} capabilities [--json]              the verbs, the skills, optional deps, executables
+
 project:
   ${CLI} init [project-root] [--slug NAME]
                                  [--engines a,b] [--services a,b] [--force]
@@ -474,6 +479,13 @@ function main(argv) {
   switch (command) {
     case 'playground':
       return runPlayground(rest);
+    case 'doctor':
+    case 'capabilities':
+      if (rest[0] === 'help' || rest[0] === '--help' || rest[0] === '-h') {
+        console.log(doctorHelp(CLI));
+        return 0;
+      }
+      return runDoctor({ verb: command, args: rest });
     case 'init':
       return runInit(rest);
     case 'setup':

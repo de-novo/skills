@@ -128,13 +128,25 @@ inside a session:
 /plugin install de-novo-skills@de-novo
 ```
 
-**As a checkout.** Clone, then `npm install && npm link`; the skills load
-through `.agents/skills/` symlinks and `de-novo skills` is on your PATH.
+**As a checkout.** Clone, check out a tag or a commit you have read,
+then `npm install`; `node infra/bin/cli.mjs …` runs from there, and
+`npm link` puts `de-novo skills` on your PATH as a convenience. The skills
+load through `.agents/skills/` symlinks.
 
 The CLI comes only with the checkout today. The first two routes give you
 the seven skills; the verbs they name (`de-novo skills …`) need the
-checkout linked once on the machine. The skills say what to run; the
-checkout is what runs it.
+checkout on the machine, and a pinned checkout is the reproducible route.
+The skills say what to run; the checkout is what runs it. `package.json`
+names the version and the Node range the suite runs on (`>=24`).
+
+**First, look.** `de-novo skills doctor` (or `--json`) reads what this
+machine and this project have: the catalog version and Node, the optional
+pseudo-terminal dependency, which executables are on PATH, each values
+file as ready, missing, or invalid, whether skill copies match this
+catalog, the gates a person owns, and the next step for each gap. It
+installs nothing, starts nothing, and grants nothing.
+`de-novo skills capabilities` lists the verbs and the skills with their
+invocation.
 
 ## Skills
 
@@ -164,9 +176,9 @@ catalog** checkout, not per consuming project:
 npm install && npm link
 ```
 
-Then consuming projects call `de-novo skills infra status` (and `infra up`,
-`setup`, `init`, `validate`, `urls`, `overlay`, `dryad`, `forester`,
-`understory`, `mycelium`). Projects choosing this machine
+Then consuming projects call `de-novo skills doctor` first, and `infra
+status` (and `infra up`, `setup`, `init`, `validate`, `urls`, `overlay`,
+`dryad`, `forester`, `understory`, `mycelium`, `herbarium`). Projects choosing this machine
 backend do not copy its `infra/` directory; projects choosing another backend
 keep their own operating procedure. `de-novo-skills` is an alias without the `skills`
 token. Machine engines are Grove-central (`infra` next to this CLI). `setup`
