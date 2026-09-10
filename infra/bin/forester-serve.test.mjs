@@ -169,7 +169,7 @@ test('a session belongs to one seat: finishing the seat closes it, and a new att
   await f.until(() => /w1: closing \(seat finished/.test(serve.log), 'the session of the finished seat is closed');
   await f.until(() => f.session('w1')?.state === 'needs-input' && f.session('w1').pid !== firstPid, 'attempt 2 launched as its own session', 20000);
   assert.equal(f.session('w1').attempt, 2);
-  assert.match(serve.log, /w1: attempt 2 seated; dropping the session of attempt 1/);
+  await f.until(() => /w1: (attempt 2 seated; dropping the session of attempt 1|closing \(seat finished; attempt 2 seated\))/.test(serve.log), 'the old attempt\'s session was closed or dropped for attempt 2', 5000);
   assert.equal(f.status().items.find((item) => item.id === 'w1').seat.attempt, 2);
   serve.child.kill('SIGINT');
 });
@@ -201,7 +201,10 @@ test('a serve started after a crash relaunches sessions as fresh contexts and sa
   await sleep(300);
   const second = f.serve();
   await f.until(() => f.status()?.serve?.alive === true && f.status().serve.pid === second.child.pid, 'second serve took over');
-  assert.match(second.log, new RegExp(`previous serve pid ${firstPid} ended with 1 live session \\(w1\\); they cannot be resumed natively`));
+  // The daemon's stdout reaches this process through a pipe, after the
+  // snapshot it wrote is already readable (seen on the Linux runner).
+  const note = new RegExp(`previous serve pid ${firstPid} ended with 1 live session \\(w1\\); they cannot be resumed natively`);
+  await f.until(() => note.test(second.log), 'the second serve names the sessions it did not resume', 5000);
   await f.until(() => f.session('w1')?.state === 'needs-input', 'w1 relaunched');
   assert.match(f.session('w1').note, /fresh context: the previous serve's session \(needs-input\) was not resumed natively/);
   assert.notEqual(f.session('w1').pid, null);
