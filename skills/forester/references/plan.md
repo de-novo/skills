@@ -151,6 +151,7 @@ de-novo skills forester assign [--apply] [--json] [--project ROOT]
 de-novo skills forester status [--json | --watch] [--project ROOT]
 de-novo skills forester serve  [--project ROOT]
 de-novo skills forester attach ID [--project ROOT]
+de-novo skills forester restart ID [--project ROOT]
 de-novo skills forester hooks  [--apply | --remove --apply] [--json]
 ```
 
@@ -160,8 +161,9 @@ de-novo skills forester hooks  [--apply | --remove --apply] [--json]
 | next | `assign <id>` and `hold <id> <reason>` lines, then `would assign k/free; changes nothing` | — |
 | assign | same as next | runs `dryad plan <id> --task <handoff> --by forester --revision <rev> [--owns … | --read-only] [--input <dep>=<sha> …] --apply` for each chosen item; prints `assigned k/n · slots a/parallel`; non-zero if any seat failed to plan |
 | status | `slots a/parallel`, `waiting r ready · w waiting for integration · b blocked`, `done d/n`, `failed f`, `outside n` seats the plan does not name, and `serve` with one line per live session: tool, state, and what it is doing with its age; non-zero when any item is failed. `--watch` redraws the text form every two seconds until Ctrl-C | — |
-| serve | foreground daemon: every poll it does what `assign --apply` does, starts the tool of each active item as a real interactive session in a pseudo-terminal it holds, reads the tool's hook events, closes a session whose seat reported done, and serves `attach`. Ctrl-C closes every session and removes its snapshot and socket. Refuses to start when another serve runs for the project | — |
+| serve | foreground daemon: every poll it does what `assign --apply` does, starts the tool of each active item as a real interactive session in a pseudo-terminal it holds, reads the tool's hook events, closes a session whose seat reported done, and serves `attach` and `restart`. Before a launch it checks the tool is declared and on PATH, the worktree exists, and the seat's env is not pending; a failed check is a `failed` session naming its kind and nothing is spawned. A seat whose env is pending is planned again with a doubling wait (capped at a minute) up to five times, then marked `failed` (`env-pending`). Ctrl-C closes every session and removes its snapshot, socket, and lock. One serve per project: the second start stops at the lock (`<snapshot>.serve.lock`, reclaimed only from a dead pid) and removes nothing; a socket that answers is never unlinked. Started after a crash, it says which sessions the previous daemon held and launches them again as fresh contexts, never as native resumes | — |
 | attach | connects to one live session: recent output is replayed, keys go to the tool, Ctrl-] detaches and the session keeps running. A closed session is refused by name | — |
+| restart | asks serve to drop a `failed` or `exited` session so its next poll launches the item again (a pending env's retry count starts over). A live session is refused by name: nobody's work is restarted underneath them | — |
 | hooks | one row per tool store: `codex`, `grok`, `cursor-agent`, `opencode`; whether it is present, installed, or absent, and what `--apply` would do. A tool whose home is missing is skipped. `--remove --apply` takes back exactly the marked entries | writes one marked entry per event into each present store, keeping the person's own entries, atomically; a store that is not JSON is refused by name |
 
 ## Sessions
@@ -169,7 +171,7 @@ de-novo skills forester hooks  [--apply | --remove --apply] [--json]
 `serve` records a snapshot at `~/.dev-infra/foresters/<slug>.yml`
 (`GROVE_STATE_DIR/foresters/` under the override) with its pid, its socket,
 and one record per session: `tool`, `state`, `since`, `pid`, `exit`,
-`events`, `note`, `doing`, `doing_since`. `doing` is the last tool event's name and target (`Edit app/api/server.mjs`, `Bash node tools/overlay.mjs attach …`), read from the session's hook events and never from the worker's own report; `doing_since` is when it last changed. `status` prints it after the state with its age. `status` reads it and shows `stale snapshot` when that pid
+`events`, `note`, `failure`, `doing`, `doing_since`. `doing` is the last tool event's name and target (`Edit app/api/server.mjs`, `Bash node tools/overlay.mjs attach …`), read from the session's hook events and never from the worker's own report; `doing_since` is when it last changed. `status` prints it after the state with its age. `status` reads it and shows `stale snapshot` when that pid
 is gone. The socket is a short hashed name under the OS temp dir, because a
 unix socket path is capped near 100 bytes.
 
@@ -179,8 +181,9 @@ unix socket path is capped near 100 bytes.
 | `running` | A `UserPromptSubmit`, `PreToolUse`, or `PostToolUse` hook |
 | `idle` | A `Stop` or `StopFailure` hook: the turn ended |
 | `needs-input` | A `Notification` hook whose type is `permission_prompt`, `idle_prompt`, or `elicitation_dialog`; a `PermissionRequest` hook; or, while still `starting`, a screen whose last lines ask to confirm or cancel (a dialog before the first prompt, where no hook can fire) |
-| `exited` | The process ended on its own; `exit` carries the code |
+| `exited` | The process ended on its own; `exit` carries the code, and `note` says `forester restart` launches it again |
 | `closed` | serve ended it: the seat reported done, or serve stopped |
+| `failed` | Nothing was spawned; `failure: { kind, note, at }` says why: `no-tool`, `tool-missing`, `env-pending`, `worktree-missing`, or `spawn-failed` |
 
 Each session's events go to the seat's own file, `DRYAD_EVENTS`, laid by Dryad at `plan --apply` and read back by `dryad status`, so a session serve holds and one another launcher started look the same. Claude Code sessions get their hooks through `--settings <file>`, the seat's `DRYAD_CLAUDE_SETTINGS`, never into the worktree or the person's own settings.
 
@@ -223,7 +226,7 @@ cwd. A Dryad profile is required because seats are Dryad seats.
 items: [{ id, state, why, task, brief, owns, read_only, depends_on, needs:
 { <id>: result|order }, verify, tool, revision, inputs: { <id>: sha },
 attempts, max_attempts, result, integration, verification, seat, session:
-{ tool, state, since, pid, exit, events, note, doing, doing_since } | null
+{ tool, state, since, pid, exit, events, note, failure, doing, doing_since } | null
 }], next: [id], held: [{ id, reason }], slots: { active, free, parallel },
 seats_outside_plan: [id], serve: { pid, alive, socket } | null }`. `result`
 and `integration` are the done seat's records as Dryad keeps them.

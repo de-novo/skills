@@ -94,3 +94,36 @@ pointed at a throwaway state file, and hashes that file before and after.
   serve run was not exercised.
 - Registries written before this date: read as before, with the new
   fields absent; no migration was run against one.
+
+## WP-05: a launch that can fail names its failure and waits for a person
+
+`infra/lib/forester-serve.mjs`: readiness is checked before anything is
+spawned (tool declared, executable on PATH, worktree present, env not
+pending) and a failed check is a `failed` session with `failure.kind`; a
+pending overlay env is planned again with a doubling wait, capped, five
+times, then marked failed; `forester restart <id>` drops a failed or
+exited session so the next poll launches it, and refuses a live one; the
+daemon holds a lock for its lifetime, linked into place with its pid
+already written and reclaimed only from a dead pid; a socket that answers
+is never unlinked; a daemon started after a crash names the sessions the
+previous one held and launches them again as fresh contexts.
+
+```text
+node --test infra/bin/forester-serve.test.mjs   6/6 (real pseudo-terminals; the pending case drives the process overlay backend)
+npm test                                        301/301
+```
+
+| Guard reverted | Red |
+| --- | --- |
+| readiness check before spawn | 1 |
+| a pending env is not launched into | 1 |
+| the serve lock (unit) | 1 |
+| fresh-context note after a crash | 1 |
+| restart refuses a live session | 1 |
+
+One full-suite run timed out the existing serve viewer at sixty seconds
+under parallel load; the same file passes alone and with the other
+pseudo-terminal files, and the next full run passed 301/301. The viewer
+timeout is now two minutes. Not measured: a real agent tool exiting on
+its own mid-task; the lock across two machines sharing a state directory
+(the lock trusts its hostname).

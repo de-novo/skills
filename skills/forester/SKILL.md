@@ -121,7 +121,10 @@ and starts each seated item's tool as a real interactive session that it
 holds. Nothing is headless: every approval, the trust dialog included, is
 still the tool's own prompt, and `status` shows which session needs a
 person. serve grants no trust on its own; a machine that wants seat
-worktrees pre-trusted says so in the local file. `forester attach <id>`
+worktrees pre-trusted says so in the local file. A session that could not
+start says which thing is missing, a pending env is retried with backoff,
+and `forester restart <id>` launches a failed or exited item again once
+you have fixed it. One serve runs per project. `forester attach <id>`
 opens that session; Ctrl-] leaves it running. The tools and their launch
 lines are machine facts and live in the local file, never in the plan.
 Run `forester hooks --apply` once on a machine so Codex, Grok, Cursor, and

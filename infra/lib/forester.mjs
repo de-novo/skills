@@ -600,6 +600,7 @@ const VERBS = Object.freeze({
   status: { flags: ['json', 'watch'], options: ['project'] },
   serve: { flags: [], options: ['project'] },
   attach: { flags: [], options: ['project'], positional: 'seat id' },
+  restart: { flags: [], options: ['project'], positional: 'seat id' },
   hooks: { flags: ['apply', 'remove', 'json'], options: [] },
 });
 
@@ -775,7 +776,8 @@ function sessionLines(loaded) {
   const lines = [`  serve    pid ${sessions.pid} · sessions ${rows.length}`];
   for (const [id, session] of rows) {
     const doing = session.doing == null ? '' : `  · ${session.doing}${session.doing_since ? ` (${ageOf(session.doing_since)})` : ''}`;
-    lines.push(`    ${id}  ${session.tool}  ${session.state}${session.exit != null ? ' ' + session.exit : ''}${doing}`);
+    const failure = session.failure == null ? '' : `  · ${session.failure.kind}: ${session.failure.note}`;
+    lines.push(`    ${id}  ${session.tool}  ${session.state}${session.exit != null ? ' ' + session.exit : ''}${doing}${failure}`);
   }
   return lines;
 }
@@ -808,9 +810,11 @@ export async function runForester({ options, environment = process.env, cwd = pr
     console.log(options.json ? JSON.stringify(rows, null, 2) : formatHooksReport(rows, options));
     return 0;
   }
-  if (options.verb === 'serve' || options.verb === 'attach') {
-    const { runAttach, runServe } = await import('./forester-serve.mjs');
-    return options.verb === 'serve' ? runServe({ options, environment, cwd }) : runAttach({ options, environment, cwd });
+  if (options.verb === 'serve' || options.verb === 'attach' || options.verb === 'restart') {
+    const { runAttach, runRestart, runServe } = await import('./forester-serve.mjs');
+    if (options.verb === 'serve') return runServe({ options, environment, cwd });
+    if (options.verb === 'restart') return runRestart({ options, environment, cwd });
+    return runAttach({ options, environment, cwd });
   }
   if (options.verb === 'status' && options.watch) {
     if (options.json) fail('--watch prints the text form; drop --json.');
@@ -848,6 +852,7 @@ usage:
   ${cli} forester status [--json | --watch] [--project ROOT]   slots filled, items waiting, live sessions and what each is doing; --watch redraws every 2s
   ${cli} forester serve  [--project ROOT]            keep the budget filled and hold each seat's real session (foreground)
   ${cli} forester attach ID [--project ROOT]         view and type into one session; Ctrl-] detaches
+  ${cli} forester restart ID [--project ROOT]        drop a failed or exited session so serve launches it again
   ${cli} forester hooks  [--apply | --remove --apply] [--json]   one marked entry in each installed tool's hook store
 
 The plan is ${PLAN_RELPATH}: items with a task line, the paths each expects
@@ -863,11 +868,17 @@ worker reports done to fill the freed slot.
 serve does that refill on its own and starts each seated item's tool as a
 real interactive session in a pseudo-terminal it holds: the tool named by
 the item or by tool in the local file, launched from tools.<name>.command
-with {task} replaced. Claude Code sessions get their hooks through
---settings and their worktree pre-trusted; the hooks write the session's
-state (running, idle, needs-input) to a file status reads. A session is
-closed when its seat reports done. serve needs @lydell/node-pty, an
-optional dependency; nothing else does.
+with {task} replaced by the seat's handoff. Before a launch serve checks
+the tool is declared and on PATH, the worktree exists, and the overlay
+env is not pending; a failed check is a failed session naming its kind,
+a pending env is planned again with backoff, and restart drops a failed
+or exited session so the next poll launches it again. Claude Code
+sessions get their hooks through --settings; the hooks write the
+session's state (running, idle, needs-input) to a file status reads. No
+trust is granted unless tools.<name>.pretrust_worktrees is set. A session
+is closed when its seat reports done. One serve per project: a second
+start stops at the lock. serve needs @lydell/node-pty, an optional
+dependency; nothing else does.
 
 hooks installs one marked entry per event in the hook store of every tool
 found on this machine (codex, grok, cursor-agent, opencode), each gated on

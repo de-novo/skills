@@ -196,9 +196,11 @@ test('item states and allocation are a pure function of plan, seats, budget, and
   assert.equal(rows.find((row) => row.id === 'web-panel').state, 'ready');
 });
 
-test('cli args accept the seven verbs, and only attach takes a positional', () => {
+test('cli args accept the eight verbs, and only attach and restart take a positional', () => {
   assert.deepEqual(parseForesterCliArgs(['assign', '--apply', '--project', '/p']), { help: false, verb: 'assign', project: '/p', json: false, watch: false, apply: true, remove: false, id: null });
   assert.equal(parseForesterCliArgs(['attach', 'web-panel']).id, 'web-panel');
+  assert.equal(parseForesterCliArgs(['restart', 'web-panel']).id, 'web-panel');
+  assert.throws(() => parseForesterCliArgs(['restart']), /restart requires a seat id/);
   assert.throws(() => parseForesterCliArgs(['attach']), /attach requires a seat id/);
   assert.throws(() => parseForesterCliArgs(['attach', 'a', 'b']), /attach takes one seat id/);
   assert.throws(() => parseForesterCliArgs(['serve', '--json']), /--json is not valid for serve/);
@@ -377,9 +379,11 @@ test('serve seats the budget, holds real sessions, relays a viewer, and refills 
     socket.on('data', (chunk) => { out += chunk; if (out.includes('allow? (y/N)') && !socket.answered) { socket.answered = true; socket.write('y\r'); } if (out.includes('report exit 0')) { socket.end(); resolve(out); } });
     socket.once('connect', () => socket.write(JSON.stringify({ attach: 'define-shape', cols: 100, rows: 30 }) + '\n'));
     socket.on('error', reject);
-    // A loaded CI runner spawns the fixture tool's report processes slowly; sixty seconds
-    // still fails a hang, and one post-merge run on main timed out at fifteen (2026-09-09).
-    setTimeout(() => reject(new Error('viewer timed out\n' + out)), 60000);
+    // A loaded CI runner spawns the fixture tool's report processes slowly; two minutes
+    // still fails a hang. One post-merge run on main timed out at fifteen seconds
+    // (2026-09-09), and one full-suite run on a laptop timed out at sixty once the
+    // fixture also commits its work (2026-09-10).
+    setTimeout(() => reject(new Error('viewer timed out\n' + out)), 120000);
   });
   assert.match(seen, /"ok":true/);
   assert.match(seen, /fixture tool · seat define-shape · task: # define-shape: Decide the response shape/);
