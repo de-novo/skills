@@ -656,6 +656,9 @@ function probeOverlay(project, environment) {
     stale: report.counts.stale,
     projectStatusOk: report.project_status.ok,
     driftNotMeasured: report.drift == null,
+    // The report as Grove printed it, so a reader of status --json (Canopy)
+    // has the one observation Dryad made and need not ask Grove again.
+    report,
     result,
   };
 }
@@ -685,7 +688,7 @@ const VERBS = Object.freeze({
   seat: { positionals: [1, 1], options: ['project'], flags: ['json', 'env', 'shell', 'task'] },
   report: { positionals: [1, 1], options: ['status', 'note', 'session', 'evidence', 'project'], flags: ['accept-outside-scope'] },
   integrate: { positionals: [1, 1], options: ['commit', 'by', 'note', 'project'], flags: ['apply'] },
-  status: { positionals: [0, 1], options: ['project'], flags: ['json', 'finished'] },
+  status: { positionals: [0, 1], options: ['project', 'tail'], flags: ['json', 'finished'] },
   diff: { positionals: [1, 1], options: ['project'], flags: ['json'] },
   finish: { positionals: [1, 1], options: ['project'], flags: ['apply'] },
   rebind: { positionals: [0, 0], options: ['project'], flags: ['apply'] },
@@ -754,6 +757,11 @@ export function parseDryadCliArgs(args) {
   }
   if (verb === 'integrate') {
     if (options.commit == null) fail('integrate requires --commit <sha>.');
+  }
+  if (verb === 'status' && options.tail != null) {
+    if (!options.finished) fail('--tail goes with --finished.');
+    options.tail = Number(options.tail);
+    if (!Number.isInteger(options.tail) || options.tail < 1) fail('--tail must be an integer of at least 1.');
   }
   if (verb === 'seat') {
     const chosen = SEAT_FORMATS.filter((name) => options[name]);
@@ -1342,13 +1350,17 @@ function runRebind({ options, project, environment }) {
 
 function runFinishedStatus({ options, project, environment }) {
   const { seats } = readDryadFinished(project.slug, environment);
-  const selected = seats.filter((seat) => options.id == null || seat.id === options.id);
-  if (options.id != null && selected.length === 0) fail(`seat ${options.id} is not in the finished archive for ${project.slug}.`);
+  const matching = seats.filter((seat) => options.id == null || seat.id === options.id);
+  if (options.id != null && matching.length === 0) fail(`seat ${options.id} is not in the finished archive for ${project.slug}.`);
+  // The archive grows without bound; --tail reads its newest records and
+  // says how many there are in all, so a reader knows the view is partial.
+  const selected = options.tail != null && matching.length > options.tail ? matching.slice(matching.length - options.tail) : matching;
+  const partial = selected.length < matching.length;
   if (options.json) {
-    console.log(JSON.stringify({ project: project.slug, finished: selected }, null, 2));
+    console.log(JSON.stringify({ project: project.slug, finished: selected, finished_total: matching.length, partial }, null, 2));
     return 0;
   }
-  const lines = [`■ ${project.slug} — finished seats ${selected.length}`];
+  const lines = [`■ ${project.slug} — finished seats ${selected.length}${partial ? ` of ${matching.length} (newest; --tail ${options.tail})` : ''}`];
   for (const seat of selected) {
     lines.push(`  ${seat.id}  ${seat.branch}  ${seat.status}${seat.by ? '  by ' + seat.by : ''}  finished ${seat.finished_at}  journal ${seat.journal.length}`);
     if (options.id != null) {
@@ -1400,6 +1412,7 @@ function runStatus({ options, project, environment }) {
   if (options.id != null && entries.length === 0) fail(`seat ${options.id} is not registered for ${project.slug}.`);
 
   const problems = [];
+  let overlayReport = null;
   const repository = gitRepositoryId(project.root);
   if (state.repository != null && state.repository !== repository) {
     problems.push(`registry bound to repository ${state.repository.slice(0, 12)}; this checkout is ${repository.slice(0, 12)} (dryad rebind)`);
@@ -1410,6 +1423,7 @@ function runStatus({ options, project, environment }) {
   let busy = new Set();
   if (project.overlayActive && (wantsEnv.length > 0 || options.id == null)) {
     const probe = probeOverlay(project, environment);
+    overlayReport = probe.report;
     tracked = probe.envs;
     attached = probe.attached;
     busy = new Set(probe.pending.filter((item) => item.state === 'in-flight').map((item) => item.env));
@@ -1469,6 +1483,7 @@ function runStatus({ options, project, environment }) {
           overlaps,
           problems,
           repository: { bound: state.repository ?? null, checkout: repository },
+          overlay_report: overlayReport,
           seats: rows.map((row) => ({
             id: row.id,
             worktree: row.seat.worktree,
@@ -1684,7 +1699,7 @@ usage:
   ${cli} dryad report ID --status working|blocked|done [--note TEXT] [--session REF] [--evidence PATH]
                       [--accept-outside-scope] [--project ROOT]
   ${cli} dryad integrate ID --commit SHA [--by LABEL] [--note TEXT] [--project ROOT] [--apply]
-  ${cli} dryad status [ID] [--json] [--finished] [--project ROOT]
+  ${cli} dryad status [ID] [--json] [--finished [--tail N]] [--project ROOT]
   ${cli} dryad diff ID [--json] [--project ROOT]    the seat's work as a patch against its base, committed or not, plus untracked files
   ${cli} dryad finish ID [--project ROOT] [--apply]
   ${cli} dryad rebind [--project ROOT] [--apply]    bind the slug to this checkout's repository

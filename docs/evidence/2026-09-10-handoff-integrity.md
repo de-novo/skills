@@ -254,3 +254,46 @@ node infra/bin/cli.mjs herbarium check   links 230/230 · anchors 19/19 · snaps
 
 Not measured: a real tokenizer (the estimate is bytes over four and says
 so); Markdown escapes such as `\[` (the link regexes do not model them).
+
+## WP-11: what a Canopy view costs, counted before and after
+
+`infra/lib/canopy.mjs`, `infra/lib/dryad.mjs`: Dryad's `status --json`
+carries the Grove report it already read (`overlay_report`), so Canopy
+asks Grove again only when an older Dryad answered; the archive is read
+with `--finished --tail 20` and the card says `finished 20 of n
+(newest)`; the chat and diff pages read one seat of one project. Tests
+count the processes through a `trace` option on the CLI call.
+
+```text
+node --test infra/bin/canopy-cost.test.mjs   2/2
+node --test infra/bin/canopy.test.mjs infra/bin/dryad.test.mjs   29/29
+```
+
+Processes per full view, two projects (one with overlays): base 6
+(discovery, then status, finished, and overlay status for the overlay
+project), now 5. Per detail page: base 7 (a full view, then the diff),
+now 3 (discovery, one seat's status, the diff).
+
+Wall clock, the audited base checked out beside this one, both CLIs on
+the same fixture (two projects, one with the process overlay backend, a
+500-record archive), seven runs each, on this laptop:
+
+| Seats | `canopy --once` median (base → now) | `/diff` page median (base → now) |
+| --- | --- | --- |
+| 1 | 456 → 454 ms | 464 → 327 ms |
+| 10 | 482 → 489 ms | 514 → 336 ms |
+| 50 | 1138 → 1154 ms | 1134 → 367 ms |
+
+The full view is unchanged within noise: its cost is the per-seat git
+reads inside `dryad status`, which this package did not touch. The
+detail pages no longer pay for every project. The benchmark script lives
+in the session scratchpad and is described here, not committed.
+
+| Guard reverted | Red |
+| --- | --- |
+| Grove's report reused from Dryad's status | 1 |
+| a detail page reads one seat | 1 |
+| the archive is read with --tail | 1 |
+
+Not measured: a machine with many registered projects (the fan-out cap of
+four stays as it was); a browser's refresh cadence.

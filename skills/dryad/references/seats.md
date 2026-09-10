@@ -117,7 +117,7 @@ de-novo skills dryad projects [--json]
 | seat | always read-only: the seat for a launcher | — |
 | report | always writes the worker's status and a journal line. `done` also reads the seat's head, cleanliness, and touched paths into `result`, records `--evidence`, and holds the paths against the scope: a done that touched a path outside it is refused with the paths named (journalled as `report.refused`, status unchanged) until a person passes `--accept-outside-scope`. Done with uncommitted changes, or without evidence, is recorded and warned about, not refused | — |
 | integrate | prints what would be recorded | records on the live seat, or the latest finished record of that id, the commit a squash or rebase gave its done result. A ref that is not a commit of this repository is refused |
-| status | always read-only: counts and problems; non-zero on any problem. Counts every worktree of the repository (`worktrees n (m unseated)`) and the paths two seats both hold (`overlaps n`, then one `overlap <path> <id> · <id>` line each). With `overlay.create_on: attach` a seat's env shows `unattached` until its first attach and is not a problem. Another seat's in-flight overlay mutation is shown as `in-flight`, not counted as a problem; a stalled one is. An overlap is a fact, not a problem: it never changes the exit code | — |
+| status | always read-only: counts and problems; non-zero on any problem. `--finished --tail N` reads the newest N archived records and says the total, so a reader knows the view is partial. Counts every worktree of the repository (`worktrees n (m unseated)`) and the paths two seats both hold (`overlaps n`, then one `overlap <path> <id> · <id>` line each). With `overlay.create_on: attach` a seat's env shows `unattached` until its first attach and is not a problem. Another seat's in-flight overlay mutation is shown as `in-flight`, not counted as a problem; a stalled one is. An overlap is a fact, not a problem: it never changes the exit code | — |
 | diff | always read-only: the seat's whole difference from its base as one patch (`git diff <base>` in the worktree, so committed and uncommitted alike), then `untracked: <path>` lines; `--json` prints `{ id, worktree, base, head, patch, untracked, truncated }`, the patch capped at 512 KiB | — |
 | finish | prints what would be destroyed or removed | `overlay destroy`, remove a clean Dryad-created worktree, move the seat and its journal to `<slug>.finished.yml`; branches kept |
 | rebind | prints which repository the slug is bound to and which this checkout is | binds the slug to this checkout's repository. Refused while live seats from the other repository exist; the finished archive is kept as it was |
@@ -142,6 +142,11 @@ Grove already know all of it:
 | `worktrees` | project | `[{ path, branch, head, seat, baseline }]` from the baseline's `git worktree list --porcelain`. `seat` is the seat id holding that path, or `null` — somebody works in parallel and Dryad does not know it. `changes` is computed for seats only: reading another person's worktree is not Dryad's business |
 | `overlaps` | project | `[{ path, seats: [id, …] }]` for every path two or more of the listed seats have committed or uncommitted. Shown, never judged — who merges first is a person's call |
 | `activity` | per seat | `{ state, doing, changed_at, events, transcript, session_id }` from the seat's events file: `state` is `running`, `idle`, `needs-input`, or `exited` from the last hook event; `doing` is the last tool event's name and target (`Edit app/api/server.mjs`); `changed_at` is the file's last write; `transcript` and `session_id` are what the tool's own hook payload named (Claude Code names both in every payload; a tool that does not leaves them `null`). `null` until a session has written. The text form appends `· now <doing>` to the seat line |
+
+`status --json` also carries `overlay_report`: Grove's `overlay status
+--json` report as Dryad read it for this status, or `null` when overlays
+are off or no seat wanted an env, so a reader that needs Grove's view
+takes Dryad's one observation instead of probing again.
 
 Each seat in `status --json` and `seat --json` also carries `attempt`,
 `resumed_from`, `scope`, `revision`, `inputs`, `result`, and `integration`
@@ -171,10 +176,16 @@ Use `--port N` to choose another port, or `--once` to print the same state JSON
 and exit. The page refreshes every five seconds; without JavaScript, reload
 to refresh its server-rendered first view.
 
-It reads only public CLI JSON: `dryad projects --json`, each project's
-`dryad status --json` and `dryad status --finished --json`, and
-`overlay status --json` for projects with overlays. Each project shows its
-counts, Grove report and problems, then one card per worktree: seats in
+It reads only public CLI JSON: `dryad projects --json`, then per project
+`dryad status --json` and `dryad status --finished --json --tail 20`. The
+Grove report comes from the `overlay_report` that Dryad's status carries
+(the one observation Dryad made, marked `observed_by: dryad status`);
+`overlay status --json` is asked only when a Dryad old enough not to
+carry it answered. A full view therefore costs one discovery and two
+processes per project. The finished section shows the newest twenty
+records and, when the archive is longer, `finished 20 of n (newest)`.
+Each project shows its counts, Grove report and problems, then one card
+per worktree: seats in
 most-recent-journal order, followed by unseated worktrees. Seat cards show
 the task's first line, status and last report, elapsed activity time, env
 state, hostname links (unattached hosts are marked and not linked), journal
@@ -191,6 +202,10 @@ Every live seat card links to `/diff/<slug>/<id>`: the seat's work as
 `dryad diff --json` reports it, one fold per file, additions and deletions
 coloured, untracked files named, refreshed every five seconds; the chat
 page and the diff page link to each other.
+
+The chat and diff pages read one seat of one project (discovery, then
+`dryad status <id> --json`), never every project on the machine, and
+cannot show a seat the front page would not.
 
 A seat card whose activity names a transcript links to `/chat/<slug>/<id>`:
 the session's own transcript read where the tool left it and shown as a
