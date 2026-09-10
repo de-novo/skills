@@ -29,14 +29,20 @@ paths, machine paths. Those have homes.
 ## The drawn graph
 
 `understory graph` prints a Mermaid flowchart: one node per item, in plan
-order, coloured by state (done recedes; active and failed stand out; ready
-and blocked read as waiting); a solid edge per `depends_on`; a dotted edge
+order, coloured by state (done recedes; active, waiting, and failed stand
+out; ready and blocked read as waiting on the plan); a solid edge per `depends_on`; a dotted edge
 labelled with the claim for every ready item a claim hold keeps waiting; a
 self-note for an item the budget alone holds; and a legend of only the
 states present. The node label carries the id, the claims, the tool when
 the item names one, and the session state when serve holds one.
 
 ## The reading
+
+When the document keeps the graph or the reading for a reader who cannot
+run the CLI, it keeps it as a snapshot block that names the command and
+the revision it was drawn at (`<!-- snapshot: de-novo skills understory
+graph @ <sha> <date> -->` … `<!-- /snapshot -->`), so Herbarium reads it as
+generated and a person reads how old it is.
 
 `understory reading` prints a summary line and one line per item:
 
@@ -45,6 +51,7 @@ the item names one, and the session state when serve holds one.
 | done | `finished (why)` |
 | active | `someone is working on it (session …)`, or `… and the session is waiting for a person`; when serve holds the session, `, now <tool> <target>` from its last tool event |
 | ready | `would be assigned now`, or `could start, but <hold reason>`, or `could start` |
+| waiting | `a person must integrate first: <why>` — a dependency's result is not in the baseline yet |
 | blocked | `cannot start yet: waits for …` |
 | failed | `gave up: <why>` |
 

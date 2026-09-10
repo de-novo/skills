@@ -1,7 +1,11 @@
 {
   "name": "de-novo-skills",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
   "bin": {
     "de-novo": "./infra/bin/cli.mjs",
     "de-novo-skills": "./infra/bin/cli.mjs"

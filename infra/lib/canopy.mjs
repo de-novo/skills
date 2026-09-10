@@ -29,7 +29,14 @@ export function parseCanopyArgs(args) {
 
 // Asynchronous, shell-free, and bounded in time and output. A nonzero status
 // with a JSON report is useful evidence (for example, a blocked Dryad seat).
-export function cliJson(args, { cli = CLI, environment = process.env, timeoutMs = 10000 } = {}) {
+// How many finished records a project's card shows; the archive's total is
+// shown beside it so a partial view says so.
+const FINISHED_TAIL = 20;
+
+export function cliJson(args, { cli = CLI, environment = process.env, timeoutMs = 10000, trace = null } = {}) {
+  // A test or a benchmark counts the processes a view costs by passing an
+  // array; production passes none.
+  if (Array.isArray(trace)) trace.push(args.join(' '));
   return new Promise((resolve) => {
     let stdout = ''; let stderr = ''; let bytes = 0; let settled = false;
     const child = spawn(process.execPath, [cli, ...args], {
@@ -95,13 +102,17 @@ export async function collectState(options = {}) {
       const project = discovery.projects[index];
       try {
         if (!project || typeof project.root !== 'string') throw new Error('project root is missing');
-        const [live, archive, grove] = await Promise.all([
+        // Dryad's status already asked Grove once and carries the report;
+        // Grove is asked again only by a Dryad old enough not to carry it.
+        const [live, archive] = await Promise.all([
           cliJson(['dryad', 'status', '--json', '--project', project.root], options),
-          cliJson(['dryad', 'status', '--finished', '--json', '--project', project.root], options),
-          project.overlay === true
-            ? cliJson(['overlay', 'status', '--json', '--project', project.root], options)
-            : Promise.resolve({ inactive: true }),
+          cliJson(['dryad', 'status', '--finished', '--json', '--tail', String(FINISHED_TAIL), '--project', project.root], options),
         ]);
+        const grove = project.overlay !== true
+          ? { inactive: true }
+          : live.overlay_report != null
+            ? { ...live.overlay_report, observed_by: 'dryad status' }
+            : await cliJson(['overlay', 'status', '--json', '--project', project.root], options);
         const problems = [...(live.problems ?? [])];
         for (const [label, report] of [['Dryad', live], ['Finished', archive], ['Grove', grove]]) {
           if (report.error) problems.push(`${label}: ${report.error}`);
@@ -109,7 +120,7 @@ export async function collectState(options = {}) {
         if (grove.project_status?.error) problems.push(`Grove: ${grove.project_status.error}`);
         projects[index] = {
           ...live, ...project, counts: live.counts ?? null, seats: live.seats ?? [],
-          finished: archive.finished ?? [], grove, problems,
+          finished: archive.finished ?? [], finished_total: archive.finished_total ?? (archive.finished ?? []).length, finished_partial: archive.partial === true, grove, problems,
           ...(live.error ? { error: live.error } : {}),
           ...(archive.error ? { finished_error: archive.error } : {}),
         };
@@ -119,6 +130,21 @@ export async function collectState(options = {}) {
     }
   }));
   return { updated_at: new Date().toISOString(), projects };
+}
+
+// One seat, read locally: the project from discovery, then that seat's own
+// status. A detail page pays for one project, not for every project on
+// the machine, and cannot show a seat the front page would not.
+export async function collectSeat({ slug, id }, options = {}) {
+  const discovery = await discoverProjects(options);
+  if (discovery.error || !Array.isArray(discovery.projects)) return { error: discovery.error ?? 'dryad projects returned no projects list' };
+  const project = discovery.projects.find((p) => p?.slug === slug);
+  if (!project || typeof project.root !== 'string') return { error: `no project ${slug}` };
+  const live = await cliJson(['dryad', 'status', id, '--json', '--project', project.root], options);
+  if (live.error) return { error: live.error, project };
+  const seat = (live.seats ?? []).find((s) => s.id === id);
+  if (!seat) return { error: `no seat ${id} in ${slug}`, project };
+  return { project, seat, observed_at: new Date().toISOString() };
 }
 
 // One renderer for the server's first response and the browser's refreshes.
@@ -198,7 +224,7 @@ export function renderState(state) {
     const grove = project.grove;
     const gc = grove?.counts;
     const groveLine = grove?.inactive ? 'overlay inactive' : grove?.error ? esc(grove.error) : `environments ${shown(gc?.environments)} · attachments ${shown(gc?.attachments)} · pending ${shown(gc?.pending)}${(grove?.pending ?? []).map(item => ` · ${esc(item.env)} ${esc(item.verb)} ${esc(item.liveness ?? 'unknown')}`).join('')} · stale ${shown(gc?.stale)} · drift ${shown(gc?.drift)}`;
-    return `<section><h2>${esc(project.slug)} — ${esc(counts)}</h2><p class="grove">Grove · ${groveLine}</p>${(project.problems ?? []).map(problem => `<p class="problem">problem · ${esc(problem)}</p>`).join('')}<p class="root">${esc(project.root)}</p><div class="cards">${view.seats.map(seat => card(seat, grove, false, project.slug)).join('')}${view.unseated.map(tree => `<article class="card unseated"><h3>${esc(tree.branch ?? 'detached HEAD')}</h3><p>Not a seat</p><p>${esc(tree.path)}</p><p>HEAD ${esc(tree.head)}</p></article>`).join('')}</div>${view.overlaps.map(item => `<p class="overlap">⚠ overlap · ${esc(item.path)} · ${item.seats.map(esc).join(' · ')}</p>`).join('')}<details data-project="${esc(project.root)}"><summary>finished ${view.finished.length}</summary><div class="cards">${view.finished.map(seat => card(seat, grove, true)).join('')}</div></details></section>`;
+    return `<section><h2>${esc(project.slug)} — ${esc(counts)}</h2><p class="grove">Grove · ${groveLine}</p>${(project.problems ?? []).map(problem => `<p class="problem">problem · ${esc(problem)}</p>`).join('')}<p class="root">${esc(project.root)}</p><div class="cards">${view.seats.map(seat => card(seat, grove, false, project.slug)).join('')}${view.unseated.map(tree => `<article class="card unseated"><h3>${esc(tree.branch ?? 'detached HEAD')}</h3><p>Not a seat</p><p>${esc(tree.path)}</p><p>HEAD ${esc(tree.head)}</p></article>`).join('')}</div>${view.overlaps.map(item => `<p class="overlap">⚠ overlap · ${esc(item.path)} · ${item.seats.map(esc).join(' · ')}</p>`).join('')}<details data-project="${esc(project.root)}"><summary>finished ${view.finished.length}${project.finished_partial ? ` of ${esc(project.finished_total)} (newest)` : ''}</summary><div class="cards">${view.finished.map(seat => card(seat, grove, true)).join('')}</div></details></section>`;
   }).join('')}`;
 }
 
@@ -258,9 +284,7 @@ async function diffPage(pathname, options) {
   const match = pathname.match(/^\/diff\/([^/]+)\/([^/]+)$/);
   if (!match) return null;
   const [slug, id] = [decodeURIComponent(match[1]), decodeURIComponent(match[2])];
-  const report = await collectState(options);
-  const project = (report.projects ?? []).find((p) => p.slug === slug);
-  const seat = (project?.seats ?? []).find((s) => s.id === id);
+  const { project, seat } = await collectSeat({ slug, id }, options);
   if (!seat) return { status: 404, body: 'No such seat.' };
   const diff = await cliJson(['dryad', 'diff', id, '--project', project.root, '--json'], options);
   if (diff.error || diff.patch == null) return { status: 404, body: diff.error ?? 'No diff for this seat.' };
@@ -273,9 +297,7 @@ async function chatPage(pathname, options) {
   const match = pathname.match(/^\/chat\/([^/]+)\/([^/]+)$/);
   if (!match) return null;
   const [slug, id] = [decodeURIComponent(match[1]), decodeURIComponent(match[2])];
-  const report = await collectState(options);
-  const project = (report.projects ?? []).find((p) => p.slug === slug);
-  const seat = (project?.seats ?? []).find((s) => s.id === id);
+  const { seat } = await collectSeat({ slug, id }, options);
   if (!seat) return { status: 404, body: 'No such seat.' };
   if (!seat.activity?.transcript) return { status: 404, body: 'This seat\'s tool has not named a transcript.' };
   const turns = readTranscript(seat.activity.transcript, { base: seat.worktree ?? null });

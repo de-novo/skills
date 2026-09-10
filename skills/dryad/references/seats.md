@@ -42,10 +42,31 @@ launcher's own setting, not a Dryad value. Example: [examples/](../examples/).
 
 `~/.dev-infra/dryads/<slug>.yml` (`GROVE_STATE_DIR/dryads/` when the override
 is set). One record per seat: worktree, `owned` (created by Dryad or
-adopted), branch, base commit, task, env (`null`, `pending`, or the env
-name), `by`, `session`, `status`, and an append-only `journal` of what Dryad
-did and what the worker reported. The registry mirrors state; it does not
-repair it.
+adopted), branch, base commit, `attempt` (1 for the first seat at an id,
+n+1 after n finished seats), `resumed_from` (the attempt whose branch
+`--resume` continued, else null), task, `scope` (the claims given with
+`--owns`, `[]` for `--read-only`, `null` when unchecked), `revision` (the
+planner's label for which version of the task this seat is for; Dryad
+stores it and never interprets it), `inputs` (`{ <seat id>: <sha> }` from
+`--input`, the results this seat starts from), env (`null`, `pending`, or
+the env name), `by`, `session`, `status`, `result` (recorded by a done
+report, see below), `integration` (recorded by `integrate`), and an
+append-only `journal` of what Dryad did and what the worker reported. The
+registry also names the `repository` the slug is bound to: the root commit
+of the baseline's history. Records planned before 2026-09-10 lack the new
+fields; every reader treats absent as unknown. The registry mirrors state;
+it does not repair it.
+
+A done report's `result` is `{ head, base, ahead, clean, changed,
+scope_checked, outside_scope, at, evidence }`: the seat's own HEAD at the
+report, whether `git status` was empty, how many paths the seat touched
+since its base (destinations, rename sources, deletions, untracked files),
+which of them lay outside the scope, and the evidence file's content or
+null. Evidence is `{ checks: [{ command, cwd, exit, observed }],
+not_measured: [{ boundary, reason }] }`, both lists optional and each entry
+whole; it is recorded as given and judged by nobody here. `integration` is
+`{ commit, result_head, by, note, at }`: the commit a person says the
+result landed as, resolved in this repository at record time.
 
 Journal entries are `{ at, actor, event, detail }`. `actor` is `dryad` for
 what the tooling did (`plan`, `plan.retry`, `finish…`) and `seat` for what
@@ -77,24 +98,39 @@ profile has overlays on.
 ## CLI
 
 ```text
-de-novo skills dryad plan   ID (--task TEXT | --task-file PATH) [--worktree PATH] [--by LABEL] [--apply]
+de-novo skills dryad plan   ID (--task TEXT | --task-file PATH) [--worktree PATH | --resume]
+                            [--owns CLAIM ... | --read-only] [--revision TEXT] [--input ID=SHA ...] [--by LABEL] [--apply]
 de-novo skills dryad seat   ID [--json | --env | --shell | --task]
 de-novo skills dryad report ID --status working|blocked|done [--note TEXT] [--session REF]
+                            [--evidence PATH] [--accept-outside-scope]
+de-novo skills dryad integrate ID --commit SHA [--by LABEL] [--note TEXT] [--apply]
 de-novo skills dryad status [ID] [--json] [--finished]
 de-novo skills dryad diff   ID [--json]
 de-novo skills dryad finish ID [--apply]
+de-novo skills dryad rebind [--apply]
 de-novo skills dryad projects [--json]
 ```
 
 | Verb | Without `--apply` | With `--apply` |
 | --- | --- | --- |
-| plan | prints worktree, branch, base, env; creates nothing | `git worktree add` (or adopt `--worktree`), `overlay create` when the profile has overlays, register the seat |
+| plan | prints worktree, branch, base, attempt, scope, env; creates nothing | `git worktree add` (or adopt `--worktree`), `overlay create` when the profile has overlays, register the seat. Attempt 1 takes the profile's branch template; attempt n takes `<template>-n`, and earlier branches are kept. A branch that already exists is refused by name, never overwritten. `--resume` continues the previous attempt on its own branch with its base unchanged. The slug must be bound to this repository (below) |
 | seat | always read-only: the seat for a launcher | — |
-| report | always writes the worker's status and a journal line | — |
-| status | always read-only: counts and problems; non-zero on any problem. Counts every worktree of the repository (`worktrees n (m unseated)`) and the paths two seats both hold (`overlaps n`, then one `overlap <path> <id> · <id>` line each). With `overlay.create_on: attach` a seat's env shows `unattached` until its first attach and is not a problem. Another seat's in-flight overlay mutation is shown as `in-flight`, not counted as a problem; a stalled one is. An overlap is a fact, not a problem: it never changes the exit code | — |
+| report | always writes the worker's status and a journal line. `done` also reads the seat's head, cleanliness, and touched paths into `result`, records the evidence file (`--evidence <path>`, else the seat's own `DRYAD_EVIDENCE` file when it exists), and holds the paths against the scope: a done that touched a path outside it is refused with the paths named (journalled as `report.refused`, status unchanged) until a person passes `--accept-outside-scope`. Done with uncommitted changes, or without evidence, is recorded and warned about, not refused | — |
+| integrate | prints what would be recorded | records on the live seat, or the latest finished record of that id, the commit a squash or rebase gave its done result. A ref that is not a commit of this repository is refused |
+| status | always read-only: counts and problems; non-zero on any problem. `--finished --tail N` reads the newest N archived records and says the total, so a reader knows the view is partial. Counts every worktree of the repository (`worktrees n (m unseated)`) and the paths two seats both hold (`overlaps n`, then one `overlap <path> <id> · <id>` line each). With `overlay.create_on: attach` a seat's env shows `unattached` until its first attach and is not a problem. Another seat's in-flight overlay mutation is shown as `in-flight`, not counted as a problem; a stalled one is. An overlap is a fact, not a problem: it never changes the exit code | — |
 | diff | always read-only: the seat's whole difference from its base as one patch (`git diff <base>` in the worktree, so committed and uncommitted alike), then `untracked: <path>` lines; `--json` prints `{ id, worktree, base, head, patch, untracked, truncated }`, the patch capped at 512 KiB | — |
 | finish | prints what would be destroyed or removed | `overlay destroy`, remove a clean Dryad-created worktree, move the seat and its journal to `<slug>.finished.yml`; branches kept |
+| rebind | prints which repository the slug is bound to and which this checkout is | binds the slug to this checkout's repository. Refused while live seats from the other repository exist; the finished archive is kept as it was |
 | projects | always read-only, machine-wide (no project needed): one counted line per indexed project — root, present or missing, `seats n`, `finished n`, `overlay on|off`; `--json` prints `{ projects: [ { slug, root, root_present, seats, finished, overlay, updated_at } ] }`; a missing index prints `projects 0` | — |
+
+A slug is bound to one repository on this machine, identified by the root
+commit of its history: `plan --apply` records it in the registry and the
+project index. A different repository that borrowed the slug is refused by
+name, so two projects never share one registry and archive by accident. A
+moved checkout of the same history is not a different repository; `plan`
+warns once about the moved root and carries on. `status --json` prints
+`repository: { bound, checkout }` and lists a mismatch as a problem.
+
 
 `status --json` adds four fields that no new tracking pays for — git and
 Grove already know all of it:
@@ -102,10 +138,19 @@ Grove already know all of it:
 | Field | Where | Shape |
 | --- | --- | --- |
 | `hostnames` | per seat | `[{ host, service, attached }]` — the overlay hostnames of the seat's env, read from Grove's `urls --env <id> --json` (Dryad renders no hostname itself). A project renders a hostname for every service; `attached` says which of them the overlay status inventory actually holds. Empty without a Grove profile, with overlays off, or while the env is pending; `attached` is `false` when the env is not tracked |
-| `changes` | per seat | `{ base, committed: [{path, status}], uncommitted: [{path, status}], counts: { committed, uncommitted, ahead }, truncated }` from `git diff --name-status <base>..HEAD` and `git status --porcelain` in the seat's worktree. The lists stop at 200 entries with `truncated: true`; the counts stay whole. `null` when the worktree is missing |
+| `changes` | per seat | `{ base, committed: [{path, status, from?}], uncommitted: [{path, status, from?}], counts: { committed, uncommitted, ahead }, truncated }` from `git diff --name-status <base>..HEAD` and `git status --porcelain --untracked-files=all` in the seat's worktree; a rename or copy carries its source as `from`. The lists stop at 200 entries with `truncated: true`; the counts stay whole. `null` when the worktree is missing |
 | `worktrees` | project | `[{ path, branch, head, seat, baseline }]` from the baseline's `git worktree list --porcelain`. `seat` is the seat id holding that path, or `null` — somebody works in parallel and Dryad does not know it. `changes` is computed for seats only: reading another person's worktree is not Dryad's business |
 | `overlaps` | project | `[{ path, seats: [id, …] }]` for every path two or more of the listed seats have committed or uncommitted. Shown, never judged — who merges first is a person's call |
 | `activity` | per seat | `{ state, doing, changed_at, events, transcript, session_id }` from the seat's events file: `state` is `running`, `idle`, `needs-input`, or `exited` from the last hook event; `doing` is the last tool event's name and target (`Edit app/api/server.mjs`); `changed_at` is the file's last write; `transcript` and `session_id` are what the tool's own hook payload named (Claude Code names both in every payload; a tool that does not leaves them `null`). `null` until a session has written. The text form appends `· now <doing>` to the seat line |
+
+`status --json` also carries `overlay_report`: Grove's `overlay status
+--json` report as Dryad read it for this status, or `null` when overlays
+are off or no seat wanted an env, so a reader that needs Grove's view
+takes Dryad's one observation instead of probing again.
+
+Each seat in `status --json` and `seat --json` also carries `attempt`,
+`resumed_from`, `scope`, `revision`, `inputs`, `result`, and `integration`
+as the registry holds them.
 
 `--project ROOT` names the baseline checkout. Omitted, Dryad uses
 `DRYAD_PROJECT`, then the nearest `.agents/dryad-profile.yml` above the cwd.
@@ -116,9 +161,14 @@ Seat environment: `DRYAD_ID`, `DRYAD_ENV` (empty without overlays),
 `DRYAD_BRANCH`, `DRYAD_PROJECT`, `DRYAD_SKILL` (the path to this skill's
 SKILL.md inside the installed catalog, so the project need not vendor or
 symlink it), `DRYAD_EVENTS` (the seat's events file, which the agent
-tools' hooks append to), and `DRYAD_CLAUDE_SETTINGS` (a hooks file a
-Claude Code launcher passes as `--settings`). `plan --apply` lays the two
-files under `<state>/dryads/events/<slug>/`; `finish` removes them. Any
+tools' hooks append to), `DRYAD_EVIDENCE` (`<id>.evidence.yml` beside it:
+the file a done report reads when `--evidence` is not passed, so a worker
+never guesses where to put it and never writes it into a worktree, where
+it would fall outside the scope), and `DRYAD_CLAUDE_SETTINGS` (a hooks
+file a Claude Code launcher passes as `--settings`). `plan --apply` lays
+the events and settings files under `<state>/dryads/events/<slug>/`; the
+worker writes the evidence file; `finish` removes all three. `seat --json`
+names the evidence file as `evidence_file`. Any
 launcher that starts a tool with this environment, and `forester hooks
 --apply` once per machine for tools other than Claude Code, gets the
 seat's activity read back by `status`. The task text is not an environment variable; launchers read it
@@ -131,10 +181,16 @@ Use `--port N` to choose another port, or `--once` to print the same state JSON
 and exit. The page refreshes every five seconds; without JavaScript, reload
 to refresh its server-rendered first view.
 
-It reads only public CLI JSON: `dryad projects --json`, each project's
-`dryad status --json` and `dryad status --finished --json`, and
-`overlay status --json` for projects with overlays. Each project shows its
-counts, Grove report and problems, then one card per worktree: seats in
+It reads only public CLI JSON: `dryad projects --json`, then per project
+`dryad status --json` and `dryad status --finished --json --tail 20`. The
+Grove report comes from the `overlay_report` that Dryad's status carries
+(the one observation Dryad made, marked `observed_by: dryad status`);
+`overlay status --json` is asked only when a Dryad old enough not to
+carry it answered. A full view therefore costs one discovery and two
+processes per project. The finished section shows the newest twenty
+records and, when the archive is longer, `finished 20 of n (newest)`.
+Each project shows its counts, Grove report and problems, then one card
+per worktree: seats in
 most-recent-journal order, followed by unseated worktrees. Seat cards show
 the task's first line, status and last report, elapsed activity time, env
 state, hostname links (unattached hosts are marked and not linked), journal
@@ -151,6 +207,10 @@ Every live seat card links to `/diff/<slug>/<id>`: the seat's work as
 `dryad diff --json` reports it, one fold per file, additions and deletions
 coloured, untracked files named, refreshed every five seconds; the chat
 page and the diff page link to each other.
+
+The chat and diff pages read one seat of one project (discovery, then
+`dryad status <id> --json`), never every project on the machine, and
+cannot show a seat the front page would not.
 
 A seat card whose activity names a transcript links to `/chat/<slug>/<id>`:
 the session's own transcript read where the tool left it and shown as a
@@ -183,9 +243,10 @@ project:
   worker can run it alone with the seat's available resources. With no Grove
   environment, use the project's own applicable checks.
 - **Report:** point to [Rules for a seated worker](../SKILL.md#rules-for-a-seated-worker)
-  as the report and completion contract. Specify the task evidence to include:
-  outcome, revision, exact checks and counts, unmeasured boundaries, and the
-  session id or transcript path supplied through `--session` under those rules.
+  as the report and completion contract. The evidence goes in the file
+  `report --status done --evidence <path>` takes: each check with its
+  command, cwd, exit, and counted result; each unmeasured boundary with its
+  reason; and the session id or transcript path through `--session`.
 - **Forbidden actions:** reference those same worker rules for pushing,
   merging, `finish`, and writes to other worktrees; add any project-specific
   exclusions. Do not turn a task brief into a second lifecycle contract.
@@ -213,8 +274,11 @@ project fact; each uses the report and forbidden-action references above.
 > restrictions plus changes to the public interface.
 
 Save the completed brief as a task file and pass it through `--task-file`, or
-use `--task` for a short brief. Review the printed plan against its boundary
-before applying it; launcher handoff follows below.
+use `--task` for a short brief; give the boundary to Dryad as well with
+`--owns` (or `--read-only`), so the done report is held against it. Under
+Forester the brief is the item's `brief` file and the handoff is generated.
+Review the printed plan against its boundary before applying it; launcher
+handoff follows below.
 
 ## Handing a seat to a launcher
 

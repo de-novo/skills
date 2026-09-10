@@ -64,7 +64,7 @@ test('the reading says, per item, what a person should take from it', () => {
   assert.equal(later.find((row) => row.id === 'docs-pass').line, 'would be assigned now');
   const failed = understoryReading({ ...MOMENT, items: [{ ...MOMENT.items[3], state: 'failed', why: '1/1 attempt finished without done' }] });
   assert.equal(failed[0].line, 'gave up: 1/1 attempt finished without done');
-  assert.equal(understorySummary(MOMENT), '4 items: 0 done, 1 active, 1 ready, 2 blocked, 0 failed. Slots 1/2 (budget from local).');
+  assert.equal(understorySummary(MOMENT), '4 items: 0 done, 1 active, 1 ready, 0 waiting for integration, 2 blocked, 0 failed. Slots 1/2 (budget from local).');
 });
 
 test('the cli draws and reads a saved plan without a project', () => {

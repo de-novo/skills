@@ -12,6 +12,7 @@ import {
   allocate,
   claimSegments,
   claimsIntersect,
+  itemRevision,
   itemStates,
   parseForesterCliArgs,
   parseForesterLocal,
@@ -121,7 +122,9 @@ test('plan parser accepts the documented shape and names the offending item on e
 test('the budget is the plan first, the local file second, and an error third', () => {
   assert.deepEqual(parseForesterLocal('version: 1\nparallel: 5\n'), { version: 1, parallel: 5, tool: null, tools: {} });
   const withTools = parseForesterLocal('version: 1\nparallel: 1\ntool: claude\ntools:\n  claude: { command: [claude, "{task}"] }\n  codex: { command: [codex, "{task}"] }\n');
-  assert.deepEqual(withTools, { version: 1, parallel: 1, tool: 'claude', tools: { claude: { command: ['claude', '{task}'] }, codex: { command: ['codex', '{task}'] } } });
+  assert.deepEqual(withTools, { version: 1, parallel: 1, tool: 'claude', tools: { claude: { command: ['claude', '{task}'], pretrustWorktrees: false }, codex: { command: ['codex', '{task}'], pretrustWorktrees: false } } });
+  assert.equal(parseForesterLocal('version: 1\ntools:\n  claude: { command: [claude], pretrust_worktrees: true }\n').tools.claude.pretrustWorktrees, true);
+  assert.throws(() => parseForesterLocal('version: 1\ntools:\n  claude: { command: [claude], pretrust_worktrees: yes }\n'), /pretrust_worktrees must be true or false/);
   assert.throws(() => parseForesterLocal('version: 1\nengines: {}\n'), /unknown key "engines"/);
   assert.throws(() => parseForesterLocal('version: 1\ntool: grok\ntools: {}\n'), /tool "grok" is not declared under tools/);
   assert.throws(() => parseForesterLocal('version: 1\ntools:\n  claude: { command: [] }\n'), /tools\.claude\.command must name the executable/);
@@ -144,43 +147,62 @@ test('claims intersect by literal path segments, conservatively past the first w
   assert.equal(claimsIntersect('README.md', 'README.md'), true);
 });
 
-test('item states and allocation are a pure function of plan, seats, and budget', () => {
+test('item states and allocation are a pure function of plan, seats, budget, and what the baseline holds', () => {
   const plan = parseForesterPlan(PLAN);
   const empty = { seats: {} };
   const none = { seats: [] };
   const states = (rows) => Object.fromEntries(rows.map((row) => [row.id, row.state]));
+  // The baseline holds h1 and nothing else; no worktree has moved.
+  const observed = { head: 'base1', contains: (sha) => sha === 'h1', headOf: () => null };
+  const shapeRevision = itemRevision(plan.tasks[0]);
 
-  let rows = itemStates({ plan, state: empty, finished: none });
+  let rows = itemStates({ plan, state: empty, finished: none, observed });
   assert.deepEqual(states(rows), { 'define-shape': 'ready', 'api-endpoint': 'blocked', 'web-panel': 'blocked', 'docs-pass': 'ready' });
   let out = allocate({ items: rows, budget: { parallel: 3 } });
   assert.deepEqual(out.chosen.map((item) => item.id), ['define-shape']);
   assert.deepEqual(out.held, [{ id: 'docs-pass', reason: 'claim docs/** intersects docs/reference/** of define-shape (ready)' }]);
 
-  rows = itemStates({ plan, state: { seats: { 'define-shape': { status: 'working', worktree: '/w', env: null } } }, finished: none });
+  rows = itemStates({ plan, state: { seats: { 'define-shape': { status: 'working', worktree: '/w', env: null } } }, finished: none, observed });
   assert.deepEqual(states(rows), { 'define-shape': 'active', 'api-endpoint': 'blocked', 'web-panel': 'blocked', 'docs-pass': 'ready' });
   out = allocate({ items: rows, budget: { parallel: 3 } });
   assert.deepEqual(out.chosen, []);
   assert.equal(out.held[0].reason, 'claim docs/** intersects docs/reference/** of define-shape (active)');
 
-  rows = itemStates({ plan, state: { seats: { 'define-shape': { status: 'done', worktree: '/w', env: null } } }, finished: none });
+  // done with a result the baseline does not hold yet: dependents wait; the claim is released.
+  rows = itemStates({ plan, state: { seats: { 'define-shape': { status: 'done', worktree: '/w', env: null, revision: shapeRevision, result: { head: 'h9', clean: true } } } }, finished: none, observed });
+  assert.deepEqual(states(rows), { 'define-shape': 'done', 'api-endpoint': 'waiting', 'web-panel': 'waiting', 'docs-pass': 'ready' });
+  assert.match(rows.find((row) => row.id === 'api-endpoint').why, /define-shape done at h9 is not in baseline HEAD base1/);
+  out = allocate({ items: rows, budget: { parallel: 2 } });
+  assert.deepEqual(out.chosen.map((item) => item.id), ['docs-pass']);
+
+  // done with a result the baseline holds: dependents are ready and carry it as input.
+  rows = itemStates({ plan, state: { seats: { 'define-shape': { status: 'done', worktree: '/w', env: null, revision: shapeRevision, result: { head: 'h1', clean: true } } } }, finished: none, observed });
   assert.deepEqual(states(rows), { 'define-shape': 'done', 'api-endpoint': 'ready', 'web-panel': 'ready', 'docs-pass': 'ready' });
+  assert.deepEqual(rows.find((row) => row.id === 'api-endpoint').inputs, { 'define-shape': 'h1' });
   out = allocate({ items: rows, budget: { parallel: 2 } });
   assert.deepEqual(out.chosen.map((item) => item.id), ['api-endpoint', 'web-panel']);
   assert.deepEqual(out.held, [{ id: 'docs-pass', reason: 'budget full (2)' }]);
   assert.deepEqual({ active: out.active, free: out.free }, { active: 0, free: 2 });
 
-  const finished = { seats: [{ id: 'define-shape', status: 'done' }, { id: 'docs-pass', status: 'blocked' }, { id: 'web-panel', status: 'working' }] };
-  rows = itemStates({ plan, state: empty, finished });
+  const finished = { seats: [{ id: 'define-shape', status: 'done', revision: shapeRevision, result: { head: 'h1', clean: true } }, { id: 'docs-pass', status: 'blocked' }, { id: 'web-panel', status: 'working' }] };
+  rows = itemStates({ plan, state: empty, finished, observed });
   assert.deepEqual(states(rows), { 'define-shape': 'done', 'api-endpoint': 'ready', 'web-panel': 'ready', 'docs-pass': 'failed' });
   assert.equal(rows.find((row) => row.id === 'docs-pass').why, '1/1 attempt finished without done');
   assert.equal(rows.find((row) => row.id === 'web-panel').attempts, 1);
-  rows = itemStates({ plan, state: empty, finished: { seats: [...finished.seats, { id: 'web-panel', status: 'planned' }] } });
+  rows = itemStates({ plan, state: empty, finished: { seats: [...finished.seats, { id: 'web-panel', status: 'planned' }] }, observed });
   assert.equal(rows.find((row) => row.id === 'web-panel').state, 'failed');
+  // An attempt spent on another revision of the item is not this item's attempt.
+  rows = itemStates({ plan, state: empty, finished: { seats: [...finished.seats, { id: 'web-panel', status: 'planned', revision: 'other' }] }, observed });
+  assert.equal(rows.find((row) => row.id === 'web-panel').state, 'ready');
 });
 
-test('cli args accept the seven verbs, and only attach takes a positional', () => {
-  assert.deepEqual(parseForesterCliArgs(['assign', '--apply', '--project', '/p']), { help: false, verb: 'assign', project: '/p', json: false, watch: false, apply: true, remove: false, id: null });
+test('cli args accept the nine verbs, and only attach and restart take a positional', () => {
+  assert.deepEqual(parseForesterCliArgs(['assign', '--apply', '--project', '/p']), { help: false, verb: 'assign', project: '/p', json: false, watch: false, apply: true, remove: false, id: null, parallel: null });
+  assert.equal(parseForesterCliArgs(['machine', '--parallel', '3', '--apply']).parallel, '3');
+  assert.throws(() => parseForesterCliArgs(['machine', '--project', '/p']), /--project is not valid for machine/);
   assert.equal(parseForesterCliArgs(['attach', 'web-panel']).id, 'web-panel');
+  assert.equal(parseForesterCliArgs(['restart', 'web-panel']).id, 'web-panel');
+  assert.throws(() => parseForesterCliArgs(['restart']), /restart requires a seat id/);
   assert.throws(() => parseForesterCliArgs(['attach']), /attach requires a seat id/);
   assert.throws(() => parseForesterCliArgs(['attach', 'a', 'b']), /attach takes one seat id/);
   assert.throws(() => parseForesterCliArgs(['serve', '--json']), /--json is not valid for serve/);
@@ -198,13 +220,15 @@ test('assign --apply seats exactly the budget through Dryad, and a done report f
   let plan = f.json(['forester', 'plan']);
   assert.deepEqual(plan.budget, { parallel: 2, source: 'local' });
   assert.deepEqual(plan.next, ['define-shape']);
-  assert.match(f.good(['forester', 'plan']).stdout, /items 4 · done 0 · active 0 · ready 2 · blocked 2 · failed 0/);
+  assert.match(f.good(['forester', 'plan']).stdout, /items 4 · done 0 · active 0 · ready 2 · waiting 0 · blocked 2 · failed 0/);
   assert.match(f.good(['forester', 'next']).stdout, /would assign 1\/2; changes nothing/);
 
   let out = f.good(['forester', 'assign', '--apply']).stdout;
   assert.match(out, /assigned 1\/1 · slots 1\/2/);
   assert.match(f.good(['dryad', 'status']).stdout, /define-shape/);
-  assert.match(f.good(['dryad', 'seat', 'define-shape', '--task']).stdout, /Decide the response shape/);
+  const handoff = f.good(['dryad', 'seat', 'define-shape', '--task']).stdout;
+  assert.match(handoff, /^# define-shape: Decide the response shape/);
+  assert.match(handoff, /Scope: edit only docs\/reference\/\*\*/);
 
   // Nothing else can go while define-shape holds docs/reference/**.
   out = f.good(['forester', 'assign', '--apply']).stdout;
@@ -218,7 +242,7 @@ test('assign --apply seats exactly the budget through Dryad, and a done report f
   assert.match(out, /assigned 2\/2 · slots 2\/2/);
   const status = f.good(['forester', 'status']).stdout;
   assert.match(status, /slots    2\/2/);
-  assert.match(status, /waiting  1 ready · 0 blocked/);
+  assert.match(status, /waiting  1 ready · 0 waiting for integration · 0 blocked/);
 
   // One done report, one slot, one more item — docs-pass, since define-shape's claim is released.
   f.good(['dryad', 'report', 'api-endpoint', '--status', 'done']);
@@ -357,23 +381,28 @@ test('serve seats the budget, holds real sessions, relays a viewer, and refills 
     socket.on('data', (chunk) => { out += chunk; if (out.includes('allow? (y/N)') && !socket.answered) { socket.answered = true; socket.write('y\r'); } if (out.includes('report exit 0')) { socket.end(); resolve(out); } });
     socket.once('connect', () => socket.write(JSON.stringify({ attach: 'define-shape', cols: 100, rows: 30 }) + '\n'));
     socket.on('error', reject);
-    // A loaded CI runner spawns the fixture tool's report processes slowly; sixty seconds
-    // still fails a hang, and one post-merge run on main timed out at fifteen (2026-09-09).
-    setTimeout(() => reject(new Error('viewer timed out\n' + out)), 60000);
+    // A loaded CI runner spawns the fixture tool's report processes slowly; two minutes
+    // still fails a hang. One post-merge run on main timed out at fifteen seconds
+    // (2026-09-09), and one full-suite run on a laptop timed out at sixty once the
+    // fixture also commits its work (2026-09-10).
+    setTimeout(() => reject(new Error('viewer timed out\n' + out)), 120000);
   });
   assert.match(seen, /"ok":true/);
-  assert.match(seen, /fixture tool · seat define-shape · task: Decide the response shape/);
-  assert.equal(readFileSync(path.join(f.root, 'seats', 'define-shape', 'done.txt'), 'utf8'), 'Decide the response shape and write it into the reference\n');
+  assert.match(seen, /fixture tool · seat define-shape · task: # define-shape: Decide the response shape/);
+  assert.match(readFileSync(path.join(f.root, 'seats', 'define-shape', 'docs/reference/done.txt'), 'utf8'), /^# define-shape: Decide the response shape and write it into the reference\n/);
 
-  // Done closes that session and the freed slot goes to the next ready item.
-  await until(() => { const s = Object.fromEntries(sessions()); return s['define-shape'] === 'closed' && s['api-endpoint'] === 'needs-input'; }, 'slot refilled with api-endpoint after define-shape reported done');
+  // Done closes that session and the freed slot goes to the next ready item:
+  // docs-pass, whose claim define-shape held; api-endpoint waits until a
+  // person integrates define-shape's commit into the baseline.
+  await until(() => { const s = Object.fromEntries(sessions()); return s['define-shape'] === 'closed' && s['docs-pass'] === 'needs-input'; }, 'slot refilled with docs-pass after define-shape reported done');
   const after = f.json(['forester', 'status']);
   assert.equal(after.items.find((item) => item.id === 'define-shape').state, 'done');
+  assert.equal(after.items.find((item) => item.id === 'api-endpoint').state, 'waiting');
   // What the session was doing came from its tool events, not from the worker's report.
   const closed = after.items.find((item) => item.id === 'define-shape').session;
-  assert.equal(closed.doing, 'Write done.txt');
+  assert.equal(closed.doing, 'Write docs/reference/done.txt');
   assert.match(closed.doing_since, /^\d{4}-\d{2}-\d{2}T/);
-  assert.match(f.good(['forester', 'status']).stdout, /define-shape  fixture  closed \d+  · Write done\.txt \(\d+[smh]\)/);
+  assert.match(f.good(['forester', 'status']).stdout, /define-shape  fixture  closed \d+  · Write docs\/reference\/done\.txt \(\d+[smh]\)/);
   assert.deepEqual(after.slots, { active: 1, free: 0, parallel: 1 });
   // A closed session has nothing to attach to; the daemon says so by name.
   assert.match(f.bad(['forester', 'attach', 'define-shape']).stderr, /no live session for "define-shape"/);

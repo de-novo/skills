@@ -58,10 +58,13 @@ de-novo skills herbarium check          # links n/n · copies n · language n ·
 ```
 
 Run it before a document lands, and let CI run it on every change. A
-broken link, a copied sentence, a public surface in another script, or a
-page over its cap is a non-zero exit. Links from active documents into
-the archive are shown, not judged: a person decides whether the pointer
-is a citation or a leftover.
+broken link or anchor, a copied sentence, a public surface whose prose is
+in another script, a page over its cap, or a generated snapshot that
+names no source and revision is a non-zero exit. Similar paragraphs and
+links from active documents into the archive are shown, not judged: a
+person decides whether they are a paraphrase, a citation, or a
+leftover. The check also says how many bytes an agent loads across the
+public surfaces, with a token estimate that names itself one.
 
 ## Retire
 
@@ -72,7 +75,10 @@ able to read why it was made.
 
 ## Invariants — not weakenable
 
-- **One house per fact.** A second copy is a defect the check counts.
+- **One house per fact.** A second copy is a defect the check counts. A
+  summary in your own words that points at its source, and a generated
+  snapshot that names what made it and when, are not copies: the source
+  stays the one place to edit, and the reader can tell how old they are.
 - **The CLI never edits.** It counts; a person or an agent moves the text.
 - **Public surfaces are one language**, the one the values file names.
 - **A human page is short.** Its prose stays under the cap; a diagram in a

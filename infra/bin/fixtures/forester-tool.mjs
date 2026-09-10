@@ -3,7 +3,7 @@
 // argument, runs inside a pseudo-terminal, appends hook-shaped events to
 // FORESTER_EVENTS, waits for a person to type `y` and Enter before acting,
 // then reports done through Dryad the way a seated worker does, and exits.
-import { appendFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,10 +30,15 @@ process.stdin.on('data', (chunk) => {
     process.exit(2);
   }
   // A real tool's hooks carry the tool and its target; serve turns that
-  // into the session's "doing" line.
-  event('PreToolUse', { tool_name: 'Write', tool_input: { file_path: 'done.txt' } });
-  event('PostToolUse', { tool_name: 'Write', tool_input: { file_path: 'done.txt' } });
-  writeFileSync(path.join(process.cwd(), 'done.txt'), `${task}\n`);
+  // into the session's "doing" line. The work lands inside the seat's
+  // scope and is committed, as a seated worker's rules say, before done.
+  event('PreToolUse', { tool_name: 'Write', tool_input: { file_path: 'docs/reference/done.txt' } });
+  event('PostToolUse', { tool_name: 'Write', tool_input: { file_path: 'docs/reference/done.txt' } });
+  mkdirSync(path.join(process.cwd(), 'docs/reference'), { recursive: true });
+  writeFileSync(path.join(process.cwd(), 'docs/reference/done.txt'), `${task}\n`);
+  const gitConfig = ['-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgSign=false', '-c', 'user.name=Fixture Tool', '-c', 'user.email=fixture@example.invalid'];
+  spawnSync('git', [...gitConfig, 'add', '.'], { encoding: 'utf8' });
+  spawnSync('git', [...gitConfig, 'commit', '-q', '-m', 'fixture: done'], { encoding: 'utf8' });
   const report = spawnSync(process.execPath, [CLI, 'dryad', 'report', process.env.DRYAD_ID, '--status', 'done', '--note', 'fixture finished'], { encoding: 'utf8', env: process.env });
   process.stdout.write(`\r\nreport exit ${report.status}\r\n`);
   event('Stop');

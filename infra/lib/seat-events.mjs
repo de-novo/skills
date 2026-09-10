@@ -22,6 +22,14 @@ export function seatSettingsPath(slug, id, environment = process.env) {
   return path.join(seatEventsDirectory(slug, environment), `${id}.claude-settings.json`);
 }
 
+// Where a seat writes its evidence file: beside its events, under the
+// directory Dryad owns, so it is never a path outside the seat's scope
+// and never a guess. report --status done reads it when --evidence is
+// not passed; finish removes it with the seat.
+export function seatEvidencePath(slug, id, environment = process.env) {
+  return path.join(seatEventsDirectory(slug, environment), `${id}.evidence.yml`);
+}
+
 function shellSingle(value) {
   return `'${String(value).replaceAll("'", "'\\''")}'`;
 }

@@ -116,18 +116,46 @@ function walk(root, ignore) {
 
 // ---------------------------------------------------------------- check
 
-const LINK = /\]\(([^)\s#]*)(#[^)]*)?\)/g;
+// An inline link: the target, an optional anchor, an optional "title".
+const LINK = /\]\(([^)\s#]*)(#[^)\s]*)?(?:\s+"[^"]*")?\)/g;
+// A reference-style definition: [label]: target, at the start of a line.
+const REFERENCE = /^ {0,3}\[[^\]]+\]:\s*<?([^\s>#]*)(#[^\s>]*)?>?/gm;
+// A generated block: <!-- snapshot: <what made it> @ <revision or moment> --> … <!-- /snapshot -->.
+// Its prose is a copy by construction and is not counted as one; a block
+// whose header names no source or no revision is a finding.
+const SNAPSHOT = /<!--\s*snapshot:\s*([^\n]*?)\s*-->([\s\S]*?)<!--\s*\/snapshot\s*-->/g;
 
-// GitHub's heading slug: lower-case, punctuation dropped, spaces to hyphens.
-// A heading inside a fence is code, not a heading; inline code in a heading
-// keeps its text in the slug, as the rendered page does.
+export function snapshotsOf(text) {
+  const out = [];
+  for (const m of text.matchAll(SNAPSHOT)) {
+    const header = m[1];
+    const at = header.indexOf('@');
+    const source = (at === -1 ? header : header.slice(0, at)).trim();
+    const revision = at === -1 ? '' : header.slice(at + 1).trim();
+    out.push({ header, source, revision, sourced: source.length > 0 && revision.length > 0, body: m[2] });
+  }
+  return out;
+}
+
+function stripSnapshots(text) {
+  return text.replace(SNAPSHOT, '');
+}
+
+// GitHub's heading slug: lower-case, punctuation dropped, spaces to hyphens;
+// a repeated heading gets -1, -2, … as the rendered page does. A heading
+// inside a fence is code, not a heading; inline code in a heading keeps its
+// text in the slug.
 export function headingSlugs(text) {
   const slugs = new Set();
+  const seen = new Map();
   for (const line of stripFences(text).split('\n')) {
     const m = line.match(/^#{1,6}\s+(.+?)\s*#*\s*$/);
     if (!m) continue;
     const plain = m[1].replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[`*_~]/g, '');
-    slugs.add(plain.toLowerCase().trim().replace(/[^\p{L}\p{N}\s-]/gu, '').replace(/\s+/g, '-'));
+    const base = plain.toLowerCase().trim().replace(/[^\p{L}\p{N}\s-]/gu, '').replace(/\s+/g, '-');
+    const count = seen.get(base) ?? 0;
+    seen.set(base, count + 1);
+    slugs.add(count === 0 ? base : `${base}-${count}`);
   }
   return slugs;
 }
@@ -177,8 +205,15 @@ function stripCode(text) {
 export function checkHerbarium({ root, values }) {
   const files = walk(root, values.ignore);
   const publicFiles = files.filter((file) => matchesAny(file, values.public));
-  const findings = { links: [], anchors: [], copies: [], near_copies: [], similar: [], language: [], pages: [], archive: [] };
+  const findings = { links: [], anchors: [], copies: [], near_copies: [], similar: [], language: [], pages: [], archive: [], snapshots: [] };
   const texts = new Map(publicFiles.map((file) => [file, readFileSync(path.join(root, file), 'utf8')]));
+  // What an agent loads when it reads every public surface: bytes, and a
+  // token estimate that is bytes over four and says so; no tokenizer ran.
+  let bytes = 0;
+  for (const text of texts.values()) bytes += Buffer.byteLength(text, 'utf8');
+  let snapshots = 0;
+  // Prose the copy checks read: a snapshot's body is a copy by construction.
+  const own = new Map([...texts].map(([file, text]) => [file, stripSnapshots(text)]));
   const slugCache = new Map();
   const slugsOf = (relative) => {
     if (!slugCache.has(relative)) {
@@ -192,7 +227,13 @@ export function checkHerbarium({ root, values }) {
 
   for (const [file, text] of texts) {
     const inArchive = matchesAny(file, values.archive);
-    for (const match of stripCode(text).matchAll(LINK)) {
+    // A snapshot block shown inside a fence is an example, not a snapshot.
+    for (const snapshot of snapshotsOf(stripFences(text))) {
+      snapshots += 1;
+      if (!snapshot.sourced) findings.snapshots.push({ file, header: snapshot.header.slice(0, 100) });
+    }
+    const stripped = stripCode(text);
+    for (const match of [...stripped.matchAll(LINK), ...stripped.matchAll(REFERENCE)]) {
       const target = match[1];
       const anchor = match[2] ? match[2].slice(1) : null;
       if (/^[a-z][a-z0-9+.-]*:/i.test(target)) continue;
@@ -213,7 +254,10 @@ export function checkHerbarium({ root, values }) {
         if (!slugsOf(resolved).has(anchor.toLowerCase())) findings.anchors.push({ file, target: `${target}#${anchor}` });
       }
     }
-    if (LANGUAGES[values.language].test(text)) findings.language.push({ file });
+    // The script check reads prose: code, quoted lines, and snapshots are
+    // somebody else's words and may carry any script.
+    const proseOnly = stripCode(own.get(file)).split('\n').filter((line) => !line.trim().startsWith('>')).join('\n');
+    if (LANGUAGES[values.language].test(proseOnly)) findings.language.push({ file });
     // The cap is on prose: a diagram or a command block in a fence, and a
     // table, are looked at, not read, and do not count.
     if (matchesAny(file, values.pages.globs)) {
@@ -225,7 +269,7 @@ export function checkHerbarium({ root, values }) {
   // A copy is one sentence of prose living in two files. Pointer lines,
   // table rules, headings, and code are not prose and are not counted.
   const owners = new Map();
-  for (const [file, text] of texts) {
+  for (const [file, text] of own) {
     const seen = new Set();
     for (const raw of stripCode(text).split('\n')) {
       const line = raw.trim();
@@ -243,7 +287,7 @@ export function checkHerbarium({ root, values }) {
   // punctuation are dropped, so a pasted paragraph that was lightly edited
   // still shows. One finding per pair of files, with the first shared run.
   const shingles = new Map();
-  for (const [file, text] of texts) {
+  for (const [file, text] of own) {
     const words = proseWords(text);
     for (let i = 0; i + NEAR_COPY_WORDS <= words.length; i += 1) {
       const key = words.slice(i, i + NEAR_COPY_WORDS).join(' ');
@@ -273,7 +317,7 @@ export function checkHerbarium({ root, values }) {
   // Similar paragraphs across files. Pairs already reported as copies are
   // left to those findings.
   const reported = new Set([...findings.copies.map((c) => c.files.slice().sort().join('\n')), ...findings.near_copies.map((n) => n.files.join('\n'))]);
-  const paragraphs = [...texts].map(([file, text]) => [file, proseParagraphs(text)]);
+  const paragraphs = [...own].map(([file, text]) => [file, proseParagraphs(text)]);
   for (let a = 0; a < paragraphs.length; a += 1) {
     for (let b = a + 1; b < paragraphs.length; b += 1) {
       const [fileA, parasA] = paragraphs[a];
@@ -304,8 +348,14 @@ export function checkHerbarium({ root, values }) {
     pages_over: findings.pages.length,
     archive_links: findings.archive.length,
   };
-  const ok = counts.links_broken === 0 && counts.anchors_broken === 0 && counts.copies === 0 && counts.near_copies === 0 && counts.language === 0 && counts.pages_over === 0;
-  return { ok, counts, findings };
+  // Structural errors are certain and fail the check; copies are defects the
+  // pattern names and fail it too; similar paragraphs are candidates a
+  // person judges. The JSON groups them so a reader tells which is which.
+  const errors = { links: counts.links_broken, anchors: counts.anchors_broken, language: counts.language, pages: counts.pages_over, snapshots: findings.snapshots.length };
+  const candidates = { copies: counts.copies, near_copies: counts.near_copies, similar: counts.similar };
+  const measures = { bytes, tokens_estimate: Math.ceil(bytes / 4), method: 'bytes/4; an estimate, no tokenizer ran', snapshots, snapshots_unsourced: findings.snapshots.length };
+  const ok = Object.values(errors).every((n) => n === 0) && counts.copies === 0 && counts.near_copies === 0;
+  return { ok, counts, errors, candidates, measures, findings };
 }
 
 // -------------------------------------------------------------- project
@@ -363,7 +413,10 @@ export function formatCheck(result, root) {
     `  language  ${c.language} file${c.language === 1 ? '' : 's'} in another script`,
     `  pages     ${c.pages - c.pages_over}/${c.pages} within ${result.max_words} words`,
     `  archive   ${c.archive_links} link${c.archive_links === 1 ? '' : 's'} from active documents (shown, not judged)`,
+    `  snapshots ${result.measures.snapshots - result.measures.snapshots_unsourced}/${result.measures.snapshots} name a source and a revision`,
+    `  loaded    ${result.measures.bytes} bytes ≈ ${result.measures.tokens_estimate} tokens (bytes/4 estimate)`,
   ];
+  for (const f of result.findings.snapshots) lines.push(`  snapshot  ${f.file}: "${f.header}" names no source or no revision`);
   for (const f of result.findings.links) lines.push(`  broken    ${f.file} -> ${f.target}`);
   for (const f of result.findings.anchors) lines.push(`  anchor    ${f.file} -> ${f.target}`);
   for (const f of result.findings.copies) lines.push(`  copy      ${f.files.join(' · ')}: "${f.line}"`);
@@ -378,7 +431,7 @@ export function formatCheck(result, root) {
 export function runHerbarium({ options, cwd = process.cwd() }) {
   const { root, values } = loadHerbarium({ project: options.project, cwd });
   const result = checkHerbarium({ root, values });
-  if (options.json) console.log(JSON.stringify({ root, ok: result.ok, counts: result.counts, findings: result.findings }, null, 2));
+  if (options.json) console.log(JSON.stringify({ root, ok: result.ok, counts: result.counts, errors: result.errors, candidates: result.candidates, measures: result.measures, findings: result.findings }, null, 2));
   else console.log(formatCheck({ ...result, max_words: values.pages.max_words }, root));
   return result.ok ? 0 : 1;
 }
@@ -393,8 +446,10 @@ usage:
       of ${NEAR_COPY_WORDS} words after case and punctuation are dropped, and paragraphs
       whose word ${SIMILAR_GRAM}-grams are half contained in another's, shown not judged), files in
       another script, human pages over the word cap, links from active
-      documents into the archive. Non-zero on a broken link or anchor, a
-      copy, a wrong script, or a page over the cap.
+      documents into the archive, generated snapshots without a source and
+      revision, and the bytes an agent loads with a token estimate. Non-zero
+      on a broken link or anchor, a copy, a wrong script, a page over the
+      cap, or an unsourced snapshot; similar paragraphs are candidates.
 
 The houses come from ${VALUES_RELPATH}. Pattern: skills/herbarium/SKILL.md.`;
 }

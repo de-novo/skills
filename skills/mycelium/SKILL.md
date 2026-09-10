@@ -34,16 +34,20 @@ the CLI are in [references/log.md](references/log.md). Forester pattern:
 | Forester | an item of work and its state | the plan | `.agents/forester-plan.yml` |
 | Mycelium | an assertion and its status | the log | `<state>/mycelium/<slug>.jsonl` |
 
-The seam is one direction only: a seat that reported done may be proposed
-as a fact (`propose --from-seat`). Mycelium never changes the plan, never
-assigns, never marks an item done.
+The seam is one direction only: a seat's done or blocked report may be
+proposed as a fact (`propose --from-seat`, `--report blocked` for the
+latter). Mycelium never changes the plan, never assigns, never marks an
+item done.
 
 ## The rule
 
 **Propose is cheap; commit is a judgement.** Any worker may propose, and a
 proposal is only staging. Only a judge commits: a person, or the worker the
-project names in `judges`. A committed fact that stops being true is
-invalidated, never deleted: the log keeps what was held and for how long.
+project names in `judges`. A project that names no judges is permissive,
+and `status` says so; an unattended run wants `judges` and `mode:
+restricted`, never a worker naming itself judge. A committed fact that
+stops being true is invalidated, never deleted: the log keeps what was
+held and for how long.
 
 **Wrong is amended; no longer true is invalidated.** A fact you got wrong
 gets a corrected copy (`amend`), and the original is closed as if it never
@@ -71,8 +75,10 @@ When your work produces a fact worth keeping:
    single object at a time (a cause, a definition of done) and `many` when
    it holds several (a dependency, a blocker, an owner).
 3. **Name the source precisely.** A file path and line, a PR, a seat's
-   report, a check's output line. A fact with no source is a rumour and
-   is not proposed.
+   report, a check's output line, and the commit you read it at
+   (`--ref-commit`; `--from-seat` names the seat's own head). A fact with
+   no source is a rumour and is not proposed; a fact with a commit can be
+   told from one the baseline has moved past.
 4. **Correct with `amend`, not with a second proposal.** If you find your
    own proposal wrong, or another's, amend it and say why in the source.
    The log then shows the correction as one link, not two unrelated facts.

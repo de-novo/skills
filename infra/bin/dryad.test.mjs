@@ -431,7 +431,8 @@ test('plan without --apply creates nothing; with --apply it creates a worktree s
   const json = JSON.parse(f.good(['seat', 'w1', '--json']).stdout);
   assert.equal(json.worktree, f.seatPath('w1'));
   const eventsFile = path.join(f.root, 'state/dryads/events', 'dryad-test', 'w1.events');
-  assert.deepEqual(json.env_vars, { DRYAD_ID: 'w1', DRYAD_ENV: '', DRYAD_BRANCH: 'dryad/w1', DRYAD_PROJECT: f.baseline, DRYAD_SKILL: SKILL, DRYAD_EVENTS: eventsFile, DRYAD_CLAUDE_SETTINGS: path.join(path.dirname(eventsFile), 'w1.claude-settings.json') });
+  assert.deepEqual(json.env_vars, { DRYAD_ID: 'w1', DRYAD_ENV: '', DRYAD_BRANCH: 'dryad/w1', DRYAD_PROJECT: f.baseline, DRYAD_SKILL: SKILL, DRYAD_EVENTS: eventsFile, DRYAD_EVIDENCE: path.join(path.dirname(eventsFile), 'w1.evidence.yml'), DRYAD_CLAUDE_SETTINGS: path.join(path.dirname(eventsFile), 'w1.claude-settings.json') });
+  assert.equal(json.evidence_file, json.env_vars.DRYAD_EVIDENCE);
   // plan --apply laid the events file and the Claude settings that append to it; status reads them back as activity.
   assert.equal(existsSync(eventsFile), true, 'events file laid by plan');
   const settings = JSON.parse(readFileSync(json.env_vars.DRYAD_CLAUDE_SETTINGS, 'utf8'));
@@ -467,7 +468,7 @@ test('plan without --apply creates nothing; with --apply it creates a worktree s
   assert.equal(existsSync(json.skill), true, 'the seat points at a skill file that exists');
   assert.equal(f.good(['seat', 'w1', '--task']).stdout, 'add refund endpoint\n');
   const envLines = f.good(['seat', 'w1', '--env']).stdout.trim().split('\n');
-  assert.equal(envLines.length, 7);
+  assert.equal(envLines.length, 8);
   assert.ok(envLines.includes('DRYAD_ID=w1'));
 
   // The launcher boundary: the --shell line, executed by a real shell, lands
@@ -477,7 +478,7 @@ test('plan without --apply creates nothing; with --apply it creates a worktree s
   assert.equal(probe.status, 0, probe.stderr);
   const probeLines = probe.stdout.trim().split('\n');
   assert.equal(realpathSync(probeLines[0]), f.seatPath('w1'));
-  assert.deepEqual(probeLines.slice(1), ['DRYAD_BRANCH=dryad/w1', `DRYAD_CLAUDE_SETTINGS=${json.env_vars.DRYAD_CLAUDE_SETTINGS}`, 'DRYAD_ENV=', `DRYAD_EVENTS=${eventsFile}`, 'DRYAD_ID=w1', `DRYAD_PROJECT=${f.baseline}`, `DRYAD_SKILL=${SKILL}`]);
+  assert.deepEqual(probeLines.slice(1), ['DRYAD_BRANCH=dryad/w1', `DRYAD_CLAUDE_SETTINGS=${json.env_vars.DRYAD_CLAUDE_SETTINGS}`, 'DRYAD_ENV=', `DRYAD_EVENTS=${eventsFile}`, `DRYAD_EVIDENCE=${json.env_vars.DRYAD_EVIDENCE}`, 'DRYAD_ID=w1', `DRYAD_PROJECT=${f.baseline}`, `DRYAD_SKILL=${SKILL}`]);
 
   // A worker inside the worktree resolves the baseline through DRYAD_PROJECT
   // (the worktree carries its own copy of .agents/).
@@ -498,7 +499,8 @@ test('plan without --apply creates nothing; with --apply it creates a worktree s
   f.good(['report', 'w1', '--status', 'done']);
   const clean = f.good(['status', 'w1']);
   assert.match(clean.stdout, /reported   done 1/);
-  assert.equal((clean.stdout.match(/\n  \d{4}-\d{2}-\d{2}T/g) ?? []).length, 5, 'status <id> prints the journal');
+  // One line more than the reports and finish steps alone: Dryad's result line beside the done report.
+  assert.equal((clean.stdout.match(/\n  \d{4}-\d{2}-\d{2}T/g) ?? []).length, 6, 'status <id> prints the journal');
   const statusJson = JSON.parse(f.good(['status', '--json']).stdout);
   assert.deepEqual(statusJson.problems, []);
   assert.equal(statusJson.seats[0].ahead, 0);
@@ -684,7 +686,9 @@ test('a scripted worker seated through --shell reads seat, skill and task, commi
   const seat = f.state().seats.w1;
   assert.equal(seat.status, 'done');
   assert.match(seat.session, /^worker-\d+$/);
-  assert.deepEqual(seat.journal.map((entry) => entry.event), ['plan', 'report', 'report']);
+  // The done report is the worker's line; the git facts of its result are Dryad's line beside it.
+  assert.deepEqual(seat.journal.map((entry) => entry.event), ['plan', 'report', 'report', 'result']);
+  assert.deepEqual({ head: seat.result.head, clean: seat.result.clean, scope_checked: seat.result.scope_checked }, { head: out.head, clean: true, scope_checked: false });
   const status = f.good(['status']);
   assert.match(status.stdout, /reported   done 1/);
   assert.match(status.stdout, /\+1/);

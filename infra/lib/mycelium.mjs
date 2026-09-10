@@ -7,6 +7,7 @@
 //
 //   .agents/mycelium.yml               the project's domains, entity types, predicates, and judges (tracked)
 //   <state>/mycelium/<slug>.jsonl      the log (machine-local, like Dryad's registry)
+import { spawnSync } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
@@ -49,13 +50,21 @@ function isoOrFail(value, what) {
 // The project's whitelist. A domain or a type the file does not name is
 // rejected at propose, so the graph cannot grow a vocabulary nobody chose.
 // judges, when named, are the only writers commit and invalidate accept;
-// absent, any named writer may. Identity is declared, not authenticated.
+// absent, any named writer may. That is the commit mode: `restricted` when
+// judges are named, `permissive` when none are. A project may declare the
+// mode it means, and a declaration that contradicts the judges is refused,
+// so a project that meant restricted and forgot its judges hears it at
+// parse and not after an unattended commit. Identity is declared, not
+// authenticated.
+export const COMMIT_MODES = Object.freeze(['permissive', 'restricted']);
+
 export function parseMyceliumValues(yamlText, source = 'mycelium.yml') {
   const doc = parse(yamlText);
   if (!doc || typeof doc !== 'object' || Array.isArray(doc)) fail(`${source}: expected a mapping.`);
-  const known = new Set(['version', 'domains', 'types', 'predicates', 'judges']);
-  for (const key of Object.keys(doc)) if (!known.has(key)) fail(`${source}: unknown key "${key}"; allowed: version, domains, types, predicates, judges.`);
+  const known = new Set(['version', 'domains', 'types', 'predicates', 'judges', 'mode']);
+  for (const key of Object.keys(doc)) if (!known.has(key)) fail(`${source}: unknown key "${key}"; allowed: version, domains, types, predicates, judges, mode.`);
   if (doc.version !== 1) fail(`${source}: version must be 1.`);
+  if (doc.mode != null && !COMMIT_MODES.includes(doc.mode)) fail(`${source}: mode must be one of ${COMMIT_MODES.join(', ')}.`);
   const list = (name, pattern, what) => {
     const value = doc[name];
     if (!Array.isArray(value) || value.length === 0) fail(`${source}: ${name} must be a non-empty list.`);
@@ -74,13 +83,25 @@ export function parseMyceliumValues(yamlText, source = 'mycelium.yml') {
     if (name === REPORTED) fail(`${source}: predicate "${REPORTED}" is built in (many) and may not be redeclared.`);
     if (!CARDINALITIES.includes(value)) fail(`${source}: predicate ${name} must be one or many, got ${JSON.stringify(value)}.`);
   }
+  const judges = doc.judges == null ? null : list('judges', WRITER, 'a writer id such as human:name or seat:id');
+  const implied = judges == null ? 'permissive' : 'restricted';
+  if (doc.mode === 'restricted' && judges == null) fail(`${source}: mode: restricted needs judges; name who may commit, or drop mode to stay permissive.`);
+  if (doc.mode === 'permissive' && judges != null) fail(`${source}: mode: permissive contradicts judges; drop one of them.`);
   return {
     version: 1,
     domains: list('domains', TOKEN, 'a lower-case token'),
     types: list('types', TOKEN, 'a lower-case token'),
     predicates: { ...predicates, [REPORTED]: 'many' },
-    judges: doc.judges == null ? null : list('judges', WRITER, 'a writer id such as human:name or seat:id'),
+    judges,
+    mode: implied,
+    mode_declared: doc.mode != null,
   };
+}
+
+// One line a reader or doctor prints about the commit policy.
+export function describeMode(values) {
+  if (values.mode === 'restricted') return `restricted${values.mode_declared ? ' (declared)' : ''}: only ${values.judges.join(', ')} commit or invalidate`;
+  return `permissive${values.mode_declared ? ' (declared)' : ' (no judges declared)'}: any named writer may commit; declare judges, or mode: restricted with judges, for unattended runs`;
 }
 
 export function assertWriter(value) {
@@ -89,10 +110,38 @@ export function assertWriter(value) {
 }
 
 export function assertJudge(values, who) {
-  if (values.judges != null && !values.judges.includes(who)) {
+  if (values.mode === 'restricted' && !values.judges.includes(who)) {
     fail(`${who} is not a judge of this project (judges: ${values.judges.join(', ')}); propose or amend instead, and let a judge commit.`);
   }
   return who;
+}
+
+// Where a fact came from, as commits rather than prose: the commit it was
+// read at, and, from a seat, the seat, its attempt, its base, and whether
+// its done was verified. A fact that names a commit can be checked for
+// freshness against the baseline later; one that names none cannot.
+const SHA = /^[0-9a-f]{40}$/;
+
+export function makeRef(input) {
+  if (input == null) return null;
+  if (typeof input !== 'object' || Array.isArray(input)) fail('ref must be a map.');
+  const out = {};
+  if (typeof input.commit !== 'string' || !SHA.test(input.commit)) fail(`ref.commit must be a full commit sha, got ${JSON.stringify(input.commit)}.`);
+  out.commit = input.commit;
+  if (input.seat != null) out.seat = String(input.seat);
+  if (input.attempt != null) {
+    if (!Number.isInteger(input.attempt) || input.attempt < 1) fail('ref.attempt must be a positive integer.');
+    out.attempt = input.attempt;
+  }
+  if (input.base != null) {
+    if (typeof input.base !== 'string' || !SHA.test(input.base)) fail(`ref.base must be a full commit sha, got ${JSON.stringify(input.base)}.`);
+    out.base = input.base;
+  }
+  if (input.verified != null) {
+    if (typeof input.verified !== 'boolean') fail('ref.verified must be true or false.');
+    out.verified = input.verified;
+  }
+  return out;
 }
 
 // ------------------------------------------------------------- envelope
@@ -129,11 +178,27 @@ export function makeAssertion(input, values) {
   out.valid_from = input.valid_from == null ? out.tx_at : isoOrFail(input.valid_from, 'valid_from');
   out.valid_to = null;
   out.source = text('source');
+  out.ref = makeRef(input.ref ?? null);
   out.agent_id = assertWriter(text('agent_id'));
   out.model = text('model', { required: false });
   out.amends = text('amends', { required: false });
   out.status = 'staging';
   return out;
+}
+
+// Whether each fact's ref.commit is in the baseline now: `in-baseline`,
+// `not-in-baseline`, `unknown` when git cannot say, and null for a fact
+// with no ref. One git call per distinct commit.
+export function refStates(rows, root) {
+  const memo = new Map();
+  const ask = (sha) => {
+    if (!memo.has(sha)) {
+      const result = spawnSync('git', ['-c', 'core.hooksPath=/dev/null', 'merge-base', '--is-ancestor', sha, 'HEAD'], { cwd: root, encoding: 'utf8' });
+      memo.set(sha, result.status === 0 ? 'in-baseline' : result.status === 1 ? 'not-in-baseline' : 'unknown');
+    }
+    return memo.get(sha);
+  };
+  return rows.map((row) => ({ ...row, ref_state: row.ref?.commit == null ? null : ask(row.ref.commit) }));
 }
 
 // A correction is a new assertion that names the one it replaces. Fields
@@ -375,7 +440,7 @@ export function trace(assertions, id) {
 // One line per fact in the shape a Dryad seat brief takes: paste the block
 // and the worker starts from ids, not from a chat.
 export function brief(rows) {
-  return rows.map((row) => `- ${row.id}  ${row.s} ${row.p} ${row.o}  (${row.domain}, ${row.confidence.toFixed(2)}, ${row.source})`).join('\n');
+  return rows.map((row) => `- ${row.id}  ${row.s} ${row.p} ${row.o}  (${row.domain}, ${row.confidence.toFixed(2)}, ${row.source})${refTail(row)}`).join('\n');
 }
 
 export function counts(assertions) {
@@ -418,7 +483,19 @@ export function seatReport(slug, seatId, status = 'done', environment = process.
   if (candidates.length === 0) fail(`seat ${seatId}: not in the registry or the finished archive of ${slug}.`);
   for (const seat of candidates) {
     const report = [...(seat.journal ?? [])].reverse().find((line) => line.event === 'report' && typeof line.detail === 'string' && (line.detail === status || line.detail.startsWith(`${status}:`)));
-    if (report) return { at: report.at, detail: report.detail, by: seat.by ?? null };
+    if (report) {
+      // A done report with a recorded result carries its commits along, so
+      // the fact names where it was true and can be checked for freshness.
+      const result = status === 'done' && seat.result != null && SHA.test(seat.result.head ?? '') ? seat.result : null;
+      const ref = result == null ? null : {
+        commit: result.head,
+        seat: seatId,
+        ...(Number.isInteger(seat.attempt) ? { attempt: seat.attempt } : {}),
+        ...(SHA.test(result.base ?? '') ? { base: result.base } : {}),
+        verified: result.evidence != null && result.evidence.checks.length > 0 && result.evidence.checks.every((check) => check.exit === 0),
+      };
+      return { at: report.at, detail: report.detail, by: seat.by ?? null, ref };
+    }
   }
   fail(`seat ${seatId}: has no ${status} report; it cannot be proposed as a fact.`);
 }
@@ -430,7 +507,7 @@ export const seatDoneReport = (slug, seatId, environment) => seatReport(slug, se
 const VERBS = Object.freeze({
   propose: {
     positionals: [0, 0],
-    options: ['project', 'by', 's', 'p', 'o', 's-type', 'o-type', 'domain', 'confidence', 'source', 'model', 'valid-from', 'from-seat', 'report'],
+    options: ['project', 'by', 's', 'p', 'o', 's-type', 'o-type', 'domain', 'confidence', 'source', 'model', 'valid-from', 'from-seat', 'report', 'ref-commit'],
     flags: ['json'],
   },
   amend: {
@@ -477,7 +554,7 @@ export function parseMyceliumCliArgs(args) {
   }
   if (verb === 'propose') {
     if (options.from_seat != null) {
-      for (const name of ['s', 'p', 'o', 'source', 'valid_from']) if (options[name] != null) fail(`--from-seat sets --${name.replaceAll('_', '-')} from the seat's report; do not pass both.`);
+      for (const name of ['s', 'p', 'o', 'source', 'valid_from', 'ref_commit']) if (options[name] != null) fail(`--from-seat sets --${name.replaceAll('_', '-')} from the seat's report; do not pass both.`);
       if (options.report != null && !SEAT_REPORTS.includes(options.report)) fail(`--report must be one of ${SEAT_REPORTS.join(', ')}.`);
     } else {
       if (options.report != null) fail('--report goes with --from-seat.');
@@ -535,9 +612,14 @@ function fields(options) {
   };
 }
 
+function refTail(row) {
+  if (row.ref?.commit == null) return '';
+  return `  @${row.ref.commit.slice(0, 12)}${row.ref_state === 'not-in-baseline' ? ' (not in baseline)' : row.ref_state === 'unknown' ? ' (baseline unknown)' : ''}`;
+}
+
 function line(row) {
   const conf = row.confidence.toFixed(2);
-  return `  ${row.id}  ${row.status.padEnd(7)}  ${conf}  ${row.domain.padEnd(10)}  ${row.s} ${row.p} ${row.o}`;
+  return `  ${row.id}  ${row.status.padEnd(7)}  ${conf}  ${row.domain.padEnd(10)}  ${row.s} ${row.p} ${row.o}${refTail(row)}`;
 }
 
 export function runMycelium({ options, environment = process.env, cwd = process.cwd() }) {
@@ -547,10 +629,10 @@ export function runMycelium({ options, environment = process.env, cwd = process.
   switch (options.verb) {
     case 'propose': {
       const by = who();
-      let input = { ...fields(options), agent_id: by };
+      let input = { ...fields(options), agent_id: by, ref: options.ref_commit == null ? null : { commit: options.ref_commit } };
       if (options.from_seat != null) {
         const report = seatReport(project.slug, options.from_seat, options.report ?? 'done', environment);
-        input = { ...input, s: options.from_seat, p: REPORTED, o: report.detail, source: `dryad seat ${options.from_seat} report at ${report.at}`, valid_from: report.at };
+        input = { ...input, s: options.from_seat, p: REPORTED, o: report.detail, source: `dryad seat ${options.from_seat} report at ${report.at}`, valid_from: report.at, ref: report.ref };
       }
       const assertion = propose({ file, assertion: makeAssertion(input, values), by });
       if (options.json) console.log(JSON.stringify(assertion, null, 2));
@@ -585,7 +667,7 @@ export function runMycelium({ options, environment = process.env, cwd = process.
         if (!Number.isFinite(filter.below)) fail(`--below must be a number, got ${JSON.stringify(options.below)}.`);
       }
       if (options.at == null && !options.all) filter.status = options.status ?? 'active';
-      const rows = query(assertions, filter);
+      const rows = refStates(query(assertions, filter), project.root);
       if (options.json) console.log(JSON.stringify(rows, null, 2));
       else if (options.ids) {
         for (const row of rows) console.log(row.id);
@@ -614,6 +696,7 @@ export function runMycelium({ options, environment = process.env, cwd = process.
           `  types     ${values.types.join(', ')}`,
           `  predicates ${Object.entries(values.predicates).map(([name, card]) => `${name}(${card})`).join(', ')}`,
           `  judges    ${values.judges == null ? 'anyone named (no judges declared)' : values.judges.join(', ')}`,
+          `  mode      ${describeMode(values)}`,
           `  assertions ${c.total} · active ${c.active} · staging ${c.staging} · invalid ${c.invalid}`,
           `  staging below 0.5: ${c.staging_below_half}`,
         ].join('\n'));
@@ -630,7 +713,7 @@ export function myceliumHelp(cli = 'de-novo skills') {
   return `the facts under the forest: one append-only log of assertions per project
 
 usage:
-  ${cli} mycelium propose --s S --p P --o O --s-type T [--o-type T] --domain D --source SRC
+  ${cli} mycelium propose --s S --p P --o O --s-type T [--o-type T] --domain D --source SRC [--ref-commit SHA]
                           [--confidence 0..1] [--model M] [--valid-from ISO] [--by WHO] [--json]
   ${cli} mycelium propose --from-seat ID --s-type T --domain D [--report done|blocked] [--by WHO]
                                                   a seat's done (or blocked) report as a staging fact
