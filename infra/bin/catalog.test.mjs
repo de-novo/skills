@@ -25,7 +25,7 @@ const published = readdirSync(SKILLS, { withFileTypes: true })
   .sort();
 
 test('every published skill is named after its directory and has a description', () => {
-  assert.ok(published.length >= 5, `expected the five skills, found ${published.length}`);
+  assert.equal(published.length, 7, `expected the seven skills the root README names, found ${published.length}`);
   for (const name of published) {
     const fm = frontmatter(path.join(SKILLS, name, 'SKILL.md'));
     assert.equal(fm.name, name, `${name}: frontmatter name is ${JSON.stringify(fm.name)}`);

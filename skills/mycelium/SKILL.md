@@ -34,9 +34,10 @@ the CLI are in [references/log.md](references/log.md). Forester pattern:
 | Forester | an item of work and its state | the plan | `.agents/forester-plan.yml` |
 | Mycelium | an assertion and its status | the log | `<state>/mycelium/<slug>.jsonl` |
 
-The seam is one direction only: a seat that reported done may be proposed
-as a fact (`propose --from-seat`). Mycelium never changes the plan, never
-assigns, never marks an item done.
+The seam is one direction only: a seat's done or blocked report may be
+proposed as a fact (`propose --from-seat`, `--report blocked` for the
+latter). Mycelium never changes the plan, never assigns, never marks an
+item done.
 
 ## The rule
 

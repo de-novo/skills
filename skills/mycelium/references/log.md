@@ -80,7 +80,7 @@ nothing else. Every row the fold produces also carries `changed_at`, the
 `at` of the last line that touched it.
 
 Every write takes the same file lock Dryad's registry uses (`<log>.lock`,
-two seconds' wait, a dead owner's lock is reclaimed), re-reads the log
+fifteen seconds' wait, a dead owner's lock is reclaimed), re-reads the log
 inside it, and appends. The conflict check and the append are one step:
 two judges committing conflicting facts in the same instant leave exactly
 one active.

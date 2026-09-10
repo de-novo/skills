@@ -53,7 +53,10 @@ A skill that tells the agent to run another skill says so as a tool call,
 one skill per call: `Call the Skill tool with "dryad"`. A relative link
 (`[dryad](../dryad/SKILL.md)`) is router prose for a person and fires
 nothing. Nothing may name a user-invoked skill to the Skill tool; tell the
-person to run it instead.
+person to run it instead. In a host with no Skill tool the same sentence
+means: read that skill's `SKILL.md` from the installed copy (a seat has
+Dryad's path in `$DRYAD_SKILL`; the others sit beside it) and follow it.
+That fallback is the root README's, stated once; skills do not repeat it.
 
 ## Add a skill
 

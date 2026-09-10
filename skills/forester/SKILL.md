@@ -14,21 +14,31 @@ disable-model-invocation: true
 
 Grove is the ground and Dryad seats one worker on it. Forester decides which
 work exists, in what order, and how much of it this machine runs at once.
-The CLI is a pure function of three inputs: the plan, the Dryad seats, and
-the budget. The same inputs give the same assignment every time.
+The allocator is a pure function of its inputs: the plan, the Dryad seats,
+the budget, and the baseline's git facts; the same inputs give the same
+assignment every time. The runner around it (`assign --apply`, `serve`) is
+stateful on purpose: it reserves slots, seats items, and launches tools,
+and everything it did is readable from `status`.
 
 This file owns the pattern. The fields, the allocation rule, and the CLI are
 in [references/plan.md](references/plan.md). Dryad pattern: [dryad](../dryad/SKILL.md).
 
-## Grill first
+## Specify first
 
-Nobody knows exactly what they want. Before any item exists, interview the
-person until the two of you hold the same picture. Work it as a **design
-tree**: every decision branches into the decisions that hang off it. The
-**frontier** is every question whose prerequisites are already answered.
-Ask the whole frontier in one round, numbered, each with your recommended
-answer, then wait. A round with one question is a round; a round that
-guesses at an answer it has not heard is not.
+A plan needs four things settled: the goal, the scope (what may change and
+what may not), the verification (what proves each item), and the
+permissions (what may be spent, destroyed, or sent outside). When the
+person hands you a brief that already settles them, use it: do not
+interview them again about what they wrote down, and do not stop a safe,
+well-specified task because a question could be asked. When something is
+not settled, interview until the two of you hold the same picture. Work it
+as a **design tree**: every decision branches into the decisions that hang
+off it. The **frontier** is every question whose prerequisites are already
+answered. Ask the whole frontier in one round, numbered, each with your
+recommended answer, then wait. A round with one question is a round; a
+round that guesses at an answer it has not heard is not. Destructive,
+costly, or irreversible choices, and real ambiguity in the ask, are always
+questions; a preference you could recommend and revise is not.
 
 ```
 Q1  <title>: <the question, with the choices if there are some>
@@ -75,10 +85,12 @@ You write the plan. The CLI reads it. When the grilling is done:
 5. Give `retry.max_attempts` above one only to an item whose failure is
    likely to be the worker's, not the plan's.
 
-6. **Quiz the person before writing the file.** Show the items as a
-   numbered list: title, blocked by, what it delivers end to end. Ask three
-   things: is the granularity right, does each edge gate what it says it
-   gates, should any item be merged or split. Iterate until they say yes.
+6. **Show the split before writing the file.** Show the items as a
+   numbered list: title, blocked by, what it delivers end to end. When the
+   person gave you the items, confirm the edges and claims you added and
+   move on. When you cut them yourself, ask three things: is the
+   granularity right, does each edge gate what it says it gates, should
+   any item be merged or split. Iterate until they say yes.
 
 Then write `.agents/forester-plan.yml`, validate it with
 `de-novo skills forester plan`, and show the person the printed graph before
@@ -137,6 +149,8 @@ takes it back.
 ## Invariants — not weakenable
 
 - **No model call in the CLI.** You analyse; the file is the interface.
+  `serve` starting the tool a person configured as a session is a launch,
+  not a judgement: the CLI still decides nothing an allocation would not.
 - **Forester creates no environment or worktree itself.** It asks Dryad,
   which asks Grove.
 - **A claim is not a lock.** `owns` constrains allocation, not the filesystem.

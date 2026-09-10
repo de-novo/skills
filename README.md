@@ -38,7 +38,7 @@ Agents working in this catalog: [`AGENTS.md`](AGENTS.md). Skill load paths: [`.a
 
 ## How the skills fit
 
-Five skills, one machine, one direction of flow. Each owns one kind of fact
+Seven skills, one machine, one direction of flow. Each owns one kind of fact
 and one file; none restates another's.
 
 ```
@@ -61,13 +61,15 @@ and one file; none restates another's.
 
    Canopy        the live screen: seats, sessions, files that overlap   (reads Dryad + Forester JSON)
    Understory    the written record: the graph drawn, one line per item, facts pointed at
+   Clearing      the spoken re-pitch of the two above, for a person who lost the thread
+   Herbarium     where each document lives; check counts what drifts
 ```
 
 | Skill | Answers | Writes | Reads | Never does |
 | --- | --- | --- | --- | --- |
 | [grove](skills/grove/) | where does this project run on this machine | engines, overlay envs, names | the runtime profile | choose a port, stop shared engines |
 | [dryad](skills/dryad/) | who sits where, on what task, and what did they report | a seat's worktree, env, journal | Grove's report | launch an agent, merge, order the work |
-| [forester](skills/forester/) | what is the work, what may start now, how many at once | the plan (an agent writes it), seats through Dryad | the plan, the seats, the budget | call a model, hold world facts |
+| [forester](skills/forester/) | what is the work, what may start now, how many at once | the plan (an agent writes it), seats through Dryad, machine slot reservations; `serve` launches each seated item's tool | the plan, the seats, the budget, the baseline's git facts | call a model, merge, hold world facts |
 | [mycelium](skills/mycelium/) | what does the project hold true, since when, on whose word | one log line per propose, commit, invalidate | the log, a seat's report (read-only seam) | judge, write the plan, touch a seat |
 | [understory](skills/understory/) | can a person who was not here read the work | the document (an agent writes the prose) | Forester's graph, Mycelium's ids | draw by hand, restate a fact |
 
@@ -85,9 +87,21 @@ valid interval, transaction time, confidence, domain, and writer. The plan
 file never holds a world fact; the log never holds an assignment. The only
 seam is `propose --from-seat`. Reasons: [`docs/mycelium-design.md`](docs/mycelium-design.md).
 
-**Not in any skill.** Launching agents (a person picks the launcher: a
-terminal, a worktree app, tmux, an ACP client); merging; browser QA and e2e;
-stopping machine infra. Those are a person's, by decision.
+**Launching is one explicit boundary.** Dryad never starts an agent: a
+person picks the launcher (a terminal, a worktree app, tmux, an ACP client).
+The one launcher this catalog offers is `forester serve`, a foreground
+daemon a person starts per project; it holds the tool's real session, and
+every approval, the trust dialog included, is still the tool's own prompt.
+
+**Not in any skill.** Merging or integrating a branch; browser QA and e2e;
+stopping machine infra. Those are a person's, by decision. A done report
+is a report: an item that needs another's result waits until a person has
+merged it or recorded the integration.
+
+**Without a Skill tool.** A skill that says "Call the Skill tool with
+\"dryad\"" means, in a host that has no such tool: read that skill's
+`SKILL.md` from the installed copy and follow it. A seat finds Dryad's at
+`$DRYAD_SKILL`; the other skills sit beside it.
 
 ## Install
 

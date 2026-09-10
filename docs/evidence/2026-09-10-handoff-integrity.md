@@ -130,14 +130,10 @@ its own mid-task; the lock across two machines sharing a state directory
 
 ## WP-06: one machine cap over every project
 
-`infra/lib/forester.mjs`: `forester machine --parallel N --apply` writes
-the cap; `assign --apply` and `serve` take one reservation per chosen
-item under a lock on the slots file, then seat the granted items; a
-reservation is held while its seat is live and not done, or, before the
-seat exists, while the reserving process is alive on this host; stale
-ones are dropped in the next write and no seat is touched; seats no
-reservation names are listed as unmanaged and never counted. The plan's
-own `parallel` still bounds the plan.
+`infra/lib/forester.mjs`: the cap, the reservations taken under one lock
+before seating, what holds a reservation and what makes it stale, and the
+unmanaged seats are specified in the Forester reference's machine-cap
+section; the plan's own `parallel` still bounds the plan.
 
 ```text
 node --test infra/bin/forester-machine.test.mjs   3/3 (two projects on one state directory; three rounds of two assigns at the same instant)
@@ -158,3 +154,27 @@ seat, so two projects each got the one slot. Held reservations now carry
 the reserving pid and host and are kept while that process lives. Not
 measured: two machines sharing one state directory (the liveness check
 trusts its hostname); a cap on anything other than seats.
+
+## WP-07: one statement of each boundary
+
+Root README: seven skills, Clearing and Herbarium in the flow diagram;
+launching named as one explicit boundary (`forester serve` is the one
+launcher here; Dryad never launches); merging and integration named as a
+person's; the no-Skill-tool fallback stated once. Forester: the allocator
+is pure, the runner stateful; "Specify first" replaces "Grill first": a
+brief that settles goal, scope, verification, and permissions is used as
+written, and only destructive, costly, irreversible, or ambiguous choices
+are questions; the split is confirmed, not re-interviewed, when the person
+gave the items. Dryad: rule 1 separates source writes from writes through
+an owner's own verb. Mycelium: the seam takes done or blocked; the lock
+wait reads fifteen seconds, as the code has since 2026-09-09. The catalog
+test now requires exactly the seven skills the README names.
+
+```text
+node --test infra/bin/catalog.test.mjs infra/bin/herbarium.test.mjs   14/14
+node infra/bin/cli.mjs herbarium check                                  links 230/230 · anchors 19/19 · copies 0 near
+```
+
+Not measured: whether an agent reading the new Forester text asks fewer
+questions on a complete brief; that is the evaluation package's to
+measure with a cold session.

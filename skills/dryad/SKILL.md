@@ -40,8 +40,11 @@ project has no overlays. If `DRYAD_ID` is unset, this section does not apply.
 
 ## Rules for a seated worker
 
-1. Change nothing outside your worktree. Reading elsewhere is fine; writing
-   to the baseline checkout, other seats' worktrees, or machine state is not.
+1. Change no source outside your worktree: not the baseline checkout, not
+   another seat's worktree, not a shared engine. Reading elsewhere is fine.
+   Writing through an owner's own verb is not "outside": `report`, a
+   Mycelium `propose`, an `overlay attach` on your own env, and the journal
+   those write are the seat's voice, and the owner keeps the file.
 2. Verify through the Grove procedure. Your env already exists; you `attach`
    your changed services, and `finish` destroys the env later. Shared-only
    services stay on baseline.
