@@ -1184,6 +1184,19 @@ export function parseEvidence(text, source = 'evidence') {
 // own evidence file (DRYAD_EVIDENCE) when the worker wrote one there.
 function readEvidence(options, cwd, project, environment) {
   if (options.evidence != null && options.status !== 'done') fail('--evidence goes with --status done.');
+  // `--evidence -` takes the file on stdin: a worker can hand it in with the
+  // report through one command and never write a file its launcher would
+  // ask about.
+  if (options.evidence === '-') {
+    let text = '';
+    try {
+      text = readFileSync(0, 'utf8');
+    } catch (error) {
+      fail(`--evidence -: could not read stdin: ${error.message}`);
+    }
+    if (text.trim().length === 0) fail('--evidence -: nothing on stdin.');
+    return parseEvidence(text, 'stdin');
+  }
   let file = options.evidence == null ? null : path.resolve(cwd, options.evidence);
   if (file == null && options.status === 'done') {
     const own = seatEvidencePath(project.slug, options.id, environment);
@@ -1705,7 +1718,7 @@ usage:
                       [--revision TEXT] [--input ID=SHA ...] [--by LABEL] [--project ROOT] [--apply]
   ${cli} dryad seat   ID [--json | --env | --shell | --task] [--project ROOT]
   ${cli} dryad report ID --status working|blocked|done [--note TEXT] [--session REF] [--evidence PATH]
-                      [--accept-outside-scope] [--project ROOT]   done reads DRYAD_EVIDENCE when --evidence is not passed
+                      [--accept-outside-scope] [--project ROOT]   done reads DRYAD_EVIDENCE when --evidence is not passed; --evidence - reads stdin
   ${cli} dryad integrate ID --commit SHA [--by LABEL] [--note TEXT] [--project ROOT] [--apply]
   ${cli} dryad status [ID] [--json] [--finished [--tail N]] [--project ROOT]
   ${cli} dryad diff ID [--json] [--project ROOT]    the seat's work as a patch against its base, committed or not, plus untracked files

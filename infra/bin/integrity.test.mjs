@@ -226,8 +226,11 @@ test('a seat has one evidence file, named by its environment and the handoff; a 
   assert.equal(seat.evidence_file, seat.env_vars.DRYAD_EVIDENCE);
   assert.match(seat.evidence_file, /\/define-shape\.evidence\.yml$/);
   assert.equal(existsSync(seat.evidence_file), false, 'the worker writes it; Dryad does not');
-  assert.match(f.good(['dryad', 'seat', 'define-shape', '--task']).stdout, /write your evidence file at \$DRYAD_EVIDENCE/);
-  assert.match(f.good(['dryad', 'seat', 'define-shape', '--task']).stdout, /Run each command on its own line/);
+  const handoff = f.good(['dryad', 'seat', 'define-shape', '--task']).stdout;
+  assert.match(handoff, new RegExp(`Evidence file: ${seat.evidence_file.replaceAll('/', '\\/')}`), 'the handoff names the file literally');
+  assert.match(handoff, /Seat id: define-shape \(use it as written/);
+  assert.match(handoff, /--evidence - <<'EOF'/);
+  assert.match(handoff, /Run each command on its own line, with literal ids and paths/);
   writeFileSync(seat.evidence_file, stringify({ checks: [{ command: 'npm test', exit: 0, observed: '3/3' }] }));
   const report = f.good(['dryad', 'report', 'define-shape', '--status', 'done']);
   assert.doesNotMatch(report.stderr, /unverified/);
@@ -235,6 +238,17 @@ test('a seat has one evidence file, named by its environment and the handoff; a 
   assert.equal(f.item('define-shape').verification, 'verified');
   f.good(['dryad', 'finish', 'define-shape', '--apply']);
   assert.equal(existsSync(seat.evidence_file), false, 'finish removes it with the seat');
+
+  // Evidence handed in with the report on stdin: no file write at all.
+  f.good(['forester', 'assign', '--apply']);
+  const piped = spawnSync(process.execPath, [CLI, 'dryad', 'report', 'web-panel', '--status', 'done', '--evidence', '-', '--project', f.baseline], { cwd: f.baseline, env: f.environment, encoding: 'utf8', input: stringify({ checks: [{ command: 'node --check x.mjs', exit: 0, observed: 'no output' }], not_measured: [{ boundary: 'browser', reason: 'none here' }] }) });
+  assert.equal(piped.status, 0, piped.stderr);
+  const record = f.json(['dryad', 'status']).seats.find((row) => row.id === 'web-panel');
+  assert.equal(record.result.evidence.checks[0].command, 'node --check x.mjs');
+  assert.equal(record.result.evidence.not_measured[0].boundary, 'browser');
+  const empty = spawnSync(process.execPath, [CLI, 'dryad', 'report', 'web-panel', '--status', 'done', '--evidence', '-', '--project', f.baseline], { cwd: f.baseline, env: f.environment, encoding: 'utf8', input: '' });
+  assert.equal(empty.status, 1);
+  assert.match(empty.stderr, /--evidence -: nothing on stdin/);
 });
 
 test('F03/WP-03: evidence is recorded as given and shown as unverified when absent', (t) => {

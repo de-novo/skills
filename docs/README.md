@@ -96,6 +96,11 @@ the record is not operating authority.
 - [Handoff scenarios](evaluation/2026-09-10-handoff-scenarios.md): the
   brief's acceptance scenarios, each pointed at the test that measures it
   or marked not measured, with first metric readings.
+- [The second handoff pilot](evidence/2026-09-10-pilot-handoff-2.md): a
+  Codex seat, a squash integration recorded with `dryad integrate`, a seat
+  that blocked itself on a mismatched claim, a second attempt on its own
+  branch, serve stopped and started; one defect fixed and two prompts
+  designed away.
 - [The handoff pilot](evidence/2026-09-10-pilot-handoff.md): two real
   Claude Code seats held by serve on the playground sample; the trust
   dialog answered by a person, the dependent item waiting until the merge,
