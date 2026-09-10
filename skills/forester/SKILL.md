@@ -92,7 +92,10 @@ machine more than the project: a laptop running three shared engines seats
 fewer workers than a workstation. So it lives in `.agents/forester.local.yml`,
 which is gitignored. A project may set `parallel` in the plan itself, and
 then the project's value is followed and the local file is ignored. No
-budget anywhere is an error, never a silent default.
+budget anywhere is an error, never a silent default. Above every project
+sits one machine cap, `forester machine --parallel N --apply`: the sum of
+what Forester seats on this machine, taken as reservations under one
+lock. Seats planned by hand are shown as unmanaged and not counted.
 
 ## Keep the slots full
 

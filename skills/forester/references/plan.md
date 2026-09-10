@@ -135,7 +135,27 @@ not at 0), or `accepted` (an integration is recorded).
 1. Count the active items.
 2. Walk the ready items in declared order.
 3. Skip an item whose `owns` intersects an active or already chosen item's.
-4. Stop when active plus chosen reaches `parallel`.
+4. Stop when active plus chosen reaches `parallel`, or when the machine cap
+   less what other projects hold is reached (`machine cap full (N; k held
+   by other projects)`).
+
+## Machine cap
+
+`parallel` bounds one plan. The machine cap bounds the sum across every
+project on this machine: `forester machine --parallel N --apply` writes
+`<state>/foresters/machine.yml` (`GROVE_STATE_DIR/foresters/` under the
+override); `--parallel none --apply` removes it; absent means no cap.
+`assign --apply` and `serve` take one reservation per chosen item in
+`<state>/foresters/slots.yml` under one lock, so two projects allocating
+at the same instant never share a slot, then seat the granted items; a
+refused item is a hold, not an error. A reservation is held while its
+seat is live and not done, or, before the seat exists, while the process
+that reserved it is alive on this host; anything else is stale and is
+dropped in the next write, which touches no seat. Live seats no
+reservation names (planned by hand, or by another machine sharing the
+directory) are **unmanaged**: `forester machine` lists them and counts
+nothing for them. The cap governs what Forester seats, not what else
+runs.
 
 Two claims intersect when the path segments before the first wildcard of
 one are a prefix of the other's: `src/api/**` and `src/web/**` do not,
@@ -153,6 +173,7 @@ de-novo skills forester serve  [--project ROOT]
 de-novo skills forester attach ID [--project ROOT]
 de-novo skills forester restart ID [--project ROOT]
 de-novo skills forester hooks  [--apply | --remove --apply] [--json]
+de-novo skills forester machine [--json | --parallel N|none --apply]
 ```
 
 | Verb | Without `--apply` | With `--apply` |
@@ -160,10 +181,11 @@ de-novo skills forester hooks  [--apply | --remove --apply] [--json]
 | plan | one line per item: id, state, why; then `items n · done a · active b · ready c · waiting w · blocked d · failed e` | — |
 | next | `assign <id>` and `hold <id> <reason>` lines, then `would assign k/free; changes nothing` | — |
 | assign | same as next | runs `dryad plan <id> --task <handoff> --by forester --revision <rev> [--owns … | --read-only] [--input <dep>=<sha> …] --apply` for each chosen item; prints `assigned k/n · slots a/parallel`; non-zero if any seat failed to plan |
-| status | `slots a/parallel`, `waiting r ready · w waiting for integration · b blocked`, `done d/n`, `failed f`, `outside n` seats the plan does not name, and `serve` with one line per live session: tool, state, and what it is doing with its age; non-zero when any item is failed. `--watch` redraws the text form every two seconds until Ctrl-C | — |
+| status | `slots a/parallel`, `machine cap N · k held by other projects` (or `no cap`), `waiting r ready · w waiting for integration · b blocked`, `done d/n`, `failed f`, `outside n` seats the plan does not name, and `serve` with one line per live session: tool, state, and what it is doing with its age; non-zero when any item is failed. `--watch` redraws the text form every two seconds until Ctrl-C | — |
 | serve | foreground daemon: every poll it does what `assign --apply` does, starts the tool of each active item as a real interactive session in a pseudo-terminal it holds, reads the tool's hook events, closes a session whose seat reported done, and serves `attach` and `restart`. Before a launch it checks the tool is declared and on PATH, the worktree exists, and the seat's env is not pending; a failed check is a `failed` session naming its kind and nothing is spawned. A seat whose env is pending is planned again with a doubling wait (capped at a minute) up to five times, then marked `failed` (`env-pending`). Ctrl-C closes every session and removes its snapshot, socket, and lock. One serve per project: the second start stops at the lock (`<snapshot>.serve.lock`, reclaimed only from a dead pid) and removes nothing; a socket that answers is never unlinked. Started after a crash, it says which sessions the previous daemon held and launches them again as fresh contexts, never as native resumes | — |
 | attach | connects to one live session: recent output is replayed, keys go to the tool, Ctrl-] detaches and the session keeps running. A closed session is refused by name | — |
 | restart | asks serve to drop a `failed` or `exited` session so its next poll launches the item again (a pending env's retry count starts over). A live session is refused by name: nobody's work is restarted underneath them | — |
+| machine | `cap`, the reservations held with their project and seat, the stale ones the next write drops, and the unmanaged live seats; `--json` prints `{ parallel, held, stale, unmanaged, file }` | `--parallel N` writes the cap; `--parallel none` removes it |
 | hooks | one row per tool store: `codex`, `grok`, `cursor-agent`, `opencode`; whether it is present, installed, or absent, and what `--apply` would do. A tool whose home is missing is skipped. `--remove --apply` takes back exactly the marked entries | writes one marked entry per event into each present store, keeping the person's own entries, atomically; a store that is not JSON is refused by name |
 
 ## Sessions
@@ -228,6 +250,7 @@ items: [{ id, state, why, task, brief, owns, read_only, depends_on, needs:
 attempts, max_attempts, result, integration, verification, seat, session:
 { tool, state, since, pid, exit, events, note, failure, doing, doing_since } | null
 }], next: [id], held: [{ id, reason }], slots: { active, free, parallel },
-seats_outside_plan: [id], serve: { pid, alive, socket } | null }`. `result`
+machine: { parallel, held_by_others, unmanaged }, seats_outside_plan: [id],
+serve: { pid, alive, socket } | null }`. `result`
 and `integration` are the done seat's records as Dryad keeps them.
-`assign --apply --json` adds `assigned` and `failed`.
+`assign --apply --json` adds `assigned`, `failed`, and `held_at_machine`.

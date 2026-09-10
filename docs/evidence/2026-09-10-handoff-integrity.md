@@ -127,3 +127,34 @@ pseudo-terminal files, and the next full run passed 301/301. The viewer
 timeout is now two minutes. Not measured: a real agent tool exiting on
 its own mid-task; the lock across two machines sharing a state directory
 (the lock trusts its hostname).
+
+## WP-06: one machine cap over every project
+
+`infra/lib/forester.mjs`: `forester machine --parallel N --apply` writes
+the cap; `assign --apply` and `serve` take one reservation per chosen
+item under a lock on the slots file, then seat the granted items; a
+reservation is held while its seat is live and not done, or, before the
+seat exists, while the reserving process is alive on this host; stale
+ones are dropped in the next write and no seat is touched; seats no
+reservation names are listed as unmanaged and never counted. The plan's
+own `parallel` still bounds the plan.
+
+```text
+node --test infra/bin/forester-machine.test.mjs   3/3 (two projects on one state directory; three rounds of two assigns at the same instant)
+npm test                                          304/304
+```
+
+| Guard reverted | Red |
+| --- | --- |
+| allocate stops at the cap | 2 |
+| reserve refuses at the cap | 2 |
+| reserve takes the lock | 1 |
+| an in-flight reservation is held while its owner lives | 2 |
+| stale reservations are dropped | 3 |
+
+The concurrent case found a defect in the first draft: a reservation was
+reclaimed as stale in the window between reserving and planning the
+seat, so two projects each got the one slot. Held reservations now carry
+the reserving pid and host and are kept while that process lives. Not
+measured: two machines sharing one state directory (the liveness check
+trusts its hostname); a cap on anything other than seats.

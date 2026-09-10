@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { parse as parseYaml, stringify } from 'yaml';
 
 import { parseDryadCliArgs, readDryadState, runDryad } from './dryad.mjs';
-import { loadForester, seatArguments, sessionsPath } from './forester.mjs';
+import { loadForester, seatArguments, seatChosen, sessionsPath } from './forester.mjs';
 import { claudeSettings, doingFromEvents, seatEventsPath, seatSettingsPath, stateFromEvents } from './seat-events.mjs';
 
 export { claudeSettings, doingFromEvents, stateFromEvents };
@@ -340,16 +340,14 @@ export class ForesterServe {
   async tick() {
     if (this.stopping) return;
     let loaded = loadForester({ project: this.projectOption, environment: this.environment, cwd: this.cwd });
-    // 1. Fill the budget exactly as assign --apply would.
-    for (const item of loaded.allocation.chosen) {
-      const args = seatArguments(item, loaded);
-      try {
-        const code = runDryad({ options: parseDryadCliArgs(args), environment: this.environment, cwd: this.cwd });
-        if (code !== 0) this.log(`forester: seat ${item.id} not planned (exit ${code})`);
-      } catch (error) {
-        this.log(error.message);
-      }
+    // 1. Fill the budget exactly as assign --apply would: a machine slot
+    //    per chosen item, then the seat.
+    const seated = seatChosen(loaded, { environment: this.environment, cwd: this.cwd, log: this.log });
+    for (const id of seated.failures) this.log(`forester: seat ${id} not planned`);
+    for (const hold of seated.refused) {
+      if (this.lastHold !== hold.reason) this.log(`forester: ${hold.id}: ${hold.reason}`);
     }
+    this.lastHold = seated.refused[0]?.reason ?? null;
     loaded = loadForester({ project: this.projectOption, environment: this.environment, cwd: this.cwd });
     const { state } = readDryadState(this.project.slug, this.environment);
     // 2. Start a session for every active plan item without one; retry a

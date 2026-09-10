@@ -10,17 +10,21 @@
 // Pattern lives in skills/forester/SKILL.md. Fields in skills/forester/references/plan.md.
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { hostname } from 'node:os';
 import path from 'node:path';
-import { parse } from 'yaml';
+import { parse, stringify } from 'yaml';
 
 import { claimSegments, claimsIntersect, normalizeClaim } from './claims.mjs';
 import {
+  acquireStateLock,
   assertSeatId,
   dryadStateDirectory,
   loadDryadProject,
   parseDryadCliArgs,
   readDryadFinished,
+  readDryadProjectsIndex,
   readDryadState,
   resolveDryadProject,
   runDryad,
@@ -403,15 +407,22 @@ export function itemStates({ plan, state, finished, observed = NOTHING_OBSERVED,
 }
 
 // Walk the ready items in declared order; skip one whose claims intersect an
-// active or already chosen item's; stop when active reaches parallel.
-export function allocate({ items, budget }) {
+// active or already chosen item's; stop when active reaches parallel, or
+// when the machine's cap, less what other projects hold, is reached.
+export function allocate({ items, budget, machine = null }) {
   const active = items.filter((item) => item.state === 'active');
   const chosen = [];
   const held = [];
+  const cap = machine?.parallel ?? null;
+  const others = machine?.held_by_others ?? 0;
   for (const item of items) {
     if (item.state !== 'ready') continue;
     if (active.length + chosen.length >= budget.parallel) {
       held.push({ id: item.id, reason: `budget full (${budget.parallel})` });
+      continue;
+    }
+    if (cap != null && others + active.length + chosen.length >= cap) {
+      held.push({ id: item.id, reason: `machine cap full (${cap}; ${others} held by other projects)` });
       continue;
     }
     const hit = firstIntersection(item.owns, [...active, ...chosen]);
@@ -423,6 +434,184 @@ export function allocate({ items, budget }) {
     chosen.push(item);
   }
   return { active: active.length, free: Math.max(0, budget.parallel - active.length), chosen, held };
+}
+
+// ---------------------------------------------------------------- machine
+
+// This machine's hard ceiling on managed seats across every project, and
+// the reservations that count against it. A project's own `parallel` still
+// bounds its plan; the cap bounds their sum. Both files live with the
+// serve snapshots under the state directory.
+//
+//   <state>/foresters/machine.yml   { version: 1, parallel: N }   absent = no cap
+//   <state>/foresters/slots.yml     { version: 1, slots: { "<slug>/<id>": { slug, id, pid, host, at } } }
+//
+// A reservation is held while its seat is live in that project's registry
+// and not done, or, before the seat exists, while the reserving process is
+// alive on this host; anything else is stale and dropped the next time the
+// file is rewritten under its lock. Reclaiming edits only this file.
+const MACHINE_VERSION = 1;
+
+function foresterStateDirectory(environment = process.env) {
+  return path.join(path.dirname(dryadStateDirectory(environment)), 'foresters');
+}
+
+export function machinePath(environment = process.env) {
+  return path.join(foresterStateDirectory(environment), 'machine.yml');
+}
+
+export function slotsPath(environment = process.env) {
+  return path.join(foresterStateDirectory(environment), 'slots.yml');
+}
+
+function atomicWrite(file, text) {
+  mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  const temporary = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.${randomUUID()}.tmp`);
+  try {
+    writeFileSync(temporary, text, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+    renameSync(temporary, file);
+  } finally {
+    if (existsSync(temporary)) unlinkSync(temporary);
+  }
+}
+
+export function readMachine(environment = process.env) {
+  const file = machinePath(environment);
+  if (!existsSync(file)) return { file, parallel: null };
+  let doc;
+  try {
+    doc = parse(readFileSync(file, 'utf8'));
+  } catch (error) {
+    fail(`${file}: ${error.message}`);
+  }
+  if (!isMap(doc) || doc.version !== MACHINE_VERSION) fail(`${file}: machine file must have version ${MACHINE_VERSION}.`);
+  assertOnlyKeys(doc, ['version', 'parallel'], 'machine file', file);
+  return { file, parallel: parallelValue(doc.parallel, file) };
+}
+
+export function writeMachine({ parallel, environment = process.env }) {
+  const file = machinePath(environment);
+  if (parallel == null) {
+    if (existsSync(file)) unlinkSync(file);
+    return file;
+  }
+  atomicWrite(file, stringify({ version: MACHINE_VERSION, parallel }));
+  return file;
+}
+
+function readSlots(environment) {
+  const file = slotsPath(environment);
+  if (!existsSync(file)) return { file, slots: {} };
+  let doc;
+  try {
+    doc = parse(readFileSync(file, 'utf8'));
+  } catch (error) {
+    fail(`${file}: ${error.message}`);
+  }
+  if (!isMap(doc) || doc.version !== MACHINE_VERSION || !isMap(doc.slots)) fail(`${file}: slots file must have version ${MACHINE_VERSION} and a slots map.`);
+  return { file, slots: doc.slots };
+}
+
+function processAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error.code === 'EPERM';
+  }
+}
+
+// Whether each reservation still counts: its seat is live and not done,
+// or the seat is not there yet and the process that reserved it is still
+// alive on this host (it is between the reservation and the plan).
+// Registries are read once per slug.
+function slotLiveness(slots, environment) {
+  const registries = new Map();
+  const seatsOf = (slug) => {
+    if (!registries.has(slug)) {
+      let seats = {};
+      try {
+        seats = readDryadState(slug, environment).state.seats;
+      } catch {
+        seats = {};
+      }
+      registries.set(slug, seats);
+    }
+    return registries.get(slug);
+  };
+  const live = {};
+  const stale = [];
+  for (const [key, slot] of Object.entries(slots)) {
+    const wellFormed = isMap(slot) && typeof slot.slug === 'string' && typeof slot.id === 'string';
+    const seat = wellFormed ? seatsOf(slot.slug)[slot.id] ?? null : null;
+    const inFlight = wellFormed && seat == null && slot.host === hostname() && Number.isInteger(slot.pid) && processAlive(slot.pid);
+    if ((seat != null && seat.status !== 'done') || inFlight) live[key] = slot;
+    else stale.push({ key, ...(isMap(slot) ? slot : {}) });
+  }
+  return { live, stale, seatsOf };
+}
+
+// The machine as a reader sees it: the cap, every reservation still held
+// (and by which project), the stale ones that the next write drops, and
+// the live seats no reservation names: somebody's work outside Forester,
+// shown as unmanaged and never counted or controlled.
+export function machineView({ slug = null, environment = process.env } = {}) {
+  const { parallel } = readMachine(environment);
+  const { slots } = readSlots(environment);
+  const { live, stale, seatsOf } = slotLiveness(slots, environment);
+  const held = Object.values(live).map((slot) => ({ slug: slot.slug, id: slot.id, pid: slot.pid ?? null, at: slot.at ?? null }));
+  const unmanaged = [];
+  let projects = {};
+  try {
+    projects = readDryadProjectsIndex(environment).index.projects;
+  } catch {
+    projects = {};
+  }
+  for (const projectSlug of Object.keys(projects).sort()) {
+    for (const [id, seat] of Object.entries(seatsOf(projectSlug))) {
+      if (seat.status === 'done') continue;
+      if (live[`${projectSlug}/${id}`] == null) unmanaged.push({ slug: projectSlug, id });
+    }
+  }
+  const heldByOthers = slug == null ? held.length : held.filter((slot) => slot.slug !== slug).length;
+  return { parallel, held, held_by_others: heldByOthers, stale, unmanaged };
+}
+
+// Take slots for the given seats, in order, up to the cap less what other
+// projects hold, all under one lock on the slots file, so two projects
+// allocating at once never share a slot. Stale reservations are dropped in
+// the same write. Returns the ids granted and the ids refused with why.
+export function reserveSlots({ slug, ids, environment = process.env }) {
+  const file = slotsPath(environment);
+  const release = acquireStateLock(file, 2000);
+  try {
+    const { parallel } = readMachine(environment);
+    const { slots } = readSlots(environment);
+    const { live } = slotLiveness(slots, environment);
+    const next = { ...live };
+    let others = Object.values(next).filter((slot) => slot.slug !== slug).length;
+    let mine = Object.values(next).filter((slot) => slot.slug === slug).length;
+    const granted = [];
+    const refused = [];
+    for (const id of ids) {
+      const key = `${slug}/${id}`;
+      if (next[key] != null) {
+        granted.push(id);
+        continue;
+      }
+      if (parallel != null && others + mine >= parallel) {
+        refused.push({ id, reason: `machine cap full (${parallel}; ${others} held by other projects)` });
+        continue;
+      }
+      next[key] = { slug, id, pid: process.pid, host: hostname(), at: new Date().toISOString() };
+      mine += 1;
+      granted.push(id);
+    }
+    if (Object.keys(next).length > 0 || existsSync(file)) atomicWrite(file, stringify({ version: MACHINE_VERSION, slots: next }));
+    return { granted, refused, parallel, held_by_others: others };
+  } finally {
+    release();
+  }
 }
 
 // ---------------------------------------------------------------- git
@@ -495,13 +684,38 @@ export function loadForester({ project = null, environment = process.env, cwd = 
     repository: observed.repository,
     briefs: Object.fromEntries(Object.entries(briefs).map(([id, brief]) => [id, brief.digest])),
   });
-  const allocation = allocate({ items, budget });
+  const machine = machineView({ slug: dryad.slug, environment });
+  const allocation = allocate({ items, budget, machine });
   // Seats the plan does not name are somebody else's work on the same
   // project. They take no slot, because the budget counts items, but they
   // are shown so the count of what is moving is honest.
   const planned = new Set(plan.tasks.map((item) => item.id));
   const outside = Object.keys(state.seats).filter((id) => !planned.has(id));
-  return { project: dryad, planFile, localFile, plan, local, budget, items, allocation, outside, sessions, observed, briefs };
+  return { project: dryad, planFile, localFile, plan, local, budget, machine, items, allocation, outside, sessions, observed, briefs };
+}
+
+// What assign --apply and serve do with the chosen items: take a machine
+// slot for each, then seat the ones granted through Dryad. A refused slot
+// is reported as a hold, not an error; the next poll tries again.
+export function seatChosen(loaded, { environment, cwd, log = console.error }) {
+  const { project, allocation } = loaded;
+  const ids = allocation.chosen.map((item) => item.id);
+  const reservation = ids.length === 0 ? { granted: [], refused: [] } : reserveSlots({ slug: project.slug, ids, environment });
+  let assigned = 0;
+  const failures = [];
+  for (const item of allocation.chosen) {
+    if (!reservation.granted.includes(item.id)) continue;
+    let code;
+    try {
+      code = runDryad({ options: parseDryadCliArgs(seatArguments(item, loaded)), environment, cwd });
+    } catch (error) {
+      log(error.message);
+      code = 1;
+    }
+    if (code === 0) assigned += 1;
+    else failures.push(item.id);
+  }
+  return { assigned, failures, refused: reservation.refused };
 }
 
 // ---------------------------------------------------------------- handoff
@@ -586,6 +800,7 @@ export function foresterJson(loaded) {
     next: allocation.chosen.map((item) => item.id),
     held: allocation.held,
     slots: { active: allocation.active, free: allocation.free, parallel: budget.parallel },
+    machine: { parallel: loaded.machine.parallel, held_by_others: loaded.machine.held_by_others, unmanaged: loaded.machine.unmanaged.length },
     seats_outside_plan: loaded.outside,
     serve: loaded.sessions == null ? null : { pid: loaded.sessions.pid, alive: loaded.sessions.alive, socket: loaded.sessions.socket },
   };
@@ -602,6 +817,7 @@ const VERBS = Object.freeze({
   attach: { flags: [], options: ['project'], positional: 'seat id' },
   restart: { flags: [], options: ['project'], positional: 'seat id' },
   hooks: { flags: ['apply', 'remove', 'json'], options: [] },
+  machine: { flags: ['apply', 'json'], options: ['parallel'] },
 });
 
 export function parseForesterCliArgs(args) {
@@ -609,7 +825,7 @@ export function parseForesterCliArgs(args) {
   if (verb == null || verb === 'help' || verb === '--help' || verb === '-h') return { help: true };
   if (!(verb in VERBS)) fail(`unknown command ${JSON.stringify(verb)}.`);
   const spec = VERBS[verb];
-  const options = { help: false, verb, project: null, json: false, watch: false, apply: false, remove: false, id: null };
+  const options = { help: false, verb, project: null, json: false, watch: false, apply: false, remove: false, id: null, parallel: null };
   for (let index = 0; index < input.length; index += 1) {
     const arg = input[index];
     if (!arg.startsWith('--')) {
@@ -709,28 +925,42 @@ function runAssignVerb(loaded, options, environment, cwd) {
     );
     return 0;
   }
-  let assigned = 0;
-  const failures = [];
-  for (const item of allocation.chosen) {
-    const args = seatArguments(item, loaded);
-    let code;
-    try {
-      code = runDryad({ options: parseDryadCliArgs(args), environment, cwd });
-    } catch (error) {
-      console.error(error.message);
-      code = 1;
-    }
-    if (code === 0) assigned += 1;
-    else failures.push(item.id);
-  }
+  const { assigned, failures, refused } = seatChosen(loaded, { environment, cwd });
   const after = loadForester({ project: project.root, environment, cwd });
   const summary = `assigned ${assigned}/${allocation.chosen.length} · slots ${after.allocation.active}/${budget.parallel}`;
   if (options.json) {
-    console.log(JSON.stringify({ ...foresterJson(after), assigned, failed: failures }, null, 2));
+    console.log(JSON.stringify({ ...foresterJson(after), assigned, failed: failures, held_at_machine: refused }, null, 2));
   } else {
-    console.log(`  ${summary}${failures.length > 0 ? ` · failed ${failures.join(', ')}` : ''}`);
+    console.log(`  ${summary}${failures.length > 0 ? ` · failed ${failures.join(', ')}` : ''}${refused.length > 0 ? ` · held at machine cap ${refused.map((row) => row.id).join(', ')}` : ''}`);
   }
   return failures.length === 0 ? 0 : 1;
+}
+
+function runMachineVerb(options, environment) {
+  if (options.parallel != null) {
+    if (!options.apply) fail('--parallel changes the machine cap; rerun with --apply.');
+    const value = options.parallel === 'none' ? null : Number(options.parallel);
+    if (value != null && (!Number.isInteger(value) || value < 1)) fail('--parallel must be an integer of at least 1, or none.');
+    const file = writeMachine({ parallel: value, environment });
+    console.log(`■ forester machine\n  cap       ${value == null ? 'none (file removed)' : `${value} written`} · ${file}`);
+    return 0;
+  }
+  const view = machineView({ environment });
+  if (options.json) {
+    console.log(JSON.stringify({ parallel: view.parallel, held: view.held, stale: view.stale, unmanaged: view.unmanaged, file: machinePath(environment) }, null, 2));
+    return 0;
+  }
+  const lines = [
+    `■ forester machine`,
+    `  cap       ${view.parallel ?? 'none'} (${machinePath(environment)})`,
+    `  held      ${view.held.length}${view.parallel != null ? `/${view.parallel}` : ''} managed seat${view.held.length === 1 ? '' : 's'}`,
+    ...view.held.map((slot) => `    ${slot.slug}/${slot.id}  since ${slot.at ?? '?'}`),
+    `  stale     ${view.stale.length} reservation${view.stale.length === 1 ? '' : 's'} dropped at the next write`,
+    `  unmanaged ${view.unmanaged.length} live seat${view.unmanaged.length === 1 ? '' : 's'} no reservation names (shown, not counted)`,
+    ...view.unmanaged.map((seat) => `    ${seat.slug}/${seat.id}`),
+  ];
+  console.log(lines.join('\n'));
+  return 0;
 }
 
 // The serve snapshot, when a daemon holds sessions for this project. Read
@@ -792,6 +1022,7 @@ function runStatusVerb(loaded, options) {
       [
         `■ ${project.slug} — forester (parallel ${budget.parallel} from ${budget.source})`,
         `  slots    ${allocation.active}/${budget.parallel}`,
+        `  machine  ${loaded.machine.parallel == null ? 'no cap' : `cap ${loaded.machine.parallel} · ${loaded.machine.held_by_others} held by other projects`}${loaded.machine.unmanaged.length > 0 ? ` · ${loaded.machine.unmanaged.length} unmanaged` : ''}`,
         `  waiting  ${c.ready} ready · ${c.waiting} waiting for integration · ${c.blocked} blocked`,
         `  done     ${c.done}/${items.length}`,
         `  failed   ${c.failed}${c.failed > 0 ? '  ' + items.filter((item) => item.state === 'failed').map((item) => item.id).join(', ') : ''}`,
@@ -804,6 +1035,7 @@ function runStatusVerb(loaded, options) {
 }
 
 export async function runForester({ options, environment = process.env, cwd = process.cwd() }) {
+  if (options.verb === 'machine') return runMachineVerb(options, environment);
   if (options.verb === 'hooks') {
     const { applyHooks, formatHooksReport } = await import('./forester-hooks.mjs');
     const rows = applyHooks({ environment, apply: options.apply, remove: options.remove });
@@ -854,14 +1086,18 @@ usage:
   ${cli} forester attach ID [--project ROOT]         view and type into one session; Ctrl-] detaches
   ${cli} forester restart ID [--project ROOT]        drop a failed or exited session so serve launches it again
   ${cli} forester hooks  [--apply | --remove --apply] [--json]   one marked entry in each installed tool's hook store
+  ${cli} forester machine [--json | --parallel N|none --apply]   this machine's cap on managed seats across projects, what holds them, what runs unmanaged
 
 The plan is ${PLAN_RELPATH}: items with a task line, the paths each expects
 to own, what it depends on, and how many attempts it gets. The budget is the
 plan's own parallel when it sets one, else parallel in ${LOCAL_RELPATH}
 (machine-local, never committed); no budget anywhere is an error. assign
 walks the ready items in declared order, skips one whose claims intersect an
-active item's, stops at the budget, and with --apply seats each chosen item
-as the Dryad seat of the same id. Done is the seat's own done report, live or
+active item's, stops at the budget and at the machine cap (forester machine
+--parallel N --apply; absent means none), and with --apply takes a machine
+slot per chosen item under one lock and seats each granted item as the
+Dryad seat of the same id. A slot is held while the seat is live and not
+done; seats no reservation names are shown as unmanaged, never counted. Done is the seat's own done report, live or
 finished; a seat finished without one spends an attempt. Rerun assign after a
 worker reports done to fill the freed slot.
 

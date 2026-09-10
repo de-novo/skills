@@ -196,8 +196,10 @@ test('item states and allocation are a pure function of plan, seats, budget, and
   assert.equal(rows.find((row) => row.id === 'web-panel').state, 'ready');
 });
 
-test('cli args accept the eight verbs, and only attach and restart take a positional', () => {
-  assert.deepEqual(parseForesterCliArgs(['assign', '--apply', '--project', '/p']), { help: false, verb: 'assign', project: '/p', json: false, watch: false, apply: true, remove: false, id: null });
+test('cli args accept the nine verbs, and only attach and restart take a positional', () => {
+  assert.deepEqual(parseForesterCliArgs(['assign', '--apply', '--project', '/p']), { help: false, verb: 'assign', project: '/p', json: false, watch: false, apply: true, remove: false, id: null, parallel: null });
+  assert.equal(parseForesterCliArgs(['machine', '--parallel', '3', '--apply']).parallel, '3');
+  assert.throws(() => parseForesterCliArgs(['machine', '--project', '/p']), /--project is not valid for machine/);
   assert.equal(parseForesterCliArgs(['attach', 'web-panel']).id, 'web-panel');
   assert.equal(parseForesterCliArgs(['restart', 'web-panel']).id, 'web-panel');
   assert.throws(() => parseForesterCliArgs(['restart']), /restart requires a seat id/);
