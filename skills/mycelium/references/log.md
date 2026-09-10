@@ -25,6 +25,7 @@ predicates:
   caused-by: one                      # a subject holds one object at a time
   depends-on: many                    # a subject may hold several
 judges: [human:jane, agent:judge]     # optional
+mode: restricted                      # optional; what the judges line already implies
 ```
 
 | Field | Meaning |
@@ -33,6 +34,7 @@ judges: [human:jane, agent:judge]     # optional
 | `types` | The entity types a subject or object may have. Non-empty list of lower-case tokens |
 | `predicates` | What may be said, as a map of name to `one` or `many`. `one`: a subject holds a single object at a time, so a second object is a conflict at commit. `many`: a second object is another edge. `reported` is built in as `many` for seat reports and may not be redeclared |
 | `judges` | Writer ids that may `commit` and `invalidate`. Omitted, any named writer may. Everyone may `propose` and `amend` |
+| `mode` | The commit policy the project means: `restricted` (only `judges` commit) or `permissive` (any named writer). Omitted, it is implied by `judges`: named means restricted, absent means permissive, and `status` says which. Declared, it must agree: `restricted` without `judges`, or `permissive` with them, is refused at parse, so a project that meant restricted and forgot its judges hears it before an unattended commit. A file written before this key keeps its meaning; adding `mode: restricted` with `judges` is the migration for an unattended run |
 
 Unknown keys are rejected. Start with five to ten types and as many
 predicates; add one when a proposal is refused for lacking it, not before.
@@ -56,7 +58,23 @@ An id with spaces or capitals is refused wherever it comes from.
 The id is declared, not authenticated. `judges` says who the project
 trusts to promote; it does not stop a process from claiming an id. On a
 shared machine that trust is the same trust Dryad's registry already
-rests on.
+rests on; a stronger boundary needs an OS account per writer, which this
+log does not provide and does not claim.
+
+## Refs
+
+A fact may name the commit it was read at: `--ref-commit <sha>` on
+`propose`, or, through `--from-seat`, the seat's own done result (its
+head, base, attempt, and whether its evidence had every check at exit
+0), taken from the Dryad registry and never typed by hand. `ref` is
+`{ commit, seat?, attempt?, base?, verified? }` and is kept as written.
+Every `query` adds `ref_state` per row, `in-baseline` when that commit is
+an ancestor of the project's HEAD, `not-in-baseline` when it is not,
+`unknown` when git cannot say, and `null` for a fact with no ref; the
+text and brief forms append `@<sha>` and `(not in baseline)`. A fact
+whose commit is not in the baseline is still the fact that was proposed;
+the reader decides whether it still applies, and a brief that quotes it
+carries the mark. Nothing here re-verifies a source.
 
 Inside a playground sandbox the catalog's guard strips every `DRYAD_*`
 variable from a verb aimed at the sandbox; a seat there is still found

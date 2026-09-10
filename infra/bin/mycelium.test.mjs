@@ -533,7 +533,7 @@ test('propose --from-seat turns a seat\'s done report into a staging fact, and r
     stringify({ version: 1, project: 'mycelium-test', seats: [{ id: 'docs-pass', finished_at: '2026-09-08T04:00:00.000Z', ...seat('done', [{ at: '2026-09-08T03:30:00.000Z', actor: 'seat', event: 'report', detail: 'done' }]) }] })
   );
 
-  assert.deepEqual(seatDoneReport('mycelium-test', 'docs-pass', f.environment), { at: '2026-09-08T03:30:00.000Z', detail: 'done', by: 'codex' });
+  assert.deepEqual(seatDoneReport('mycelium-test', 'docs-pass', f.environment), { at: '2026-09-08T03:30:00.000Z', detail: 'done', by: 'codex', ref: null });
   // A retried item: an archived earlier seat reported blocked, the live seat reported blocked later. The live seat wins.
   const archive = parse(readFileSync(path.join(f.root, 'state/dryads/mycelium-test.finished.yml'), 'utf8'));
   archive.seats.push({ id: 'web-panel', finished_at: '2026-09-08T00:50:00.000Z', ...seat('blocked', [{ at: '2026-09-08T00:40:00.000Z', actor: 'seat', event: 'report', detail: 'blocked: first attempt, stale' }]) });
@@ -543,7 +543,7 @@ test('propose --from-seat turns a seat\'s done report into a staging fact, and r
   archive.seats.push({ id: 'docs-pass', finished_at: '2026-09-08T05:00:00.000Z', ...seat('done', [{ at: '2026-09-08T04:30:00.000Z', actor: 'seat', event: 'report', detail: 'done: second run' }]) });
   writeFileSync(path.join(f.root, 'state/dryads/mycelium-test.finished.yml'), stringify(archive));
   assert.equal(seatDoneReport('mycelium-test', 'docs-pass', f.environment).detail, 'done: second run');
-  assert.deepEqual(seatReport('mycelium-test', 'web-panel', 'blocked', f.environment), { at: '2026-09-08T01:30:00.000Z', detail: 'blocked: waits for the shape', by: 'codex' });
+  assert.deepEqual(seatReport('mycelium-test', 'web-panel', 'blocked', f.environment), { at: '2026-09-08T01:30:00.000Z', detail: 'blocked: waits for the shape', by: 'codex', ref: null });
   assert.throws(() => seatReport('mycelium-test', 'api-endpoint', 'blocked', f.environment), /seat api-endpoint: has no blocked report/);
   assert.throws(() => seatReport('mycelium-test', 'web-panel', 'working', f.environment), /--report must be one of done, blocked/);
   // 'done-ish' does not match done: the report is the status, or the status and a colon.

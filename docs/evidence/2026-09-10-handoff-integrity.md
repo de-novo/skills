@@ -197,3 +197,31 @@ node --test infra/bin/doctor.test.mjs   4/4 (a tree digest of the project and st
 Not measured: a machine without git or without node_modules (the rows
 exist; the states were produced only by the present machine); npm
 publishing, which stays a separate choice.
+
+## WP-09: the commit policy is stated, and a fact names its commit
+
+`infra/lib/mycelium.mjs`: the commit mode is `restricted` when judges are
+named and `permissive` when none are; a project may declare `mode`, and a
+declaration that contradicts the judges is refused at parse; `status`
+and doctor print the mode in words. A fact may carry `ref` (a full commit
+sha, and from `--from-seat` the seat's head, base, attempt, and whether
+its evidence had every check at exit 0, read from the registry); every
+`query` adds `ref_state` against the project's HEAD and the text and
+brief forms mark a fact the baseline does not hold. The log stays
+append-only; nothing is projected or cached.
+
+```text
+node --test infra/bin/mycelium.test.mjs infra/bin/mycelium-policy.test.mjs infra/bin/mycelium-arc.test.mjs   18/18
+```
+
+| Guard reverted | Red |
+| --- | --- |
+| restricted needs judges | 1 |
+| permissive contradicts judges | 1 |
+| a non-judge cannot commit under restricted | 1 |
+| ref.commit must be a full sha | 2 |
+| ref_state asks git | 1 |
+
+Not measured: a vocabulary proposal flow (a refused proposal still tells a
+person which word is missing; nothing batches them); an OS boundary
+between writers, which the reference now says the log does not provide.

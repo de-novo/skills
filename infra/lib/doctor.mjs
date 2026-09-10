@@ -17,7 +17,7 @@ import { DRYAD_PROFILE_RELPATH, parseDryadProfile, readDryadState } from './drya
 import { LOCAL_RELPATH as FORESTER_LOCAL, PLAN_RELPATH as FORESTER_PLAN, parseForesterLocal, parseForesterPlan, readMachine, resolveBudget } from './forester.mjs';
 import { resolveExecutable } from './forester-serve.mjs';
 import { VALUES_RELPATH as HERBARIUM_VALUES, parseHerbariumValues } from './herbarium.mjs';
-import { VALUES_RELPATH as MYCELIUM_VALUES, parseMyceliumValues } from './mycelium.mjs';
+import { VALUES_RELPATH as MYCELIUM_VALUES, describeMode, parseMyceliumValues } from './mycelium.mjs';
 import { parseProfile } from './profile.mjs';
 
 export const DOCTOR_SCHEMA = 1;
@@ -208,7 +208,7 @@ function projectSection(root, environment) {
   }
 
   section.mycelium = mycelium.state === 'ready'
-    ? { values: row('ready', mycelium.values.judges == null ? 'permissive: no judges declared, any named writer may commit' : `judges ${mycelium.values.judges.join(', ')}`, { file: mycelium.file, judges: mycelium.values.judges ?? null }) }
+    ? { values: row('ready', describeMode(mycelium.values), { file: mycelium.file, judges: mycelium.values.judges ?? null, mode: mycelium.values.mode }) }
     : { values: mycelium };
   section.herbarium = herbarium.state === 'ready'
     ? { values: row('ready', `${herbarium.values.public.length} public glob${herbarium.values.public.length === 1 ? '' : 's'}`, { file: herbarium.file }) }
@@ -226,7 +226,7 @@ function gates(project, catalog) {
   if (project?.forester?.local?.state === 'ready' && (project.forester.local.tools ?? []).length > 0) {
     out.push({ gate: 'trust dialogs', why: 'serve grants no trust; a tool parked on its trust dialog shows as needs-input', how: 'forester attach <id> to answer it, or tools.<name>.pretrust_worktrees: true in the local file' });
   }
-  if (project?.mycelium?.values?.state === 'ready' && project.mycelium.values.judges == null) {
+  if (project?.mycelium?.values?.state === 'ready' && project.mycelium.values.mode === 'permissive') {
     out.push({ gate: 'fact commits', why: 'no judges are declared, so any named writer may commit a fact', how: 'declare judges in .agents/mycelium.yml for unattended runs' });
   }
   if (catalog.executables.docker.state === 'missing') {
