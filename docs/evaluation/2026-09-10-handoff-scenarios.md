@@ -12,11 +12,11 @@ are correctness bars to keep, not achievements to claim.
 | A fresh install | gaps and compatibility named, no unapproved mutation | `doctor.test.mjs`: a tree digest equal before and after `doctor`; states per values file; the plugin version equals the package version |
 | A document edit with a complete brief | only the needed path runs, no stack, daemon, or question | [the pilot](../evidence/2026-09-10-pilot-handoff.md): two seats on complete briefs asked no interview question; the Forester interview itself was not run |
 | Two independent items | no scope conflict, verified in two worktrees | `forester.test.mjs` (claims hold), `integrity.test.mjs` F07 (a done outside the scope is refused) |
-| B needs A's result | no start before the result is in B's base; start on the right ref | `integrity.test.mjs` F01: waiting until merged or integrated, then B's base holds A's commit and B's `inputs` name it |
+| B needs A's result | no start before the result is in B's base; start on the right ref | `integrity.test.mjs` F01: waiting until merged or integrated, then B's base holds A's commit and B's `inputs` name it; pilot 1 (merge) and pilot 2 (squash plus `dryad integrate`) |
 | A new plan reuses an old task id | no inherited done | `integrity.test.mjs` F02, `forester.test.mjs` (attempts per revision) |
-| A new attempt after a failure | branch and evidence kept, the new attempt starts | `integrity.test.mjs` F04 (`-2` branch, `--resume`) |
+| A new attempt after a failure | branch and evidence kept, the new attempt starts | `integrity.test.mjs` F04 (`-2` branch, `--resume`); [pilot 2](../evidence/2026-09-10-pilot-handoff-2.md): a blocked attempt finished, attempt 2 seated on `seat/web-title-2` under serve |
 | Env creation or agent spawn fails | cause and recovery shown, never read as done | `forester-serve.test.mjs`: `failed` with its kind, pending retried with backoff then failed, `restart` |
-| Two serves at once, resume after a crash | one owner, no duplicate process, records kept | `forester-serve.test.mjs`: the lock, the winner's socket kept, fresh-context note |
+| Two serves at once, resume after a crash | one owner, no duplicate process, records kept | `forester-serve.test.mjs`: the lock, the winner's socket kept, fresh-context note, a session per seat; pilot 2: serve stopped and started with two seats live |
 | Several projects in parallel | managed active seats within the machine cap | `forester-machine.test.mjs`: two projects, three rounds of simultaneous `assign`, stale reclaim |
 | Summaries and fact commits | source traceable, staging never shown as settled | `mycelium-policy.test.mjs` (mode, refs, `ref_state`), `herbarium-structure.test.mjs` (sourced snapshots) |
 | Many Canopy tabs, a long archive | bounded reads, local detail pages, partial marked | `canopy-cost.test.mjs` (process counts, `finished 20 of n`); latency in the evidence |
@@ -32,7 +32,7 @@ here generalizes one tool's dialogs to another's.
 
 | Metric | Where it is counted | First reading |
 | --- | --- | --- |
-| Questions before a task starts | [the pilot](../evidence/2026-09-10-pilot-handoff.md) | 0 interview questions on complete briefs; 1 trust dialog and 1 permission prompt per seat reached a person |
+| Questions before a task starts | the two pilots | 0 interview questions on complete briefs; pilot 1: 1 trust dialog and 1 permission prompt per seat; pilot 2: prompts on every `$VARIABLE` and on the evidence file write, now designed away (literal handoff, `--evidence -`) and not yet re-measured |
 | Dependents started with the right input | `integrity.test.mjs` F01; the pilot | 1/1 in the fixture and 1/1 in the pilot, 0 started early |
 | Wrong done verdicts | `integrity.test.mjs` F02 | 0 in the fixture |
 | Duplicate daemons | `forester-serve.test.mjs` | 0 of 2 starts |

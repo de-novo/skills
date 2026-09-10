@@ -155,6 +155,25 @@ test('a missing tool is a failed session naming its kind; after the fix, restart
   serve.child.kill('SIGINT');
 });
 
+test('a session belongs to one seat: finishing the seat closes it, and a new attempt gets its own launch', async (t) => {
+  const f = fixture(t);
+  const serve = f.serve();
+  await f.until(() => f.session('w1')?.state === 'needs-input', 'w1 session up');
+  const firstPid = f.session('w1').pid;
+  assert.equal(f.session('w1').attempt, 1);
+  // The item may try twice; a person finishes the seat while its session is
+  // parked (a blocked attempt, say), and the next poll seats attempt 2.
+  writeFileSync(path.join(f.baseline, '.agents/forester-plan.yml'), PLAN.replace('    owns: [docs/reference/**]\n', '    owns: [docs/reference/**]\n    retry: { max_attempts: 2 }\n'));
+  f.run(['dryad', 'report', 'w1', '--status', 'blocked', '--note', 'wrong scope']);
+  assert.equal(f.run(['dryad', 'finish', 'w1', '--apply']).status, 0);
+  await f.until(() => /w1: closing \(seat finished/.test(serve.log), 'the session of the finished seat is closed');
+  await f.until(() => f.session('w1')?.state === 'needs-input' && f.session('w1').pid !== firstPid, 'attempt 2 launched as its own session', 20000);
+  assert.equal(f.session('w1').attempt, 2);
+  assert.match(serve.log, /w1: attempt 2 seated; dropping the session of attempt 1/);
+  assert.equal(f.status().items.find((item) => item.id === 'w1').seat.attempt, 2);
+  serve.child.kill('SIGINT');
+});
+
 test('two serves started at once leave exactly one; the other stops at the lock and removes nothing', async (t) => {
   const f = fixture(t);
   const first = f.serve();

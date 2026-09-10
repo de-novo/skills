@@ -362,8 +362,21 @@ export class ForesterServe {
     //    pending env instead of launching into it; close the session of
     //    every item whose seat reported done.
     for (const item of loaded.items) {
-      const session = this.sessions.get(item.id);
+      let session = this.sessions.get(item.id);
       const seat = state.seats[item.id];
+      // A session belongs to one seat. When that seat is gone (finished by
+      // a person) the session is closed; when a new attempt was seated, the
+      // old record is dropped so the new seat gets its own launch.
+      if (session != null && seat == null && session.pty != null) this.close(item.id, 'seat finished');
+      if (session != null && seat != null && session.attempt != null && seat.attempt != null && session.attempt !== seat.attempt) {
+        if (session.pty != null) {
+          this.close(item.id, `seat finished; attempt ${seat.attempt} seated`);
+        } else {
+          this.log(`forester: ${item.id}: attempt ${seat.attempt} seated; dropping the session of attempt ${session.attempt}`);
+          this.sessions.delete(item.id);
+          session = undefined;
+        }
+      }
       if (item.state === 'active' && seat?.env === 'pending' && (session == null || session.pty == null)) {
         this.retryPending(item, loaded);
         continue;
@@ -431,7 +444,7 @@ export class ForesterServe {
       return;
     }
     const { toolName, tool } = readiness;
-    const record = { id: item.id, tool: toolName, state: 'starting', since: now(), pid: null, exit: null, pty: null, viewers: new Set(), events: null, note: null, failure: null, scrollback: '' };
+    const record = { id: item.id, tool: toolName, state: 'starting', since: now(), pid: null, exit: null, pty: null, viewers: new Set(), events: null, note: null, failure: null, attempt: seat.attempt ?? null, scrollback: '' };
     const before = this.previous[item.id];
     if (before != null && ['starting', 'running', 'idle', 'needs-input'].includes(before.state)) {
       record.note = `fresh context: the previous serve's session (${before.state}) was not resumed natively`;
@@ -528,7 +541,7 @@ export class ForesterServe {
   snapshotSeats() {
     const seats = {};
     for (const [id, session] of this.sessions) {
-      seats[id] = { tool: session.tool, state: session.state, since: session.since, pid: session.pid, exit: session.exit, events: session.events, note: session.note, failure: session.failure ?? null, doing: session.doing ?? null, doing_since: session.doing_since ?? null };
+      seats[id] = { tool: session.tool, state: session.state, since: session.since, pid: session.pid, exit: session.exit, events: session.events, note: session.note, failure: session.failure ?? null, attempt: session.attempt ?? null, doing: session.doing ?? null, doing_since: session.doing_since ?? null };
     }
     return seats;
   }

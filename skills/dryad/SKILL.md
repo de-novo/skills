@@ -41,7 +41,9 @@ reads. If `DRYAD_ID` is unset, this section does not apply.
 
 Run each of these as its own command, and keep doing so: a launcher's
 allow list matches one command, and a line that chains several with `;`
-or `&&` stops you on a prompt a person has to answer.
+or `&&` stops you on a prompt a person has to answer. So does a
+`$VARIABLE` in the line: your handoff names your seat id and your paths
+literally; use them as written.
 
 ## Rules for a seated worker
 
@@ -60,11 +62,12 @@ or `&&` stops you on a prompt a person has to answer.
    present tense. When Forester's `serve` holds your session, the person
    also sees your tool stream ("now Edit app/api/server.mjs"); your notes
    say *why*, which the stream cannot.
-4. When done: write your evidence file at `$DRYAD_EVIDENCE` (each check
-   you ran with command, cwd, exit, observed count; each boundary you did
-   not measure with its reason), commit on your branch, then run `report
-   --status done` and stop. The report reads that file; `--evidence
-   <path>` names another. Done records your head and holds the paths you
+4. When done: commit on your branch, then hand in your evidence with the
+   report and stop: `report --status done --evidence -` with the YAML on
+   stdin (each check you ran with command, cwd, exit, observed count; each
+   boundary you did not measure with its reason). Writing it to the seat's
+   evidence file first and reporting without `--evidence` is the same
+   thing with one file write a launcher may ask about. Done records your head and holds the paths you
    touched against the seat's scope, so a change outside it is refused
    until a person accepts it. Only what is committed reaches anyone else.
    Do not push, merge, or call `finish`. Those belong to the human.

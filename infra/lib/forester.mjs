@@ -17,6 +17,7 @@ import path from 'node:path';
 import { parse, stringify } from 'yaml';
 
 import { claimSegments, claimsIntersect, normalizeClaim } from './claims.mjs';
+import { seatEvidencePath } from './seat-events.mjs';
 import {
   acquireStateLock,
   assertSeatId,
@@ -730,7 +731,7 @@ export function loadForester({ project = null, environment = process.env, cwd = 
   // are shown so the count of what is moving is honest.
   const planned = new Set(plan.tasks.map((item) => item.id));
   const outside = Object.keys(state.seats).filter((id) => !planned.has(id));
-  return { project: dryad, planFile, localFile, plan, local, budget, machine, items, allocation, outside, sessions, observed, briefs };
+  return { project: dryad, planFile, localFile, plan, local, budget, machine, items, allocation, outside, sessions, observed, briefs, environment };
 }
 
 // What assign --apply and serve do with the chosen items: take a machine
@@ -763,12 +764,15 @@ export function seatChosen(loaded, { environment, cwd, log = console.error }) {
 // to start, and nothing the seat, the skill, or the repository already
 // says. The brief is copied with its path and digest so the copy names its
 // source; the source stays the one place to edit.
-export function renderHandoff({ item, project, observed, briefs }) {
+export function renderHandoff({ item, project, observed, briefs, environment = process.env }) {
   const brief = briefs[item.id] ?? null;
+  const evidence = seatEvidencePath(project.slug, item.id, environment);
   const lines = [
     `# ${item.id}: ${item.task}`,
     '',
     `Forester handoff · item ${item.id} · revision ${item.revision}`,
+    `Seat id: ${item.id} (use it as written; a launcher may stop on $DRYAD_ID and every other variable expansion)`,
+    `Evidence file: ${evidence}`,
     `Base: ${observed.head ?? 'unknown'} (baseline HEAD when seated)`,
     `Scope: ${item.readOnly ? 'read-only; change nothing' : item.owns.length > 0 ? `edit only ${item.owns.join(', ')}` : 'unchecked (the plan claims nothing)'}`,
   ];
@@ -784,7 +788,7 @@ export function renderHandoff({ item, project, observed, briefs }) {
     for (const command of item.verify) lines.push(`  - ${command}`);
   }
   lines.push(
-    `Report: write your evidence file at $DRYAD_EVIDENCE (checks: command, cwd, exit, observed; not_measured: boundary, reason), commit on your branch, then de-novo skills dryad report ${item.id} --status done; the rules are in $DRYAD_SKILL under "Rules for a seated worker". Run each command on its own line: a compound line is one a launcher's allow list cannot match.`,
+    `Report: commit on your branch, then hand in your evidence with the report, no file write needed: de-novo skills dryad report ${item.id} --status done --evidence - <<'EOF' … EOF (YAML: checks with command, cwd, exit, observed; not_measured with boundary, reason). Or write it at the evidence file above first and run the report without --evidence. The rules are in the Dryad skill under "Rules for a seated worker". Run each command on its own line, with literal ids and paths: a compound line, and a $VARIABLE, are what a launcher's allow list cannot match.`,
   );
   if (brief != null) {
     lines.push('', `Brief (${brief.path}, sha256:${brief.digest.slice(0, 12)}):`, '', brief.text.trimEnd());
@@ -794,7 +798,7 @@ export function renderHandoff({ item, project, observed, briefs }) {
 }
 
 function seatArguments(item, loaded) {
-  const args = ['plan', item.id, '--task', renderHandoff({ item, project: loaded.project, observed: loaded.observed, briefs: loaded.briefs }), '--by', 'forester', '--revision', item.revision];
+  const args = ['plan', item.id, '--task', renderHandoff({ item, project: loaded.project, observed: loaded.observed, briefs: loaded.briefs, environment: loaded.environment }), '--by', 'forester', '--revision', item.revision];
   if (item.readOnly) args.push('--read-only');
   for (const claim of item.owns) args.push('--owns', claim);
   for (const [id, sha] of Object.entries(item.inputs)) args.push('--input', `${id}=${sha}`);
