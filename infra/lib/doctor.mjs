@@ -10,6 +10,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { lookup } from 'node:dns/promises';
 import { parse } from 'yaml';
 
 import { GROVE_ADDRESSING_FILE, GROVE_ADDRESSING_LOCAL_FILE, loadGroveAddressing, renderProjectUrls, resolveAddressing } from './addressing.mjs';
@@ -19,6 +20,7 @@ import { resolveExecutable } from './forester-serve.mjs';
 import { VALUES_RELPATH as HERBARIUM_VALUES, parseHerbariumValues } from './herbarium.mjs';
 import { VALUES_RELPATH as MYCELIUM_VALUES, describeMode, parseMyceliumValues } from './mycelium.mjs';
 import { parseProfile } from './profile.mjs';
+import { wildcardExplanation } from './wildcards.mjs';
 
 export const DOCTOR_SCHEMA = 1;
 export const CATALOG_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -257,7 +259,43 @@ function nextSteps(project, catalog, root) {
   return out;
 }
 
-export function doctorReport({ project = null, environment = process.env, cwd = process.cwd() } = {}) {
+// --------------------------------------------------------------- probe
+
+// The boundaries between a printed name and a working environment, each
+// its own observation and never inferred from the one before it:
+// rendered (the profile printed it), dns (this machine's resolver returned
+// an address), listener, route, tls, and revision. The probe measures the
+// first two; the rest are named as not measured with the reason, so no
+// reader takes a resolved name for a running service. It reads DNS and
+// nothing else; it starts no listener and installs no trust.
+export async function probeAddressing(hostnames, { timeoutMs = 2000 } = {}) {
+  const rows = [];
+  for (const host of hostnames) {
+    let dns;
+    try {
+      const result = await Promise.race([
+        lookup(host, { all: true }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`no answer within ${timeoutMs}ms`)), timeoutMs).unref()),
+      ]);
+      dns = row('ready', result.map((entry) => entry.address).join(', '), { addresses: result.map((entry) => entry.address) });
+    } catch (error) {
+      dns = row('missing', error.code ?? error.message, { addresses: [] });
+    }
+    rows.push({
+      host,
+      rendered: row('ready', 'the profile rendered this name; rendering proves nothing else'),
+      dns,
+      listener: row('unknown', 'not measured: no port is known to the profile; a listener is the project\'s or the proxy\'s'),
+      route: row('unknown', 'not measured: which service answers on this name is the proxy\'s routing, not DNS'),
+      tls: row('unknown', 'not measured: certificate names match one label per wildcard (RFC 9525), which is not the DNS rule'),
+      revision: row('unknown', 'not measured: what is running is read by overlay status and the project\'s own checks'),
+      wildcards: wildcardExplanation(host),
+    });
+  }
+  return rows;
+}
+
+export async function doctorReport({ project = null, environment = process.env, cwd = process.cwd(), probe = false } = {}) {
   const catalog = catalogSection(environment);
   const root = resolveDoctorProject({ project, environment, cwd });
   if (project != null && !existsSync(root)) fail(`--project not found: ${root}`);
@@ -271,6 +309,10 @@ export function doctorReport({ project = null, environment = process.env, cwd = 
     gates: gates(projectSectionValue, catalog),
     next: nextSteps(projectSectionValue, catalog, root),
   };
+  if (probe) {
+    const hosts = projectSectionValue?.grove?.hostnames?.shared ?? [];
+    report.probe = { dns: await probeAddressing(hosts), note: 'each row is its own observation: a resolved name is not a listener, a route, a matching certificate, or the expected revision' };
+  }
   report.ok = !JSON.stringify(report).includes('"state":"invalid"') && catalog.node.state !== 'unsupported';
   return report;
 }
@@ -294,11 +336,13 @@ export function capabilitiesReport({ environment = process.env } = {}) {
 // ------------------------------------------------------------------- cli
 
 export function parseDoctorArgs(args, verb) {
-  const options = { json: false, project: null };
+  const options = { json: false, project: null, probe: false };
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === '--json') {
       options.json = true;
+    } else if (arg === '--probe' && verb === 'doctor') {
+      options.probe = true;
     } else if (arg === '--project' && verb === 'doctor') {
       const value = args[index + 1];
       if (value == null || value.startsWith('--')) fail('--project requires a value.');
@@ -330,6 +374,13 @@ export function formatDoctor(report) {
     const copies = Object.entries(report.project.skills).filter(([, found]) => found.length > 0);
     lines.push(`  skills       ${copies.length}/${Object.keys(report.project.skills).length} carried as copies${copies.some(([, found]) => found.some((copy) => copy.same_as_catalog === false)) ? ' (some differ from the catalog)' : ''}`);
   }
+  if (report.probe != null) {
+    lines.push(`  probe        dns ${report.probe.dns.filter((r) => r.dns.state === 'ready').length}/${report.probe.dns.length} names resolve here; listener, route, tls, revision not measured`);
+    for (const entry of report.probe.dns) {
+      lines.push(`    ${entry.host}  dns ${entry.dns.state}${entry.dns.detail ? ` (${entry.dns.detail})` : ''}`);
+      for (const w of entry.wildcards) lines.push(`      ${w.pattern}  tls ${w.tls ? 'matches' : 'no match'} · dns wildcard ${w.dns ? 'would synthesize' : 'would not'} (empty zone assumed)`);
+    }
+  }
   lines.push(`  gates        ${report.gates.length}`);
   for (const gate of report.gates) lines.push(`    ${gate.gate}: ${gate.why}; ${gate.how}`);
   lines.push(`  next         ${report.next.length === 0 ? 'nothing' : ''}`);
@@ -349,14 +400,14 @@ export function formatCapabilities(report) {
   ].join('\n');
 }
 
-export function runDoctor({ verb, args, environment = process.env, cwd = process.cwd() }) {
+export async function runDoctor({ verb, args, environment = process.env, cwd = process.cwd() }) {
   const options = parseDoctorArgs(args, verb);
   if (verb === 'capabilities') {
     const report = capabilitiesReport({ environment });
     console.log(options.json ? JSON.stringify(report, null, 2) : formatCapabilities(report));
     return 0;
   }
-  const report = doctorReport({ project: options.project, environment, cwd });
+  const report = await doctorReport({ project: options.project, environment, cwd, probe: options.probe });
   console.log(options.json ? JSON.stringify(report, null, 2) : formatDoctor(report));
   return report.ok ? 0 : 1;
 }
@@ -365,10 +416,16 @@ export function doctorHelp(cli = 'de-novo skills') {
   return `what this machine and this project have, before anything runs (read-only)
 
 usage:
-  ${cli} doctor [--project ROOT] [--json]   catalog version, Node, optional deps, executables, the project's values files
+  ${cli} doctor [--project ROOT] [--probe] [--json]   catalog version, Node, optional deps, executables, the project's values files
                                             (grove, dryad, forester, mycelium, herbarium), skill copies, the gates a
                                             person owns, and the next step for each thing missing or invalid
   ${cli} capabilities [--json]               the verbs, the skills with their invocation, optional deps, executables
+
+--probe asks this machine's resolver for each rendered hostname and says,
+per name, what was and was not observed: dns yes or no; listener, route,
+tls, and revision not measured; and what a wildcard one and two labels up
+would do under the TLS rule (one label) and the DNS rule (any depth below
+an empty parent).
 
 doctor installs nothing, links nothing, starts no engine, seeds no trust,
 writes no hook, and writes no database. Every row is ready, missing,

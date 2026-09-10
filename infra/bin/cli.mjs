@@ -438,7 +438,7 @@ machine (Grove-central — compose + addressing.yml):
   ${CLI} infra k3d connect --cluster NAME
 
 first:
-  ${CLI} doctor [--project ROOT] [--json]   what this machine and project have; read-only, exit 1 on an invalid values file
+  ${CLI} doctor [--project ROOT] [--probe] [--json]   what this machine and project have; read-only, exit 1 on an invalid values file
   ${CLI} capabilities [--json]              the verbs, the skills, optional deps, executables
 
 project:

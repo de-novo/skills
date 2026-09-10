@@ -297,3 +297,29 @@ in the session scratchpad and is described here, not committed.
 
 Not measured: a machine with many registered projects (the fan-out cap of
 four stays as it was); a browser's refresh cadence.
+
+## WP-12: a name is a name; each boundary after it is its own observation
+
+`skills/grove/references/runtime-profile.md` now states the DNS wildcard
+rule (RFC 4592: any depth below an empty parent, stopping where a name
+exists) apart from the TLS rule (RFC 9525: one label), and lists the
+boundaries between a rendered name and a working environment. Both rules
+are written down in `infra/lib/wildcards.mjs` and tested with the cases
+the RFCs give. `doctor --probe` asks this machine's resolver for each
+rendered name and reports listener, route, tls, and revision as not
+measured; it starts nothing and installs nothing.
+
+```text
+node --test infra/bin/wildcards.test.mjs infra/bin/doctor.test.mjs   7/7
+```
+
+| Guard reverted | Red |
+| --- | --- |
+| TLS wildcard matches one label | 1 |
+| DNS closest encloser stops synthesis | 1 |
+
+Not measured: a real zone (the DNS rule is exercised on names given to
+the function, not on a server); a certificate (the TLS rule is exercised
+on names, not on a handshake); whether this laptop's resolver answers
+`*.localhost` is measured by the probe each run and not asserted either
+way.

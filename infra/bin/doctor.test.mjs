@@ -68,7 +68,7 @@ test('doctor outside a project reports the catalog and says how to get a project
   assert.match(spawnSync(process.execPath, [CLI, 'doctor', '--project', path.join(dir, 'nowhere')], { cwd: dir, env: environment, encoding: 'utf8' }).stderr, /--project not found/);
 });
 
-test('doctor reads a project\'s values files, tells missing from invalid, names the gates and the next step, and changes nothing', (t) => {
+test('doctor reads a project\'s values files, tells missing from invalid, names the gates and the next step, and changes nothing', async (t) => {
   const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'doctor-project-')));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const project = path.join(root, 'project');
@@ -86,7 +86,7 @@ test('doctor reads a project\'s values files, tells missing from invalid, names 
   writeFileSync(path.join(project, '.agents/skills/dryad/SKILL.md'), '---\nname: dryad\n---\nold copy\n');
   const before = treeDigest(root);
 
-  const report = doctorReport({ project, environment, cwd: root });
+  const report = await doctorReport({ project, environment, cwd: root });
   assert.equal(report.ok, true);
   assert.equal(report.project.grove.profile.state, 'ready');
   assert.equal(report.project.grove.overlay.mode, 'off');

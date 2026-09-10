@@ -50,8 +50,10 @@ There is no down command.
 ## Addressing and isolation
 
 Use the profile's names and port registry. Named URLs do not prove DNS,
-listener, routing, or application readiness. Grove prints names; the project's
-chosen listener routes them. A proxy declaration is intent, not a process.
+listener, routing, certificate names, or application readiness; each is
+its own observation, and `doctor --probe` measures the first. Grove prints
+names; the project's chosen listener routes them. A proxy declaration is
+intent, not a process.
 
 Share engines and isolate each project's data with its namespace and permitted
 accounts or prefixes. The catalog's machine backend is optional. When chosen,

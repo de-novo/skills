@@ -36,6 +36,7 @@ Remote: `git@github.com:de-novo/skills.git`. CLI: `de-novo skills` (alias `de-no
 | Mycelium envelope, transitions, CLI | `skills/mycelium/references/log.md` |
 | Mycelium log fold + conflict rule | `infra/lib/mycelium.mjs` only |
 | Hostname render | `infra/lib/addressing.mjs` |
+| DNS and TLS wildcard rules (as their RFCs state them) | `infra/lib/wildcards.mjs` only |
 | How to work in this catalog | this file |
 | Agent skill load paths | `.agents/` (see `.agents/README.md`) |
 | Herbarium houses and check | `skills/herbarium/references/houses.md`; parse and counts in `infra/lib/herbarium.mjs` only |

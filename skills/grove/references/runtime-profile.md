@@ -139,18 +139,40 @@ web.acme.local.example.com          *.*.local.example.com
 web--w1.acme.local.example.com      overlay: still two labels (-- stays one label)
 ```
 
-Do not write `*.local.example.com` as the tld value — wildcards belong to DNS,
-not the yaml. A public record `*.local.example.com` covers **one** extra label
-(`acme.local.example.com`), not `web.acme.local.example.com`. For two labels
-use `*.acme.local.example.com` per project, or a resolver that matches the
-whole subtree (dnsmasq `address=/local.example.com/127.0.0.1`). Let's Encrypt
-wildcards are one label too.
+Do not write `*.local.example.com` as the tld value — wildcards belong to
+DNS and to certificates, not the yaml, and the two follow different rules:
+
+- **DNS** (RFC 4592 §§2.2.1, 3.3.1): a wildcard record `*.local.example.com`
+  synthesizes an answer for any name below `local.example.com` that does
+  not exist and has no existing name between it and the parent, at any
+  depth. So it answers `web.acme.local.example.com` as long as
+  `acme.local.example.com` has no record of its own; the moment a record
+  for `acme.local.example.com` exists, names below it are no longer
+  covered and need their own wildcard (`*.acme.local.example.com`). A
+  resolver that matches a subtree (dnsmasq
+  `address=/local.example.com/127.0.0.1`) answers every depth regardless.
+- **TLS** (RFC 9525 §6.3): a certificate name `*.local.example.com`
+  matches exactly one label: `acme.local.example.com`, never
+  `web.acme.local.example.com`. Two labels need `*.acme.local.example.com`
+  on the certificate, one per project. Let's Encrypt wildcards follow this
+  rule.
+
+A hostname printed by `urls` is a name and nothing more. The boundaries
+between it and a working environment are observed one at a time and none
+implies the next: the name resolves on this machine (DNS); something
+listens on the port the proxy or the project chose; the route sends that
+name to the right service; the certificate's names match under the TLS
+rule; the revision running is the one expected (`overlay status` and the
+project's own checks). `de-novo skills doctor --probe` measures the first
+of these from this machine's resolver and names the rest as not measured;
+`.localhost` in particular is answered by some resolvers and clients and
+not others, so ask the one you use.
 
 | Method | Resolves | When |
 | --- | --- | --- |
-| `localhost` (Grove default) | OS `*.localhost` → loopback, any depth | Personal machine, no external callbacks |
-| Owned `local.example.com` | You point DNS at 127.0.0.1 at the right depth | OAuth, phones, a domain you already own |
-| dnsmasq custom TLD | `/etc/resolver/` + dnsmasq subtree | No real domain and localhost fails in a tool |
+| `localhost` (Grove default) | `*.localhost` → loopback where the OS resolver or the client does it (browsers do; `doctor --probe` says whether this machine's resolver does) | Personal machine, no external callbacks |
+| Owned `local.example.com` | You point DNS at 127.0.0.1 at the right depth (see the two rules above) | OAuth, phones, a domain you already own |
+| dnsmasq custom TLD | `/etc/resolver/` + dnsmasq subtree, every depth | No real domain and localhost fails in a tool |
 
 One TLD for the machine's projects. A new TLD per project multiplies certs
 and trust. Exclusive `tld` in a project profile is for a domain that project
