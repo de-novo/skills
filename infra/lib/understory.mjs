@@ -8,13 +8,15 @@ import { readFileSync } from 'node:fs';
 import { foresterJson, loadForester } from './forester.mjs';
 import { VALUES_RELPATH as MYCELIUM_VALUES, loadMycelium, query as myceliumQuery } from './mycelium.mjs';
 
-const STATE_ORDER = ['done', 'active', 'ready', 'blocked', 'failed'];
-// One fill per state. Chosen so done recedes and the two states that need a
-// person (active, failed) stand out; blocked and ready read as waiting.
+const STATE_ORDER = ['done', 'active', 'ready', 'waiting', 'blocked', 'failed'];
+// One fill per state. Chosen so done recedes and the three states that need
+// a person (active, waiting, failed) stand out; blocked and ready read as
+// waiting on the plan.
 const STATE_STYLE = Object.freeze({
   done: 'fill:#d9e8d9,stroke:#4c7a4c,color:#1f3d1f',
   active: 'fill:#fff2c2,stroke:#b58900,color:#3d2f00',
   ready: 'fill:#e3ecf7,stroke:#3b6ea5,color:#102a43',
+  waiting: 'fill:#fbe3c8,stroke:#b5651d,color:#3d2000',
   blocked: 'fill:#f2f2f2,stroke:#8a8a8a,color:#3a3a3a,stroke-dasharray:4 3',
   failed: 'fill:#f8d7da,stroke:#a33a3a,color:#4a1010',
 });
@@ -97,6 +99,9 @@ export function understoryReading(json) {
             : 'could start';
         break;
       }
+      case 'waiting':
+        line = `a person must integrate first: ${item.why}`;
+        break;
       case 'blocked':
         line = `cannot start yet: ${item.why}`;
         break;
@@ -116,7 +121,7 @@ export function understorySummary(json) {
   const total = json.items.length;
   const slots = json.slots ?? {};
   return [
-    `${total} item${total === 1 ? '' : 's'}: ${c.done ?? 0} done, ${c.active ?? 0} active, ${c.ready ?? 0} ready, ${c.blocked ?? 0} blocked, ${c.failed ?? 0} failed.`,
+    `${total} item${total === 1 ? '' : 's'}: ${c.done ?? 0} done, ${c.active ?? 0} active, ${c.ready ?? 0} ready, ${c.waiting ?? 0} waiting for integration, ${c.blocked ?? 0} blocked, ${c.failed ?? 0} failed.`,
     slots.parallel != null ? `Slots ${slots.active}/${slots.parallel} (budget from ${json.budget?.source ?? 'unknown'}).` : null,
     json.next?.length ? `Next: ${json.next.join(', ')}.` : null,
   ].filter(Boolean).join(' ');

@@ -52,7 +52,12 @@ project has no overlays. If `DRYAD_ID` is unset, this section does not apply.
    present tense. When Forester's `serve` holds your session, the person
    also sees your tool stream ("now Edit app/api/server.mjs"); your notes
    say *why*, which the stream cannot.
-4. When done: commit on your branch, run `report --status done`, and stop.
+4. When done: commit on your branch, then run `report --status done
+   --evidence <file>` and stop. The evidence file lists each check you ran
+   (command, cwd, exit, observed count) and each boundary you did not
+   measure with its reason; done records your head and holds the paths
+   you touched against the seat's scope, so a change outside it is refused
+   until a person accepts it. Only what is committed reaches anyone else.
    Do not push, merge, or call `finish`. Those belong to the human.
 5. Before `report --status done`, check whether your tool exposes a session
    id or transcript path (Claude Code and Codex both do). If it does, include
@@ -80,20 +85,25 @@ reporting and completion; a task does not replace those rules.
 
 For the human or an orchestrator, in order:
 
-1. `de-novo skills dryad plan <id> --task … --by <label>` prints the plan;
-   `--apply` creates the worktree, calls Grove's `overlay create` when the
-   profile has overlays, and registers the seat. Pass
-   `--worktree <path>` to adopt a worktree another launcher already made.
+1. `de-novo skills dryad plan <id> --task … --owns <claim> … --by <label>`
+   prints the plan; `--apply` creates the worktree, calls Grove's
+   `overlay create` when the profile has overlays, and registers the seat
+   with its scope. Pass `--worktree <path>` to adopt a worktree another
+   launcher already made, `--read-only` for a seat that edits nothing.
 2. `de-novo skills dryad seat <id> --shell|--env|--json` hands the seat to
    any launcher. Dryad does not run the launcher.
 3. `de-novo skills dryad status [<id>]` counts seats, worktrees present,
    envs tracked, and reported states. Non-zero when a worktree is missing, an
    env is untracked or pending, Grove's status fails, or a seat is blocked.
-4. After the branch is reviewed and merged by a person:
-   `de-novo skills dryad finish <id> --apply` destroys the env and removes
-   only a clean, Dryad-created worktree. Adopted worktrees and all branches
-   are kept. There is no `--force`. The seat's journal moves to the finished
-   archive; `status --finished [<id>]` reads it for a later audit.
+4. After the branch is reviewed and merged by a person: when the merge
+   was a squash or a rebase, `de-novo skills dryad integrate <id> --commit
+   <sha> --apply` records where the result landed, so a dependent item can
+   prove its base holds it. Then `de-novo skills dryad finish <id> --apply`
+   destroys the env and removes only a clean, Dryad-created worktree.
+   Adopted worktrees and all branches are kept. There is no `--force`. The
+   seat's journal moves to the finished archive; `status --finished [<id>]`
+   reads it for a later audit. The next attempt at the same id gets a
+   branch of its own, or continues this one with `--resume`.
 
 A failed `overlay create` leaves the seat with `env: pending`; rerun the same
 `plan --apply` to retry. Dryad never repairs runtime state silently.

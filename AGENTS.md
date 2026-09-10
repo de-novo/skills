@@ -29,6 +29,7 @@ Remote: `git@github.com:de-novo/skills.git`. CLI: `de-novo skills` (alias `de-no
 | Dryad profile parse + seat registry | `infra/lib/dryad.mjs` only |
 | Forester plan schema + CLI | `skills/forester/references/plan.md` |
 | Forester plan parse + allocation rule | `infra/lib/forester.mjs` only |
+| Path claims (normalize, intersect, match a seat's changes) | `infra/lib/claims.mjs` only |
 | Understory document shape | `skills/understory/references/document.md` |
 | Understory graph + reading lines | `infra/lib/understory.mjs` only |
 | Mycelium envelope, transitions, CLI | `skills/mycelium/references/log.md` |

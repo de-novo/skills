@@ -54,8 +54,10 @@ Mycelium keeps the decisions the grilling locked. Root map:
    project owns that decision.
 4. `forester plan`, read it, then either `forester assign --apply` and seat
    the workers with any launcher, rerunning `assign --apply` as done reports
-   arrive, or `forester serve` in a terminal of its own and `forester attach
-   <id>` whenever `status` shows a session that needs input.
+   and merges arrive, or `forester serve` in a terminal of its own and
+   `forester attach <id>` whenever `status` shows a session that needs
+   input. An item that needs another's result waits until you merge that
+   branch; `plan` says so per item.
 5. `serve` needs `@lydell/node-pty`, an optional dependency of the catalog;
    `npm install` in the catalog brings it. Nothing else needs it.
 

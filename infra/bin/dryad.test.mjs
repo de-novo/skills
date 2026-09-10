@@ -498,7 +498,8 @@ test('plan without --apply creates nothing; with --apply it creates a worktree s
   f.good(['report', 'w1', '--status', 'done']);
   const clean = f.good(['status', 'w1']);
   assert.match(clean.stdout, /reported   done 1/);
-  assert.equal((clean.stdout.match(/\n  \d{4}-\d{2}-\d{2}T/g) ?? []).length, 5, 'status <id> prints the journal');
+  // One line more than the reports and finish steps alone: Dryad's result line beside the done report.
+  assert.equal((clean.stdout.match(/\n  \d{4}-\d{2}-\d{2}T/g) ?? []).length, 6, 'status <id> prints the journal');
   const statusJson = JSON.parse(f.good(['status', '--json']).stdout);
   assert.deepEqual(statusJson.problems, []);
   assert.equal(statusJson.seats[0].ahead, 0);
@@ -684,7 +685,9 @@ test('a scripted worker seated through --shell reads seat, skill and task, commi
   const seat = f.state().seats.w1;
   assert.equal(seat.status, 'done');
   assert.match(seat.session, /^worker-\d+$/);
-  assert.deepEqual(seat.journal.map((entry) => entry.event), ['plan', 'report', 'report']);
+  // The done report is the worker's line; the git facts of its result are Dryad's line beside it.
+  assert.deepEqual(seat.journal.map((entry) => entry.event), ['plan', 'report', 'report', 'result']);
+  assert.deepEqual({ head: seat.result.head, clean: seat.result.clean, scope_checked: seat.result.scope_checked }, { head: out.head, clean: true, scope_checked: false });
   const status = f.good(['status']);
   assert.match(status.stdout, /reported   done 1/);
   assert.match(status.stdout, /\+1/);

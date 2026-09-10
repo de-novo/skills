@@ -44,8 +44,11 @@ the log (Call the Skill tool with "mycelium").
 
 You write the plan. The CLI reads it. When the grilling is done:
 
-1. **Split it into items a single worker can finish alone**, each with one
-   task line that a stranger could start from. An item is a **vertical
+1. **Split it into items a single worker can finish alone**, each with a
+   one-line title and, unless the title says it all, a `brief` file that a
+   stranger could start from (outcome, boundary, verification, report,
+   forbidden: the shape in [Dryad's seat brief](../dryad/references/seats.md#writing-a-seat-brief)).
+   Name the checks in `verify`; the handoff carries both. An item is a **vertical
    slice**: a narrow but complete path through every layer it touches, so a
    finished item is demoable or verifiable on its own, never one layer of
    something bigger. Size each to one fresh context window. An item is too
@@ -60,8 +63,12 @@ You write the plan. The CLI reads it. When the grilling is done:
    the worker to edit. Two items that must edit the same file are one item,
    or one depends on the other.
 3. **Declare `depends_on`** only where the second item cannot start until
-   the first is done. A shared reference that both read is a dependency on
-   the item that writes it. Sharing an opinion is not.
+   the first is done, and say what it needs. A bare id means the second
+   item starts from a base that holds the first one's result, so it waits
+   until a person has merged that branch (or recorded the squash with
+   `dryad integrate`). `{ item: <id>, needs: order }` means only that the
+   first has reported done. A shared reference that both read is a result
+   dependency on the item that writes it. Sharing an opinion is not.
 4. **Order matters.** Items are walked in declared order and ties are broken
    by it. Put the item that unblocks the most first. Do not encode priority
    any other way; there is no estimate field on purpose.
@@ -97,16 +104,24 @@ de-novo skills forester status           # slots filled, items waiting
 ```
 
 `assign --apply` creates one Dryad seat per chosen item, with the item id as
-the seat id and the task line as the seat's task. From there Dryad's rules
-apply: the worker reports its own state, and `report --status done` is the
-only thing that makes an item done. Rerun `assign --apply` after a done
-report to fill the freed slot. A seat that is finished without a done report
-spends one of the item's attempts.
+the seat id, a generated handoff as the seat's task, and the item's
+revision, scope, and dependency inputs recorded on the seat. From there
+Dryad's rules apply: the worker reports its own state, and `report --status
+done` for this revision is the only thing that makes an item done. A done
+report is a report, not an integration: an item whose result another item
+needs stays `waiting` until a person merges its branch or records the
+squash, and `plan` says which. Rerun `assign --apply` after a done report
+or a merge to fill the freed slot. A seat that is finished without a done
+report spends one of the item's attempts; the next attempt gets a branch of
+its own. Editing an item's task, claims, or brief gives it a new revision,
+and no earlier done is inherited.
 
 `forester serve`, run in a terminal of its own, does the refill by itself
 and starts each seated item's tool as a real interactive session that it
-holds. Nothing is headless: every approval is still the tool's own prompt,
-and `status` shows which session needs a person. `forester attach <id>`
+holds. Nothing is headless: every approval, the trust dialog included, is
+still the tool's own prompt, and `status` shows which session needs a
+person. serve grants no trust on its own; a machine that wants seat
+worktrees pre-trusted says so in the local file. `forester attach <id>`
 opens that session; Ctrl-] leaves it running. The tools and their launch
 lines are machine facts and live in the local file, never in the plan.
 Run `forester hooks --apply` once on a machine so Codex, Grok, Cursor, and
@@ -121,6 +136,11 @@ takes it back.
 - **A claim is not a lock.** `owns` constrains allocation, not the filesystem.
 - **Order is declared, not inferred.** No estimate-based scheduling.
 - **The project's budget wins; the local one is the fallback; none is an error.**
+- **A done report is not an integration.** A result reaches a dependent item
+  only through the baseline, by a person's merge or recorded integration.
+  Forester never merges.
+- **A done belongs to a revision.** An item edited after its seat was done
+  is not done.
 
 ## Not this skill
 

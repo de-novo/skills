@@ -20,6 +20,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse, stringify } from 'yaml';
 
+import { normalizeClaim, pathsOutsideScope } from './claims.mjs';
 import { parseProfile } from './profile.mjs';
 import { claudeSettings, seatActivity, seatEventsDirectory, seatEventsPath, seatSettingsPath } from './seat-events.mjs';
 
@@ -228,18 +229,19 @@ export function readDryadProjectsIndex(environment = process.env) {
     if (!isMap(entry) || typeof entry.root !== 'string' || !path.isAbsolute(entry.root) || typeof entry.updated_at !== 'string') {
       fail(`${file}: project ${slug} must have an absolute root and updated_at.`);
     }
+    if (entry.repository != null && typeof entry.repository !== 'string') fail(`${file}: project ${slug}.repository must be a string.`);
   }
   return { file, index: doc };
 }
 
 // Returns the root the slug pointed at before, or null when unchanged or new.
-function recordProjectRoot(slug, root, environment) {
+function recordProjectRoot(slug, root, repository, environment) {
   const file = dryadProjectsIndexPath(environment);
   const release = acquireStateLock(file, LOCK_WAIT_MS);
   try {
     const { index } = readDryadProjectsIndex(environment);
     const previous = index.projects[slug]?.root ?? null;
-    index.projects[slug] = { root, updated_at: now() };
+    index.projects[slug] = { root, repository, updated_at: now() };
     atomicWriteFile(file, stringify(index));
     return previous != null && previous !== root ? previous : null;
   } finally {
@@ -252,6 +254,7 @@ function validateState(state, slug, file) {
     fail(`${file}: registry must have version ${STATE_VERSION} and project ${JSON.stringify(slug)}.`);
   }
   if (!isMap(state.seats)) fail(`${file}: seats must be a map.`);
+  if (state.repository != null && typeof state.repository !== 'string') fail(`${file}: repository must be a string.`);
   for (const [id, seat] of Object.entries(state.seats)) {
     assertSeatId(id);
     if (!isMap(seat)) fail(`${file}: seat ${id} must be a map.`);
@@ -262,6 +265,14 @@ function validateState(state, slug, file) {
     if (seat.env != null && typeof seat.env !== 'string') fail(`${file}: seat ${id}.env must be a string or null.`);
     if (!STATUS_VALUES.includes(seat.status)) fail(`${file}: seat ${id}.status must be one of ${STATUS_VALUES.join('|')}.`);
     if (!Array.isArray(seat.journal)) fail(`${file}: seat ${id}.journal must be a list.`);
+    // Fields a seat planned before 2026-09-10 does not carry. Absent means
+    // unknown, and every reader says so rather than guessing.
+    if (seat.scope != null && !Array.isArray(seat.scope)) fail(`${file}: seat ${id}.scope must be a list or null.`);
+    if (seat.revision != null && typeof seat.revision !== 'string') fail(`${file}: seat ${id}.revision must be a string or null.`);
+    if (seat.inputs != null && !isMap(seat.inputs)) fail(`${file}: seat ${id}.inputs must be a map or null.`);
+    if (seat.result != null && !isMap(seat.result)) fail(`${file}: seat ${id}.result must be a map or null.`);
+    if (seat.integration != null && !isMap(seat.integration)) fail(`${file}: seat ${id}.integration must be a map or null.`);
+    if (seat.attempt != null && (!Number.isInteger(seat.attempt) || seat.attempt < 1)) fail(`${file}: seat ${id}.attempt must be a positive integer.`);
   }
   return state;
 }
@@ -407,6 +418,25 @@ function gitAhead(base, cwd) {
   return result.status === 0 ? Number(result.stdout.trim()) : null;
 }
 
+function gitBranchExists(branch, cwd) {
+  return git(['show-ref', '--verify', '--quiet', `refs/heads/${branch}`], cwd).status === 0;
+}
+
+// What makes this repository this repository across moves and clones: its
+// first root commit. Two checkouts of one history share it; a different
+// project that borrowed the same slug does not.
+function gitRepositoryId(cwd) {
+  const roots = gitOk(['rev-list', '--max-parents=0', 'HEAD'], cwd).split('\n').filter(Boolean).sort();
+  if (roots.length === 0) fail(`no commits in ${cwd}; a seat needs a base commit.`);
+  return roots[0];
+}
+
+// A full commit sha for a ref, or null when the repository has no such commit.
+function gitResolveCommit(ref, cwd) {
+  const result = git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], cwd);
+  return result.status === 0 ? result.stdout.trim() : null;
+}
+
 function isInside(child, parent) {
   const relative = path.relative(parent, child);
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
@@ -437,29 +467,48 @@ function committedChanges(base, cwd) {
   for (let index = 0; index < fields.length; ) {
     const status = fields[index];
     // A rename or copy carries source then destination; the destination is
-    // the path this seat holds now.
+    // the path this seat holds now, and the source is a path it touched.
     const paths = /^[RC]/.test(status) ? 2 : 1;
     const target = fields[index + paths];
     if (target == null) break;
-    rows.push({ path: target, status });
+    rows.push(paths === 2 ? { path: target, status, from: fields[index + 1] } : { path: target, status });
     index += paths + 1;
   }
   return rows;
 }
 
 function uncommittedChanges(cwd) {
-  const result = git(['status', '--porcelain', '-z'], cwd);
+  const result = git(['status', '--porcelain', '-z', '--untracked-files=all'], cwd);
   if (result.status !== 0) return null;
   const fields = splitNulRecords(result.stdout);
   const rows = [];
   for (let index = 0; index < fields.length; index += 1) {
     const field = fields[index];
     const code = field.slice(0, 2);
-    rows.push({ path: field.slice(3), status: code.trim() });
+    const row = { path: field.slice(3), status: code.trim() };
     // A rename or copy is followed by its original path in its own record.
-    if (/[RC]/.test(code)) index += 1;
+    if (/[RC]/.test(code)) {
+      index += 1;
+      row.from = fields[index];
+    }
+    rows.push(row);
   }
   return rows;
+}
+
+// Every path the seat touched since its base, whole: destinations, rename
+// sources, deletions, and untracked files. This is what a scope is checked
+// against, so it is never truncated.
+function seatTouchedPaths(seat) {
+  const committed = committedChanges(seat.base, seat.worktree);
+  const uncommitted = uncommittedChanges(seat.worktree);
+  if (committed == null || uncommitted == null) return null;
+  const paths = new Set();
+  for (const row of [...committed, ...uncommitted]) {
+    paths.add(row.path);
+    if (row.from != null) paths.add(row.from);
+  }
+  return [...paths].sort();
 }
 
 // git already knows what a seat changed; Dryad adds no tracking of its own.
@@ -632,12 +681,14 @@ function overlayProblems(probe) {
 // --------------------------------------------------------------- cli args
 
 const VERBS = Object.freeze({
-  plan: { positionals: [1, 1], options: ['task', 'task-file', 'worktree', 'by', 'project'], flags: ['apply'] },
+  plan: { positionals: [1, 1], options: ['task', 'task-file', 'worktree', 'by', 'revision', 'project'], multi: ['owns', 'input'], flags: ['apply', 'read-only', 'resume'] },
   seat: { positionals: [1, 1], options: ['project'], flags: ['json', 'env', 'shell', 'task'] },
-  report: { positionals: [1, 1], options: ['status', 'note', 'session', 'project'], flags: [] },
+  report: { positionals: [1, 1], options: ['status', 'note', 'session', 'evidence', 'project'], flags: ['accept-outside-scope'] },
+  integrate: { positionals: [1, 1], options: ['commit', 'by', 'note', 'project'], flags: ['apply'] },
   status: { positionals: [0, 1], options: ['project'], flags: ['json', 'finished'] },
   diff: { positionals: [1, 1], options: ['project'], flags: ['json'] },
   finish: { positionals: [1, 1], options: ['project'], flags: ['apply'] },
+  rebind: { positionals: [0, 0], options: ['project'], flags: ['apply'] },
   projects: { positionals: [0, 0], options: [], flags: ['json'] },
 });
 
@@ -654,20 +705,26 @@ export function parseDryadCliArgs(args) {
   const spec = VERBS[verb];
   const options = { help: false, verb, id: null, project: null };
   for (const name of spec.options) options[camel(name)] = null;
-  for (const name of spec.flags) options[name] = false;
+  for (const name of spec.multi ?? []) options[camel(name)] = [];
+  for (const name of spec.flags) options[camel(name)] = false;
   const positionals = [];
   for (let index = 0; index < input.length; index += 1) {
     const arg = input[index];
     if (arg.startsWith('--')) {
       const name = arg.slice(2);
       if (spec.flags.includes(name)) {
-        if (options[name]) fail(`--${name} may be passed only once.`);
-        options[name] = true;
+        if (options[camel(name)]) fail(`--${name} may be passed only once.`);
+        options[camel(name)] = true;
         continue;
       }
       if (spec.options.includes(name)) {
         if (options[camel(name)] != null) fail(`--${name} may be passed only once.`);
         options[camel(name)] = takeOption(input, index, name);
+        index += 1;
+        continue;
+      }
+      if ((spec.multi ?? []).includes(name)) {
+        options[camel(name)].push(takeOption(input, index, name));
         index += 1;
         continue;
       }
@@ -684,6 +741,19 @@ export function parseDryadCliArgs(args) {
 
   if (verb === 'plan') {
     if ((options.task == null) === (options.taskFile == null)) fail('plan requires exactly one of --task or --task-file.');
+    if (options.readOnly && options.owns.length > 0) fail('--read-only and --owns exclude each other: a read-only seat claims no path.');
+    if (options.resume && options.worktree != null) fail('--resume continues a Dryad-created branch; it cannot adopt --worktree.');
+    options.owns = options.owns.map((claim, index) => normalizeClaim(claim, `--owns[${index}]`));
+    const inputs = {};
+    for (const entry of options.input) {
+      const match = /^([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)=([0-9a-f]{40})$/.exec(entry);
+      if (match == null) fail(`--input must be <seat id>=<full commit sha> (got ${JSON.stringify(entry)}).`);
+      inputs[match[1]] = match[2];
+    }
+    options.inputs = inputs;
+  }
+  if (verb === 'integrate') {
+    if (options.commit == null) fail('integrate requires --commit <sha>.');
   }
   if (verb === 'seat') {
     const chosen = SEAT_FORMATS.filter((name) => options[name]);
@@ -773,7 +843,15 @@ function readTask(options, cwd) {
   return text;
 }
 
-function resolveWorktreePlan(options, project, cwd, existing) {
+// The attempts already made at this seat id, oldest first, from the
+// finished archive. Attempt n+1 starts after n finished seats.
+function previousAttempts(finished, id) {
+  return finished.seats.filter((record) => record.id === id);
+}
+
+function resolveWorktreePlan(options, project, cwd, existing, finished) {
+  const previous = previousAttempts(finished, options.id);
+  const attempt = previous.length + 1;
   if (options.worktree != null) {
     const target = path.resolve(cwd, options.worktree);
     if (!existsSync(target) || !statSync(target).isDirectory()) fail(`--worktree is not a directory: ${target}`);
@@ -782,7 +860,7 @@ function resolveWorktreePlan(options, project, cwd, existing) {
     if (gitCommonDir(real) !== gitCommonDir(project.root)) {
       fail(`--worktree belongs to a different repository: ${real}`);
     }
-    return { path: real, owned: false, branch: gitBranch(real), base: gitHead(real), exists: true };
+    return { path: real, owned: false, branch: gitBranch(real), base: gitHead(real), exists: true, attempt, resumedFrom: null };
   }
   if (project.dryad.worktrees == null) {
     fail('dryad-profile.yml has no worktrees section; pass --worktree <existing-path> to adopt one.');
@@ -792,23 +870,59 @@ function resolveWorktreePlan(options, project, cwd, existing) {
   if (isInside(target, project.root)) {
     fail(`worktrees.root resolves inside the baseline checkout: ${target}`);
   }
-  const seatBranch = branch.replaceAll('{id}', options.id);
   if (existing != null) {
-    return { path: existing.worktree, owned: true, branch: existing.branch, base: existing.base, exists: existsSync(existing.worktree) };
+    return { path: existing.worktree, owned: true, branch: existing.branch, base: existing.base, exists: existsSync(existing.worktree), attempt: existing.attempt ?? attempt, resumedFrom: existing.resumed_from ?? null };
   }
   const exists = existsSync(target);
-  return { path: target, owned: true, branch: seatBranch, base: gitHead(project.root), exists };
+  const last = previous.at(-1) ?? null;
+  if (options.resume) {
+    // Continue the previous attempt on its own branch: same base, so diff
+    // and scope still cover the whole of the work.
+    if (last == null) fail(`--resume: no finished attempt of ${options.id} to continue.`);
+    if (last.owned === false) fail(`--resume: attempt ${previous.length} adopted ${last.worktree}; plan it again with --worktree.`);
+    if (!gitBranchExists(last.branch, project.root)) fail(`--resume: branch ${last.branch} of attempt ${previous.length} is gone.`);
+    return { path: target, owned: true, branch: last.branch, base: last.base, exists, attempt, resumedFrom: last.attempt ?? previous.length, create: ['worktree', 'add', target, last.branch] };
+  }
+  // Every attempt gets a branch of its own; the branches of earlier attempts
+  // are kept, as finish promised. A branch that already exists is never
+  // reused or overwritten: it is somebody's work.
+  const seatBranch = attempt === 1 ? branch.replaceAll('{id}', options.id) : `${branch.replaceAll('{id}', options.id)}-${attempt}`;
+  if (!exists && gitBranchExists(seatBranch, project.root)) {
+    fail(`branch ${seatBranch} already exists in ${project.root}; Dryad never overwrites a branch. Move it aside yourself, or pass --resume to continue attempt ${previous.length} on its own branch.`);
+  }
+  return { path: target, owned: true, branch: seatBranch, base: gitHead(project.root), exists, attempt, resumedFrom: null, create: ['worktree', 'add', '--no-track', '-b', seatBranch, target, 'HEAD'] };
+}
+
+// The slug is bound to one repository on this machine. A second repository
+// that borrowed the same slug must not quietly join the first one's registry
+// and archive; it is refused by name until a person rebinds.
+function assertRepositoryBinding(project, environment, repository) {
+  const { index } = readDryadProjectsIndex(environment);
+  const entry = index.projects[project.slug] ?? null;
+  const { state } = readDryadState(project.slug, environment);
+  const bound = state.repository ?? entry?.repository ?? null;
+  if (bound != null && bound !== repository) {
+    fail(`project ${project.slug} is bound to repository ${bound.slice(0, 12)} (${entry?.root ?? 'root unknown'}); this checkout is repository ${repository.slice(0, 12)} (${project.root}). Give this project its own slug, or run dryad rebind --apply from here after its live seats are finished.`);
+  }
+  return bound;
 }
 
 function runPlan({ options, project, environment, cwd }) {
   const { state } = readDryadState(project.slug, environment);
+  const finished = readDryadFinished(project.slug, environment);
   const existing = state.seats[options.id] ?? null;
   if (existing != null && existing.env !== 'pending') {
     fail(`seat ${options.id} already exists; finish it before planning it again.`);
   }
   const task = readTask(options, cwd);
-  const plan = resolveWorktreePlan(options, project, cwd, existing);
+  const repository = gitRepositoryId(project.root);
+  assertRepositoryBinding(project, environment, repository);
+  const plan = resolveWorktreePlan(options, project, cwd, existing, finished);
   const envWanted = project.overlayActive ? options.id : null;
+  const scope = options.readOnly ? [] : options.owns.length > 0 ? options.owns : null;
+  const attemptLine = plan.resumedFrom != null
+    ? `resumes attempt ${plan.resumedFrom} on ${plan.branch} as attempt ${plan.attempt}`
+    : `${plan.attempt}${plan.attempt > 1 ? ` (earlier branches kept)` : ''}`;
 
   if (!options.apply) {
     console.log(
@@ -817,6 +931,8 @@ function runPlan({ options, project, environment, cwd }) {
         `  worktree  ${plan.path} (${plan.owned ? (plan.exists ? 'exists' : 'would create') : 'adopt'})`,
         `  branch    ${plan.branch}`,
         `  base      ${plan.base.slice(0, 12)}`,
+        `  attempt   ${attemptLine}`,
+        `  scope     ${scope == null ? 'unchecked' : scope.length === 0 ? 'read-only' : scope.join(' ')}`,
         `  env       ${envWanted ?? 'none'}${existing?.env === 'pending' ? ' (pending, would retry)' : ''}`,
         `  task      ${task.split('\n')[0].slice(0, 72)}`,
         '  apply     nothing created; rerun with --apply',
@@ -835,9 +951,11 @@ function runPlan({ options, project, environment, cwd }) {
       }
       journalLines.push(`worktree present on ${plan.branch}`);
     } else {
-      gitOk(['worktree', 'add', '--no-track', '-b', plan.branch, plan.path, 'HEAD'], project.root);
+      gitOk(plan.create, project.root);
       created = true;
-      journalLines.push(`worktree add ${plan.branch} at ${plan.base.slice(0, 12)}`);
+      journalLines.push(plan.resumedFrom != null
+        ? `worktree add ${plan.branch} resuming attempt ${plan.resumedFrom} at ${gitHead(plan.path).slice(0, 12)} (base ${plan.base.slice(0, 12)})`
+        : `worktree add ${plan.branch} at ${plan.base.slice(0, 12)} (attempt ${plan.attempt})`);
     }
   } else {
     journalLines.push(`adopt ${plan.path} on ${plan.branch}`);
@@ -864,23 +982,31 @@ function runPlan({ options, project, environment, cwd }) {
       owned: plan.owned,
       branch: plan.branch,
       base: plan.base,
+      attempt: plan.attempt,
+      resumed_from: plan.resumedFrom,
       task,
+      scope,
+      revision: options.revision ?? null,
+      inputs: Object.keys(options.inputs).length === 0 ? null : options.inputs,
       env: null,
       by: options.by ?? null,
       session: null,
       created_at: now(),
       status: 'planned',
+      result: null,
+      integration: null,
       journal: [],
     };
     record.env = env;
     if (options.by != null) record.by = options.by;
     journal(record, 'dryad', existing == null ? 'plan' : 'plan.retry', journalLines.join('; '));
     current.seats[options.id] = record;
+    current.repository = repository;
     return record;
   });
   prepareSeatEvents(project.slug, options.id, environment);
 
-  const movedFrom = recordProjectRoot(project.slug, project.root, environment);
+  const movedFrom = recordProjectRoot(project.slug, project.root, repository, environment);
   if (movedFrom != null) {
     console.error(`dryad: project index: ${project.slug} root moved from ${movedFrom} to ${project.root}; index keeps the latest.`);
   }
@@ -890,6 +1016,9 @@ function runPlan({ options, project, environment, cwd }) {
       `■ ${project.slug} — seat ${options.id}`,
       `  worktree  1/1 ${seat.worktree} (${seat.owned ? (created ? 'created' : 'present') : 'adopted'})`,
       `  branch    ${seat.branch}`,
+      `  base      ${seat.base.slice(0, 12)}`,
+      `  attempt   ${attemptLine}`,
+      `  scope     ${scope == null ? 'unchecked' : scope.length === 0 ? 'read-only' : scope.join(' ')}`,
       `  env       ${env == null ? 'none' : env === 'pending' ? '0/1 pending' : '1/1 ' + env}`,
       `  journal   ${seat.journal.length}`,
     ].join('\n')
@@ -956,11 +1085,18 @@ function runSeat({ options, project, environment }) {
             owned: seat.owned,
             branch: seat.branch,
             base: seat.base,
+            attempt: seat.attempt ?? null,
+            resumed_from: seat.resumed_from ?? null,
+            scope: seat.scope ?? null,
+            revision: seat.revision ?? null,
+            inputs: seat.inputs ?? null,
             env: seat.env,
             task: seat.task,
             by: seat.by,
             session: seat.session,
             status: seat.status,
+            result: seat.result ?? null,
+            integration: seat.integration ?? null,
             env_vars: envVars,
             skill: SKILL_PATH,
           },
@@ -997,20 +1133,210 @@ function runSeat({ options, project, environment }) {
   return present ? 0 : 1;
 }
 
-function runReport({ options, project, environment }) {
-  const seat = updateState(project.slug, environment, (state) => {
-    const record = seatOf(state, options.id);
+// What a worker hands in with done: the checks it ran, each with the exact
+// command, where, the exit, and what was counted; and the boundaries it did
+// not measure, each with the reason. Recorded as given, never judged here.
+export function parseEvidence(text, source = 'evidence') {
+  let doc;
+  try {
+    doc = parse(text);
+  } catch (error) {
+    fail(`${source}: ${error.message}`);
+  }
+  if (!isMap(doc)) fail(`${source}: evidence must be a map with checks and not_measured.`);
+  assertOnlyKeys(doc, ['checks', 'not_measured'], 'evidence', source);
+  const checks = doc.checks == null ? [] : doc.checks;
+  const notMeasured = doc.not_measured == null ? [] : doc.not_measured;
+  if (!Array.isArray(checks)) fail(`${source}: checks must be a list.`);
+  if (!Array.isArray(notMeasured)) fail(`${source}: not_measured must be a list.`);
+  const out = { checks: [], not_measured: [] };
+  checks.forEach((row, index) => {
+    if (!isMap(row)) fail(`${source}: checks[${index}] must be a map.`);
+    assertOnlyKeys(row, ['command', 'cwd', 'exit', 'observed'], `checks[${index}]`, source);
+    const command = nonEmptyString(row.command, `checks[${index}].command`, source);
+    const cwd = row.cwd == null ? '.' : nonEmptyString(row.cwd, `checks[${index}].cwd`, source);
+    if (!Number.isInteger(row.exit)) fail(`${source}: checks[${index}].exit must be an integer exit code.`);
+    const observed = nonEmptyString(row.observed, `checks[${index}].observed`, source);
+    out.checks.push({ command, cwd, exit: row.exit, observed });
+  });
+  notMeasured.forEach((row, index) => {
+    if (!isMap(row)) fail(`${source}: not_measured[${index}] must be a map.`);
+    assertOnlyKeys(row, ['boundary', 'reason'], `not_measured[${index}]`, source);
+    out.not_measured.push({
+      boundary: nonEmptyString(row.boundary, `not_measured[${index}].boundary`, source),
+      reason: nonEmptyString(row.reason, `not_measured[${index}].reason`, source),
+    });
+  });
+  return out;
+}
+
+function readEvidence(options, cwd) {
+  if (options.evidence == null) return null;
+  if (options.status !== 'done') fail('--evidence goes with --status done.');
+  const file = path.resolve(cwd, options.evidence);
+  if (!existsSync(file)) fail(`--evidence not found: ${file}`);
+  return parseEvidence(readFileSync(file, 'utf8'), file);
+}
+
+// A done report records the seat's own head, whether the tree was clean,
+// and every path touched, then holds those against the seat's scope. The
+// worker's word is the status; the git facts are read here, not supplied.
+function doneResult(seat, id, options) {
+  if (!existsSync(seat.worktree)) fail(`seat ${id}: worktree missing at ${seat.worktree}; done needs a head to record.`);
+  const head = gitHead(seat.worktree);
+  const touched = seatTouchedPaths(seat);
+  const uncommitted = uncommittedChanges(seat.worktree);
+  if (touched == null || uncommitted == null) fail(`seat ${id}: git could not read ${seat.worktree}.`);
+  const outside = seat.scope == null ? [] : pathsOutsideScope(touched, seat.scope);
+  return {
+    head,
+    base: seat.base,
+    ahead: gitAhead(seat.base, seat.worktree),
+    clean: uncommitted.length === 0,
+    changed: touched.length,
+    scope_checked: seat.scope != null,
+    outside_scope: outside,
+    at: now(),
+    evidence: options.evidence ?? null,
+  };
+}
+
+function runReport({ options, project, environment, cwd }) {
+  const evidence = readEvidence(options, cwd);
+  const { state } = readDryadState(project.slug, environment);
+  const current = seatOf(state, options.id);
+  const result = options.status === 'done' ? doneResult(current, options.id, { evidence }) : null;
+  if (result != null && result.outside_scope.length > 0 && !options.acceptOutsideScope) {
+    updateState(project.slug, environment, (live) => {
+      journal(seatOf(live, options.id), 'seat', 'report.refused', `done: ${result.outside_scope.length} path${result.outside_scope.length === 1 ? '' : 's'} outside scope: ${result.outside_scope.join(' ')}`);
+    });
+    console.error(
+      [
+        `dryad: seat ${options.id} changed ${result.outside_scope.length} path${result.outside_scope.length === 1 ? '' : 's'} outside its scope (${current.scope.length === 0 ? 'read-only' : current.scope.join(' ')}):`,
+        ...result.outside_scope.map((file) => `  ${file}`),
+        `dryad: narrow the change and report again, or a person accepts it with --accept-outside-scope.`,
+      ].join('\n')
+    );
+    return 1;
+  }
+  const seat = updateState(project.slug, environment, (live) => {
+    const record = seatOf(live, options.id);
     record.status = options.status;
+    record.result = result;
     if (options.session != null) record.session = options.session;
+    // The report line is the worker's own words, the seam Mycelium reads;
+    // what git said about the result is a line of Dryad's beside it.
     journal(record, 'seat', 'report', options.note == null ? options.status : `${options.status}: ${options.note}`);
+    if (result != null) {
+      journal(record, 'dryad', 'result', `head ${result.head.slice(0, 12)}${result.clean ? '' : ' (uncommitted changes)'} · ${result.changed} path${result.changed === 1 ? '' : 's'}${result.outside_scope.length > 0 ? ` · outside scope accepted: ${result.outside_scope.join(' ')}` : ''}${result.evidence == null ? ' · no evidence' : ` · checks ${result.evidence.checks.length}, not measured ${result.evidence.not_measured.length}`}`);
+    }
     return record;
   });
   console.log(
-    [`■ ${project.slug} — seat ${options.id}`, `  status    ${seat.status}`, `  journal   ${seat.journal.length}`].join('\n')
+    [
+      `■ ${project.slug} — seat ${options.id}`,
+      `  status    ${seat.status}`,
+      ...(result == null ? [] : [`  result    head ${result.head.slice(0, 12)} · ${result.clean ? 'clean' : 'uncommitted changes'} · ${result.changed} path${result.changed === 1 ? '' : 's'} touched · scope ${result.scope_checked ? (result.outside_scope.length === 0 ? 'kept' : `${result.outside_scope.length} outside, accepted`) : 'unchecked'} · ${result.evidence == null ? 'unverified' : `checks ${result.evidence.checks.length}, not measured ${result.evidence.not_measured.length}`}`]),
+      `  journal   ${seat.journal.length}`,
+    ].join('\n')
   );
+  if (result != null && !result.clean) {
+    console.error(`dryad: seat ${options.id} reported done with uncommitted changes; only what is committed at ${result.head.slice(0, 12)} can reach another seat.`);
+  }
+  if (result != null && result.evidence == null) {
+    console.error(`dryad: seat ${options.id} reported done without --evidence; the result stays unverified until a person checks it.`);
+  }
   if (options.status === 'done' && seat.session == null) {
     console.error(`dryad: seat ${options.id} has no session reference; if your tool exposes a session id or transcript path, run report --session <ref>.`);
   }
+  return 0;
+}
+
+// A person says where a seat's result landed when git ancestry cannot: a
+// squash or a rebase gives the same work a new commit. The commit must be
+// one this repository has; the seat's own reported head is kept beside it.
+function runIntegrate({ options, project, environment }) {
+  const commit = gitResolveCommit(options.commit, project.root);
+  if (commit == null) fail(`${options.commit} is not a commit of this repository (${project.root}).`);
+  const { state } = readDryadState(project.slug, environment);
+  const live = state.seats[options.id] ?? null;
+  const finished = readDryadFinished(project.slug, environment);
+  const archived = previousAttempts(finished, options.id);
+  const target = live ?? archived.at(-1) ?? null;
+  if (target == null) fail(`seat ${options.id} is not registered for ${project.slug} and not in its finished archive.`);
+  if (target.status !== 'done' || target.result == null) {
+    fail(`seat ${options.id} has no done result to integrate (status ${target.status}${target.result == null ? ', no result recorded' : ''}).`);
+  }
+  const record = { commit, result_head: target.result.head, by: options.by ?? null, note: options.note ?? null, at: now() };
+  const where = live != null ? 'live seat' : `finished attempt ${target.attempt ?? archived.length}`;
+  if (!options.apply) {
+    console.log(
+      [
+        `■ ${project.slug} — seat ${options.id} (integrate plan)`,
+        `  result    ${target.result.head.slice(0, 12)} (${where})`,
+        `  commit    ${commit.slice(0, 12)}`,
+        `  apply     would record the integration; rerun with --apply`,
+      ].join('\n')
+    );
+    return 0;
+  }
+  const detail = `${target.result.head.slice(0, 12)} integrated as ${commit.slice(0, 12)}${options.by ? ` by ${options.by}` : ''}${options.note ? `: ${options.note}` : ''}`;
+  if (live != null) {
+    updateState(project.slug, environment, (current) => {
+      const seat = seatOf(current, options.id);
+      seat.integration = record;
+      journal(seat, 'dryad', 'integrate', detail);
+    });
+  } else {
+    const release = acquireStateLock(finished.file, LOCK_WAIT_MS);
+    try {
+      const fresh = readDryadFinished(project.slug, environment);
+      const index = fresh.seats.map((row, position) => [row, position]).filter(([row]) => row.id === options.id).at(-1)?.[1];
+      if (index == null) fail(`seat ${options.id} left the finished archive while integrating; retry.`);
+      fresh.seats[index].integration = record;
+      fresh.seats[index].journal = fresh.seats[index].journal ?? [];
+      journal(fresh.seats[index], 'dryad', 'integrate', detail);
+      atomicWriteFile(fresh.file, stringify({ version: STATE_VERSION, project: project.slug, seats: fresh.seats }));
+    } finally {
+      release();
+    }
+  }
+  console.log(
+    [
+      `■ ${project.slug} — seat ${options.id}`,
+      `  result    ${target.result.head.slice(0, 12)} (${where})`,
+      `  commit    1/1 ${commit.slice(0, 12)} recorded${options.by ? ` by ${options.by}` : ''}`,
+    ].join('\n')
+  );
+  return 0;
+}
+
+// Bind the slug to this checkout's repository. Refused while seats from the
+// other repository are live; the finished archive is kept as it is, and a
+// reader that compares repositories sees those records as another project's.
+function runRebind({ options, project, environment }) {
+  const repository = gitRepositoryId(project.root);
+  const { index } = readDryadProjectsIndex(environment);
+  const { state } = readDryadState(project.slug, environment);
+  const entry = index.projects[project.slug] ?? null;
+  const bound = state.repository ?? entry?.repository ?? null;
+  const seats = Object.keys(state.seats).length;
+  const lines = [
+    `■ ${project.slug} — rebind${options.apply ? '' : ' (plan)'}`,
+    `  bound     ${bound == null ? 'nothing' : `${bound.slice(0, 12)} at ${entry?.root ?? 'root unknown'}`}`,
+    `  checkout  ${repository.slice(0, 12)} at ${project.root}`,
+  ];
+  if (bound === repository) {
+    console.log([...lines, '  rebind    nothing to do; already bound here'].join('\n'));
+    return 0;
+  }
+  if (seats > 0) fail(`${project.slug} has ${seats} live seat${seats === 1 ? '' : 's'} from repository ${bound == null ? 'unknown' : bound.slice(0, 12)}; finish them before rebinding.`);
+  if (!options.apply) {
+    console.log([...lines, '  apply     nothing changed; rerun with --apply'].join('\n'));
+    return 0;
+  }
+  recordProjectRoot(project.slug, project.root, repository, environment);
+  console.log([...lines, `  rebind    1/1 index now names ${repository.slice(0, 12)}; the finished archive is kept as it was`].join('\n'));
   return 0;
 }
 
@@ -1074,6 +1400,10 @@ function runStatus({ options, project, environment }) {
   if (options.id != null && entries.length === 0) fail(`seat ${options.id} is not registered for ${project.slug}.`);
 
   const problems = [];
+  const repository = gitRepositoryId(project.root);
+  if (state.repository != null && state.repository !== repository) {
+    problems.push(`registry bound to repository ${state.repository.slice(0, 12)}; this checkout is ${repository.slice(0, 12)} (dryad rebind)`);
+  }
   const wantsEnv = entries.filter(([, seat]) => seat.env != null);
   let tracked = null;
   let attached = null;
@@ -1138,6 +1468,7 @@ function runStatus({ options, project, environment }) {
           worktrees,
           overlaps,
           problems,
+          repository: { bound: state.repository ?? null, checkout: repository },
           seats: rows.map((row) => ({
             id: row.id,
             worktree: row.seat.worktree,
@@ -1145,12 +1476,19 @@ function runStatus({ options, project, environment }) {
             owned: row.seat.owned,
             branch: row.seat.branch,
             base: row.seat.base,
+            attempt: row.seat.attempt ?? null,
+            resumed_from: row.seat.resumed_from ?? null,
+            scope: row.seat.scope ?? null,
+            revision: row.seat.revision ?? null,
+            inputs: row.seat.inputs ?? null,
             ahead: row.ahead,
             changes: row.changes,
             env: row.seat.env,
             env_state: row.envState,
             hostnames: row.hostnames,
             status: row.seat.status,
+            result: row.seat.result ?? null,
+            integration: row.seat.integration ?? null,
             by: row.seat.by,
             session: row.seat.session,
             activity: row.activity,
@@ -1320,13 +1658,17 @@ export function runDryad({ options, environment = process.env, cwd = process.cwd
     case 'seat':
       return runSeat({ options, project, environment });
     case 'report':
-      return runReport({ options, project, environment });
+      return runReport({ options, project, environment, cwd });
+    case 'integrate':
+      return runIntegrate({ options, project, environment });
     case 'status':
       return runStatus({ options, project, environment });
     case 'diff':
       return runDiff({ options, project, environment });
     case 'finish':
       return runFinish({ options, project, environment });
+    case 'rebind':
+      return runRebind({ options, project, environment });
     default:
       fail(`unsupported command ${JSON.stringify(options.verb)}.`);
   }
@@ -1336,25 +1678,40 @@ export function dryadHelp(cli = 'de-novo skills') {
   return `seats for workers on Grove's ground (worktree + overlay env + task; no agent launch)
 
 usage:
-  ${cli} dryad plan   ID (--task TEXT | --task-file PATH) [--worktree PATH] [--by LABEL] [--project ROOT] [--apply]
+  ${cli} dryad plan   ID (--task TEXT | --task-file PATH) [--worktree PATH | --resume] [--owns CLAIM ...| --read-only]
+                      [--revision TEXT] [--input ID=SHA ...] [--by LABEL] [--project ROOT] [--apply]
   ${cli} dryad seat   ID [--json | --env | --shell | --task] [--project ROOT]
-  ${cli} dryad report ID --status working|blocked|done [--note TEXT] [--session REF] [--project ROOT]
+  ${cli} dryad report ID --status working|blocked|done [--note TEXT] [--session REF] [--evidence PATH]
+                      [--accept-outside-scope] [--project ROOT]
+  ${cli} dryad integrate ID --commit SHA [--by LABEL] [--note TEXT] [--project ROOT] [--apply]
   ${cli} dryad status [ID] [--json] [--finished] [--project ROOT]
   ${cli} dryad diff ID [--json] [--project ROOT]    the seat's work as a patch against its base, committed or not, plus untracked files
   ${cli} dryad finish ID [--project ROOT] [--apply]
+  ${cli} dryad rebind [--project ROOT] [--apply]    bind the slug to this checkout's repository
   ${cli} dryad projects [--json]
 
 plan creates a worktree (or adopts --worktree) and, when the runtime profile
-has overlays, calls \`overlay create\`. seat prints the seat for any launcher.
-Workers report their own status. finish destroys the env, removes only a
-clean, Dryad-created worktree, and keeps the seat's journal in the finished
-archive; branches are always kept. The seat carries DRYAD_SKILL, the path to
-this skill, so a worker can read it from any launcher. ROOT defaults to
-DRYAD_PROJECT, then the nearest .agents/dryad-profile.yml above the cwd.
-projects lists every project that has planned a seat on this machine (the
-index next to the registries) with live seat, finished, and overlay counts.
-status --json carries each seat's overlay hostnames (read from \`urls --json\`,
-marked attached or not), the files it changed, every worktree of the baseline
+has overlays, calls \`overlay create\`. Every attempt at an id gets its own
+branch (the template, then -2, -3, …); earlier branches are kept, and an
+existing branch is never overwritten. --resume continues the previous
+attempt's branch instead. --owns records the seat's scope; --read-only
+records an empty one; neither leaves it unchecked. seat prints the seat for
+any launcher. Workers report their own status; a done report records the
+seat's own head, whether the tree was clean, every path touched, and the
+--evidence file (checks with command, cwd, exit, observed; not_measured with
+boundary, reason). A done that touched paths outside the scope is refused
+with the paths named until a person passes --accept-outside-scope.
+integrate records, from a person, the commit a squash or rebase gave the
+seat's result. finish destroys the env, removes only a clean, Dryad-created
+worktree, and keeps the seat's journal in the finished archive. The seat
+carries DRYAD_SKILL, the path to this skill, so a worker can read it from
+any launcher. ROOT defaults to DRYAD_PROJECT, then the nearest
+.agents/dryad-profile.yml above the cwd. A slug is bound to one repository
+on this machine (its root commit); another repository with the same slug is
+refused until rebind. projects lists every project that has planned a seat
+on this machine with live seat, finished, and overlay counts. status --json
+carries each seat's overlay hostnames (read from \`urls --json\`, marked
+attached or not), the files it changed, every worktree of the baseline
 repository whether seated or not, and the paths two seats both hold. A seat
 also journals the state-changing catalog verbs it runs, with their exit code.`;
 }

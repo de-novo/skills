@@ -34,7 +34,7 @@ where. For deciding *what* the work is and how many run at once, use
 ## It's working if
 
 - `dryad status` exits zero and its counts match what you see in `git worktree list`.
-- Every live seat has a task a stranger could start from, and its last journal line says what the worker did.
+- Every live seat has a task a stranger could start from, a scope its done report is held against, and its last journal line says what the worker did.
 - Nobody merges, pushes, or runs `finish` from inside a seat.
 
 ## Where it fits

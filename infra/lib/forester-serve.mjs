@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { stringify } from 'yaml';
 
 import { parseDryadCliArgs, readDryadState, runDryad } from './dryad.mjs';
-import { loadForester, sessionsPath } from './forester.mjs';
+import { loadForester, seatArguments, sessionsPath } from './forester.mjs';
 import { claudeSettings, doingFromEvents, seatEventsPath, seatSettingsPath, stateFromEvents } from './seat-events.mjs';
 
 export { claudeSettings, doingFromEvents, stateFromEvents };
@@ -78,9 +78,12 @@ export function screenAsksForInput(text) {
 
 // Claude Code parks a fresh git root on a trust dialog whose default is
 // "exit". Its own error message names projects[<path>].hasTrustDialogAccepted
-// in its state file as the way to pre-trust a folder, so that is what is
-// written, for the seat's worktree only, atomically, and never when the file
-// does not exist (the tool's own onboarding has not run).
+// in its state file as the way to pre-trust a folder. Granting trust is a
+// person's decision, so by default serve writes nothing here and the parked
+// session shows as needs-input for a person to answer through attach. Only
+// a local file that sets tools.<name>.pretrust_worktrees: true has this
+// written, for the seat's worktree only, atomically, and never when the
+// file does not exist (the tool's own onboarding has not run).
 export function claudeTrustFile(environment = process.env) {
   const configDir = environment.CLAUDE_CONFIG_DIR;
   return configDir ? path.join(configDir, '.claude.json') : path.join(homedir(), '.claude.json');
@@ -228,7 +231,7 @@ export class ForesterServe {
     let loaded = loadForester({ project: this.projectOption, environment: this.environment, cwd: this.cwd });
     // 1. Fill the budget exactly as assign --apply would.
     for (const item of loaded.allocation.chosen) {
-      const args = ['plan', item.id, '--task', item.task, '--by', 'forester', '--project', this.project.root, '--apply'];
+      const args = seatArguments(item, loaded);
       try {
         const code = runDryad({ options: parseDryadCliArgs(args), environment: this.environment, cwd: this.cwd });
         if (code !== 0) this.log(`forester: seat ${item.id} not planned (exit ${code})`);
@@ -278,10 +281,16 @@ export class ForesterServe {
     if (path.basename(tool.command[0]) === 'claude') {
       settingsFile = seatSettingsPath(this.project.slug, item.id, this.environment);
       writeFileSync(settingsFile, JSON.stringify(claudeSettings(record.events), null, 2));
-      const trust = seedClaudeTrust(seat.worktree, this.environment);
-      this.log(`forester: ${item.id}: trust ${trust.result} (${trust.file})`);
+      if (tool.pretrustWorktrees) {
+        const trust = seedClaudeTrust(seat.worktree, this.environment);
+        this.log(`forester: ${item.id}: trust ${trust.result === 'seeded' ? 'seeded' : trust.result} (${trust.file}; tools.${toolName}.pretrust_worktrees)`);
+      } else {
+        this.log(`forester: ${item.id}: trust not seeded; a trust dialog shows as needs-input, answer it with forester attach ${item.id}`);
+      }
     }
-    const command = launchCommand({ toolName, tool, task: item.task, settingsFile });
+    // The seat's task is the handoff Forester wrote at seating, so the tool
+    // sees the same text a person reads with dryad seat --task.
+    const command = launchCommand({ toolName, tool, task: seat.task ?? item.task, settingsFile });
     const env = seatEnvironment(seat, item.id, this.project, this.environment);
     env.FORESTER_EVENTS = record.events;
     env.DRYAD_EVENTS = record.events;

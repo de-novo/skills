@@ -93,6 +93,10 @@ the record is not operating authority.
   holding two real Claude Code sessions to done with every prompt answered
   through the socket, then hooks for the other tools with Codex, Grok, and
   OpenCode run to done; 29 guards seen red.
+- [Handoff integrity](evidence/2026-09-10-handoff-integrity.md): task
+  revisions, done results held against scope, the integration gate a
+  dependent item waits on, attempt branches, and no trust seeded by
+  default; every guard reverted and seen red.
 
 Published evidence uses repository-owned synthetic applications. Private project
 identities, configuration, source fingerprints, and adoption history do not
