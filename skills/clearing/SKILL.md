@@ -19,9 +19,12 @@ clearing and say it again.
 2. Re-pitch in plain words: what the goal is, what is done, what is moving,
    what is open, and the one next action. Short sentences, one idea each,
    the words `.agents/mycelium.yml` declares where they exist.
-3. Name any fact you cannot point at as a guess. Do not fill the gap.
+3. Say which of three things each sentence is: **observed** (on that
+   screen or in that log, and you can point at it), **not known** (the
+   gap, named, not filled), or **proposed** (the one next action, marked
+   as yours). A guess is never dressed as an observation.
 
-Say nothing that is not on that screen or in that log.
+Say nothing observed that is not on that screen or in that log.
 
 ## Not this skill
 

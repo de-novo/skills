@@ -38,6 +38,12 @@ the item names one, and the session state when serve holds one.
 
 ## The reading
 
+When the document keeps the graph or the reading for a reader who cannot
+run the CLI, it keeps it as a snapshot block that names the command and
+the revision it was drawn at (`<!-- snapshot: de-novo skills understory
+graph @ <sha> <date> -->` … `<!-- /snapshot -->`), so Herbarium reads it as
+generated and a person reads how old it is.
+
 `understory reading` prints a summary line and one line per item:
 
 | State | Line |

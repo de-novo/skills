@@ -20,7 +20,7 @@ ignore: [dist/**, .playground/**]      # never read; node_modules and .git are a
 
 | Field | Meaning | Default |
 | --- | --- | --- |
-| `language` | The script public surfaces use. `en`: a file holding Hangul, Han, kana, Cyrillic, Arabic, or Thai letters is counted | `en` |
+| `language` | The script public surfaces use. Only `en` is supported, and it is a script check over prose, not a judgment of language: a file whose prose holds Hangul, Han, kana, Cyrillic, Arabic, or Thai letters is counted; code spans, fences, quoted lines (`>`), and snapshots may carry any script | `en` |
 | `public` | Globs of every document a reader from outside may meet. Required, non-empty | — |
 | `pages.globs` | Globs of the human pages held to the cap | none |
 | `pages.max_words` | The cap on a page's prose: words outside code fences and tables | 450 |
@@ -29,6 +29,39 @@ ignore: [dist/**, .playground/**]      # never read; node_modules and .git are a
 
 Unknown keys are rejected. Globs: `**` spans directories, `*` stays inside
 one segment.
+
+## Links, snapshots, and what the check reads
+
+A link is resolved as the rendered page resolves it: inline
+(`[text](path#anchor "title")`) and reference-style (`[label]: path`)
+alike; an anchor is checked against the headings of the file it names,
+and a repeated heading gets `-1`, `-2`, … as GitHub gives it.
+
+A **generated snapshot** is prose or a diagram a command produced and a
+document keeps for a reader who cannot run the command: an Understory
+reading, a Forester graph, a status line. It is a copy by construction,
+so it is not counted as one, on one condition: its block names what made
+it and the revision or moment it was made at.
+
+```markdown
+<!-- snapshot: de-novo skills understory reading @ 3ccdbda 2026-09-10 -->
+…
+<!-- /snapshot -->
+```
+
+A block whose header has no source before the `@` or nothing after it is
+a finding, and the check fails. A **cited summary** is prose in your own
+words that points at its source on the same line; a quoted line (`>`)
+that carries a link is read as a citation, not as a copy.
+
+`check --json` groups what it found: `errors` (broken links and
+anchors, another script, pages over the cap, unsourced snapshots) are
+certain; `candidates` (exact copies, near copies, similar paragraphs)
+are for a person to judge, of which the exact and near copies still fail
+the check because the pattern names them defects. `measures` says what an
+agent loads when it reads every public surface: `bytes`, and
+`tokens_estimate`, which is bytes over four and says so; no tokenizer
+runs, and the number is a scale, not a bill.
 
 ## The houses
 

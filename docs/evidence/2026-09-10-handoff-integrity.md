@@ -225,3 +225,32 @@ node --test infra/bin/mycelium.test.mjs infra/bin/mycelium-policy.test.mjs infra
 Not measured: a vocabulary proposal flow (a refused proposal still tells a
 person which word is missing; nothing batches them); an OS boundary
 between writers, which the reference now says the log does not provide.
+
+## WP-10: structure told from similarity; a snapshot names its source
+
+`infra/lib/herbarium.mjs`: repeated headings get `-1`, `-2` anchors as
+the rendered page does; reference-style definitions and titled links are
+resolved; a `<!-- snapshot: <source> @ <revision> -->` block is read as
+generated, not copied, and one without a source or revision is a
+finding; the script check reads prose only (`en` remains the one
+supported script, and it is a script check, not a language judgment);
+`check --json` groups `errors`, `candidates`, and `measures` (bytes
+loaded and a bytes-over-four token estimate that names itself one).
+Understory's document keeps generated blocks as snapshots; Clearing says
+which sentences are observed, not known, or proposed.
+
+```text
+node --test infra/bin/herbarium.test.mjs infra/bin/herbarium-structure.test.mjs infra/bin/catalog.test.mjs   18/18
+node infra/bin/cli.mjs herbarium check   links 230/230 · anchors 19/19 · snapshots 0/0 · loaded 452582 bytes ≈ 113146 tokens (estimate)
+```
+
+| Guard reverted | Red |
+| --- | --- |
+| duplicate heading anchors | 1 |
+| reference-style links resolved | 1 |
+| unsourced snapshot is a finding | 1 |
+| a sourced snapshot is not a copy | 2 |
+| script check over prose only | 1 |
+
+Not measured: a real tokenizer (the estimate is bytes over four and says
+so); Markdown escapes such as `\[` (the link regexes do not model them).
