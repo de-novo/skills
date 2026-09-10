@@ -9,8 +9,14 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Linux is the baseline; macOS is where the catalog is used day to day,
+    # so its worktree paths, resolver, and pseudo-terminals are run too.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
@@ -22,7 +28,10 @@ jobs:
       - name: Check shell syntax
         run: bash -n infra/bin/provision
       - name: Validate the compose catalog
+        if: runner.os == 'Linux'
         run: docker compose -f infra/docker-compose.yml --profile '*' config --quiet
+      - name: Look before anything runs
+        run: node infra/bin/cli.mjs doctor --json > /dev/null && node infra/bin/cli.mjs herbarium check
       - name: Validate published examples
         run: |
           passed=0

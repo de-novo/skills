@@ -315,7 +315,7 @@ node --test infra/bin/wildcards.test.mjs infra/bin/doctor.test.mjs   7/7
 
 | Guard reverted | Red |
 | --- | --- |
-| TLS wildcard matches one label | 1 |
+| TLS wildcard matches one label (the first reversal tried, a looser length check, left the suffix compare intact and turned nothing red; the reversal recorded here lets the wildcard swallow extra labels) | 1 |
 | DNS closest encloser stops synthesis | 1 |
 
 Not measured: a real zone (the DNS rule is exercised on names given to
@@ -323,3 +323,29 @@ the function, not on a server); a certificate (the TLS rule is exercised
 on names, not on a handshake); whether this laptop's resolver answers
 `*.localhost` is measured by the probe each run and not asserted either
 way.
+
+## WP-13: the scenarios, each pointed at what measures it
+
+[The evaluation page](../evaluation/2026-09-10-handoff-scenarios.md)
+maps the brief's twelve scenarios to the tests that measure them or marks
+them not measured, and records first metric readings. CI now runs the
+suite on macOS as well as Linux, both on Node 24, and runs `doctor --json`
+and `herbarium check` after it.
+
+## Final state of the branch
+
+Branch `feat/handoff-integrity`, thirteen packages as sequential local
+commits on the audited base; nothing pushed, no pull request opened, no
+shared engine touched, no trust file changed on this machine.
+
+```text
+npm test                                  320/320 (286 on the base; 34 new across 8 new test files)
+node infra/bin/cli.mjs herbarium check    links 232/232 · anchors 19/19 · copies 0 · pages 7/7 · snapshots 0/0
+validate skills/grove/examples/*          2/2
+bash -n infra/bin/provision               exit 0
+```
+
+Still not measured, and a person's to decide: the CI matrix on real
+runners (the macOS job was added, not run); a cold-session count of the
+questions an agent asks on a complete brief; a real Claude Code or Codex
+session through the trust dialog under serve; npm publishing.
