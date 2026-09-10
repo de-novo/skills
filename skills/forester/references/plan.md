@@ -189,7 +189,7 @@ de-novo skills forester machine [--json | --parallel N|none --apply]
 | attach | connects to one live session: recent output is replayed, keys go to the tool, Ctrl-] detaches and the session keeps running. A closed session is refused by name | — |
 | restart | asks serve to drop a `failed` or `exited` session so its next poll launches the item again (a pending env's retry count starts over). A live session is refused by name: nobody's work is restarted underneath them | — |
 | machine | `cap`, the reservations held with their project and seat, the stale ones the next write drops, and the unmanaged live seats; `--json` prints `{ parallel, held, stale, unmanaged, file }` | `--parallel N` writes the cap; `--parallel none` removes it |
-| hooks | one row per tool store: `codex`, `grok`, `cursor-agent`, `opencode`; whether it is present, installed, or absent, and what `--apply` would do. A tool whose home is missing is skipped. `--remove --apply` takes back exactly the marked entries | writes one marked entry per event into each present store, keeping the person's own entries, atomically; a store that is not JSON is refused by name |
+| hooks | one row per tool store: `codex`, `grok`, `cursor-agent`, `opencode`; whether it is present, installed, or absent, and what `--apply` would do. A tool whose home is missing is skipped. `--remove --apply` takes back exactly the marked entries | writes one marked entry per event into each present store, keeping the person's own entries, atomically; a store that is not JSON is refused by name. For Codex it also writes one marked trust table per entry into `$CODEX_HOME/config.toml` (`[hooks.state."<hooks.json>:<event>:<group>:<handler>"] trusted_hash`), because Codex skips a user-level hook nobody has trusted; a key the person already trusts is left alone, and `--remove --apply` takes the tables back byte for byte |
 
 ## Sessions
 
@@ -234,7 +234,7 @@ where the others write `UserPromptSubmit`.
 | Tool | Store | Hooks | Once per store |
 | --- | --- | --- | --- |
 | claude | per-session `--settings` file | UserPromptSubmit, PreToolUse, PostToolUse, Stop, StopFailure, SessionEnd, Notification | trust dialog is a person's answer unless `pretrust_worktrees`; "external CLAUDE.md imports" dialog is a person's answer |
-| codex | `$CODEX_HOME/hooks.json`, else `~/.codex/hooks.json` | UserPromptSubmit, PreToolUse, PostToolUse, PermissionRequest, Stop | Codex asks to review new hooks on the next launch ("Trust all and continue"); the screen fallback shows it as needs-input |
+| codex | `$CODEX_HOME/hooks.json`, else `~/.codex/hooks.json`, with the trust tables in `config.toml` beside it | UserPromptSubmit, PreToolUse, PostToolUse, PermissionRequest, Stop | none: `hooks --apply` records the trust Codex checks (the hash of the handler's normalized identity, as `codex-rs` computes it); without that record Codex runs nothing and says nothing in the events file. Its directory-trust prompt is a person's answer, shown as needs-input by the screen fallback |
 | grok | `~/.grok/hooks/de-novo-forester.json` (a file of its own) | the Claude set | none seen |
 | cursor-agent | `~/.cursor/hooks.json` | beforeSubmitPrompt, preToolUse, postToolUse, stop, each writing the Claude-style name | none seen |
 | opencode | `$OPENCODE_CONFIG_DIR/plugins/de-novo-forester.js`, else `~/.config/opencode/plugins/` | a plugin mapping session status and permission events to the same names | none seen |

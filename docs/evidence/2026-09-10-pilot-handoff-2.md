@@ -122,8 +122,37 @@ merge, and serve stopped and started in the middle. Catalog at `main`
   `docs/**` while the baseline and its scope said `app/web/**`, and said so
   in its working report. The seat's `scope` is the fact; the copy is not.
 
+## Why Codex's hooks stayed silent, diagnosed after the run
+
+Codex runs a user-level hook only after a person has trusted that exact
+handler: it keeps `[hooks.state."<hooks.json>:<event>:<group>:<handler>"]
+trusted_hash = "sha256:…"` in its `config.toml` and skips, without a
+word in the events file, any handler whose hash is missing or differs
+(`codex-rs/hooks/src/engine/discovery.rs`, `hook_hash`;
+`codex-rs/config/src/fingerprint.rs`, `version_for_toml`). The entries
+`forester hooks --apply` appended had no such record. Measured on this
+machine's Codex 0.154.0, one `codex exec` turn each, events counted in
+the seat's file:
+
+| Hooks installed by Forester | Trust | Events |
+| --- | --- | --- |
+| yes | none recorded | 0 |
+| yes | `--dangerously-bypass-hook-trust` on the command line | 2 (UserPromptSubmit, Stop) |
+| yes | records written by `forester hooks --apply` | 2 (UserPromptSubmit, Stop) |
+
+The hash is the normalized identity `{event_name, hooks: [{type,
+command, timeout, async: false}]}` as canonical JSON, sha256; an
+independent implementation matched all four handlers Codex itself had
+trusted on this machine, and the JS one is pinned to it in the test.
+`forester hooks --apply` now writes one marked trust table per handler it
+installs, leaves a key a person already trusts alone, and `--remove
+--apply` takes the tables back, the config returning byte for byte
+(measured with `cmp`). The earlier `codex exec` probes hung on an MCP
+server's expired OAuth token, not on hooks; `-c 'mcp_servers={}'` was
+used for the measurements.
+
 ## Not measured
 
 An out-of-scope done in a live session (the seat refused itself first);
-why Codex's hooks stay silent; a second machine sharing the state
-directory.
+a second machine sharing the state directory; Codex's own `/hooks` review
+screen (the records were verified through `codex exec`, not the TUI).
