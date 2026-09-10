@@ -32,7 +32,7 @@ here generalizes one tool's dialogs to another's.
 
 | Metric | Where it is counted | First reading |
 | --- | --- | --- |
-| Questions before a task starts | the two pilots | 0 interview questions on complete briefs; pilot 1: 1 trust dialog and 1 permission prompt per seat; pilot 2: prompts on every `$VARIABLE` and on the evidence file write, now designed away (literal handoff, `--evidence -`) and not yet re-measured |
+| Questions before a task starts | the two pilots | 0 interview questions on complete briefs; pilot 1: 1 trust dialog and 1 permission prompt per seat; pilot 2: prompts on every `$VARIABLE` and on the evidence file write; [pilot 3](../evidence/2026-09-10-pilot-handoff-3.md), after the literal handoff and `--evidence -`: a Claude seat at 0 prompts, a Codex seat at 3 sandbox escalations |
 | Dependents started with the right input | `integrity.test.mjs` F01; the pilot | 1/1 in the fixture and 1/1 in the pilot, 0 started early |
 | Wrong done verdicts | `integrity.test.mjs` F02 | 0 in the fixture |
 | Duplicate daemons | `forester-serve.test.mjs` | 0 of 2 starts |

@@ -449,13 +449,16 @@ test('hooks installs one marked entry per event in each tool store, keeps the pe
   assert.match(rows[0].trust, /5 trust records in .*config\.toml/);
   // The hash is Codex's own recipe: the normalized identity as canonical JSON, sha256.
   // Pinned from an independent implementation that matched four handlers Codex had trusted itself (2026-09-10).
-  const ourStop = JSON.parse(readFileSync(path.join(home, '.codex/hooks.json'), 'utf8')).hooks.Stop[1].hooks[0];
+  const ourStopGroup = JSON.parse(readFileSync(path.join(home, '.codex/hooks.json'), 'utf8')).hooks.Stop[1];
+  assert.equal('matcher' in ourStopGroup, false, 'a Codex group of ours carries no matcher key, which Codex would hash into the identity');
+  const ourStop = ourStopGroup.hooks[0];
   assert.equal(codexHookHash('Stop', ourStop), 'sha256:3d77284b9c368a202db95f330184a6c8c04dc01aa95c8bf6f65ee19a63d37a6c');
   assert.equal(codexHookHash('SessionEnd', { command: 'x' }), codexHookHash('SessionEnd', { command: 'x', timeout: 1 }), 'SessionEnd defaults to one second');
   assert.notEqual(codexHookHash('Stop', { command: 'x' }), codexHookHash('Stop', { command: 'x', timeout: 10 }));
   // A key the person already trusts is left alone; removal returns the file to its bytes.
   assert.equal(renderCodexTrust('[hooks.state."k:stop:0:0"]\ntrusted_hash = "sha256:theirs"\n', [{ key: 'k:stop:0:0', hash: 'sha256:ours' }]), '[hooks.state."k:stop:0:0"]\ntrusted_hash = "sha256:theirs"\n');
   assert.equal(renderCodexTrust(renderCodexTrust('a = 1\n', [{ key: 'k:stop:0:0', hash: 'sha256:ours' }]), [], { remove: true }), 'a = 1\n');
+  assert.equal(renderCodexTrust('a = 1\n\n# de-novo forester hook trust\n\n[b]\nc = 2\n', [], { remove: true }), 'a = 1\n\n[b]\nc = 2\n', 'an orphan marker is dropped too');
   const cursor = JSON.parse(readFileSync(path.join(home, '.cursor/hooks.json'), 'utf8'));
   assert.equal(cursor.version, 1);
   assert.deepEqual(cursor.hooks.stop[0], { command: 'their-stop.sh', timeout: 5 });
