@@ -114,6 +114,29 @@ as copies; two gates named (shared engines, trust dialogs); next: nothing.
   a person; with the allow list alone every compound command would have.
   The pilot of 2026-09-09 answered about a hundred prompts by hand.
 
+## Fixed after this run
+
+- **Evidence file location.** Every seat now has `DRYAD_EVIDENCE`, its
+  `<id>.evidence.yml` beside its events file under the directory Dryad
+  owns; `seat --json` names it as `evidence_file`; the handoff says to
+  write it there; `report --status done` reads it when `--evidence` is not
+  passed; `finish` removes it with the seat. A seat can no longer guess a
+  location or write one into its worktree, where it would fall outside
+  the scope.
+- **One command per line.** The Dryad skill's wake-up procedure and the
+  handoff now say to run each command on its own line, because a
+  launcher's allow list matches one command and a chained line stops the
+  seat on a prompt a person answers. The tool template row in the
+  Forester reference says the approval policy lives there.
+- **Slots released each poll.** serve now drops stale reservations at the
+  start of every poll (`reclaimStaleSlots`), so a slot a finished seat
+  held is free within one poll instead of at the next allocation that
+  happened to rewrite the file; the two-minute in-flight bound stays.
+
+```text
+npm test   321/321
+```
+
 ## Not measured
 
 Codex as a seat under serve (both seats were Claude Code); a seat that

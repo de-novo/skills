@@ -17,8 +17,8 @@ import { fileURLToPath } from 'node:url';
 import { parse as parseYaml, stringify } from 'yaml';
 
 import { parseDryadCliArgs, readDryadState, runDryad } from './dryad.mjs';
-import { loadForester, seatArguments, seatChosen, sessionsPath } from './forester.mjs';
-import { claudeSettings, doingFromEvents, seatEventsPath, seatSettingsPath, stateFromEvents } from './seat-events.mjs';
+import { loadForester, reclaimStaleSlots, seatArguments, seatChosen, sessionsPath } from './forester.mjs';
+import { claudeSettings, doingFromEvents, seatEventsPath, seatEvidencePath, seatSettingsPath, stateFromEvents } from './seat-events.mjs';
 
 export { claudeSettings, doingFromEvents, stateFromEvents };
 
@@ -339,6 +339,14 @@ export class ForesterServe {
 
   async tick() {
     if (this.stopping) return;
+    // 0. A slot a finished seat held is released now, not at the next
+    //    allocation that happens to rewrite the file.
+    try {
+      const { dropped } = reclaimStaleSlots({ environment: this.environment });
+      for (const key of dropped) this.log(`forester: machine slot ${key} released`);
+    } catch (error) {
+      this.log(`forester: ${error.message}`);
+    }
     let loaded = loadForester({ project: this.projectOption, environment: this.environment, cwd: this.cwd });
     // 1. Fill the budget exactly as assign --apply would: a machine slot
     //    per chosen item, then the seat.
@@ -455,6 +463,7 @@ export class ForesterServe {
     const env = seatEnvironment(seat, item.id, this.project, this.environment);
     env.FORESTER_EVENTS = record.events;
     env.DRYAD_EVENTS = record.events;
+    env.DRYAD_EVIDENCE = seatEvidencePath(this.project.slug, item.id, this.environment);
     if (settingsFile != null) env.DRYAD_CLAUDE_SETTINGS = settingsFile;
     try {
       record.pty = this.pty.spawn(command.file, command.args, { name: 'xterm-256color', cols: 120, rows: 40, cwd: seat.worktree, env });

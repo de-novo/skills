@@ -74,8 +74,9 @@ never reused as done; it does spend an attempt.
 afterwards with `dryad seat <id> --task`: the title, the revision, the base
 commit, the scope (`edit only …`, `read-only`, or `unchecked`), each
 dependency with the result commit that is in the base or the note that only
-its report was required, the `verify` commands, the report line, and the
-brief's text under its path and digest. Dryad also records the scope
+its report was required, the `verify` commands, the report line (write the
+evidence file at `$DRYAD_EVIDENCE`, commit, report done, one command per
+line), and the brief's text under its path and digest. Dryad also records the scope
 (`--owns` or `--read-only`), the revision, and the dependency inputs on the
 seat.
 
@@ -102,7 +103,7 @@ an error that names both files.
 | --- | --- |
 | `parallel` | This machine's budget |
 | `tool` | The tool an item runs when it names none |
-| `tools.<name>.command` | The tool's argv; `{task}` is replaced by the seat's handoff text. Only `serve` reads it. Which tools a machine has is a machine fact, so the templates live here and never in the plan |
+| `tools.<name>.command` | The tool's argv; `{task}` is replaced by the seat's handoff text. Only `serve` reads it. Which tools a machine has is a machine fact, so the templates live here and never in the plan. The machine's approval policy goes here too (`--permission-mode`, an allow list); a compound command still reaches a person, which is why the Dryad skill has a worker run one command per line |
 | `tools.<name>.pretrust_worktrees` | `true` lets `serve` mark each seat's worktree as trusted in Claude Code's own state file before launch (see Sessions). Default `false`: nothing outside the state directory is written, and a trust dialog shows as `needs-input` |
 
 ## Item states

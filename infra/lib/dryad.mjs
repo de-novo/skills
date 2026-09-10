@@ -22,7 +22,7 @@ import { parse, stringify } from 'yaml';
 
 import { normalizeClaim, pathsOutsideScope } from './claims.mjs';
 import { parseProfile } from './profile.mjs';
-import { claudeSettings, seatActivity, seatEventsDirectory, seatEventsPath, seatSettingsPath } from './seat-events.mjs';
+import { claudeSettings, seatActivity, seatEventsDirectory, seatEventsPath, seatEvidencePath, seatSettingsPath } from './seat-events.mjs';
 
 export const DRYAD_PROFILE_RELPATH = '.agents/dryad-profile.yml';
 const RUNTIME_PROFILE_RELPATH = '.agents/runtime-profile.yml';
@@ -1052,6 +1052,7 @@ export function seatEnvironment(seat, id, project, environment = process.env) {
     DRYAD_PROJECT: project.root,
     DRYAD_SKILL: SKILL_PATH,
     DRYAD_EVENTS: seatEventsPath(project.slug, id, environment),
+    DRYAD_EVIDENCE: seatEvidencePath(project.slug, id, environment),
     DRYAD_CLAUDE_SETTINGS: seatSettingsPath(project.slug, id, environment),
   };
 }
@@ -1067,7 +1068,7 @@ export function prepareSeatEvents(slug, id, environment = process.env) {
 }
 
 export function removeSeatEvents(slug, id, environment = process.env) {
-  for (const file of [seatEventsPath(slug, id, environment), seatSettingsPath(slug, id, environment)]) {
+  for (const file of [seatEventsPath(slug, id, environment), seatSettingsPath(slug, id, environment), seatEvidencePath(slug, id, environment)]) {
     try { unlinkSync(file); } catch {}
   }
 }
@@ -1106,6 +1107,7 @@ function runSeat({ options, project, environment }) {
             result: seat.result ?? null,
             integration: seat.integration ?? null,
             env_vars: envVars,
+            evidence_file: envVars.DRYAD_EVIDENCE,
             skill: SKILL_PATH,
           },
           null,
@@ -1178,10 +1180,16 @@ export function parseEvidence(text, source = 'evidence') {
   return out;
 }
 
-function readEvidence(options, cwd) {
-  if (options.evidence == null) return null;
-  if (options.status !== 'done') fail('--evidence goes with --status done.');
-  const file = path.resolve(cwd, options.evidence);
+// --evidence names the file; without it, a done report reads the seat's
+// own evidence file (DRYAD_EVIDENCE) when the worker wrote one there.
+function readEvidence(options, cwd, project, environment) {
+  if (options.evidence != null && options.status !== 'done') fail('--evidence goes with --status done.');
+  let file = options.evidence == null ? null : path.resolve(cwd, options.evidence);
+  if (file == null && options.status === 'done') {
+    const own = seatEvidencePath(project.slug, options.id, environment);
+    if (existsSync(own)) file = own;
+  }
+  if (file == null) return null;
   if (!existsSync(file)) fail(`--evidence not found: ${file}`);
   return parseEvidence(readFileSync(file, 'utf8'), file);
 }
@@ -1210,7 +1218,7 @@ function doneResult(seat, id, options) {
 }
 
 function runReport({ options, project, environment, cwd }) {
-  const evidence = readEvidence(options, cwd);
+  const evidence = readEvidence(options, cwd, project, environment);
   const { state } = readDryadState(project.slug, environment);
   const current = seatOf(state, options.id);
   const result = options.status === 'done' ? doneResult(current, options.id, { evidence }) : null;
@@ -1252,7 +1260,7 @@ function runReport({ options, project, environment, cwd }) {
     console.error(`dryad: seat ${options.id} reported done with uncommitted changes; only what is committed at ${result.head.slice(0, 12)} can reach another seat.`);
   }
   if (result != null && result.evidence == null) {
-    console.error(`dryad: seat ${options.id} reported done without --evidence; the result stays unverified until a person checks it.`);
+    console.error(`dryad: seat ${options.id} reported done with no evidence file at ${seatEvidencePath(project.slug, options.id, environment)} and no --evidence; the result stays unverified until a person checks it.`);
   }
   if (options.status === 'done' && seat.session == null) {
     console.error(`dryad: seat ${options.id} has no session reference; if your tool exposes a session id or transcript path, run report --session <ref>.`);
@@ -1697,7 +1705,7 @@ usage:
                       [--revision TEXT] [--input ID=SHA ...] [--by LABEL] [--project ROOT] [--apply]
   ${cli} dryad seat   ID [--json | --env | --shell | --task] [--project ROOT]
   ${cli} dryad report ID --status working|blocked|done [--note TEXT] [--session REF] [--evidence PATH]
-                      [--accept-outside-scope] [--project ROOT]
+                      [--accept-outside-scope] [--project ROOT]   done reads DRYAD_EVIDENCE when --evidence is not passed
   ${cli} dryad integrate ID --commit SHA [--by LABEL] [--note TEXT] [--project ROOT] [--apply]
   ${cli} dryad status [ID] [--json] [--finished [--tail N]] [--project ROOT]
   ${cli} dryad diff ID [--json] [--project ROOT]    the seat's work as a patch against its base, committed or not, plus untracked files

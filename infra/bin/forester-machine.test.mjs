@@ -12,7 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse, stringify } from 'yaml';
 
-import { allocate, machineView, reserveSlots, slotsPath } from '../lib/forester.mjs';
+import { allocate, machineView, reclaimStaleSlots, reserveSlots, slotsPath } from '../lib/forester.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CLI = path.join(HERE, 'cli.mjs');
@@ -142,6 +142,10 @@ test('stale reservations are reclaimed without touching a live seat; unmanaged s
   a.good(['dryad', 'finish', 'alpha-one', '--apply']);
   writeFileSync(file, stringify({ version: 1, slots: { 'alpha/alpha-one': { ...old, at: new Date(Date.now() - 1000).toISOString() } } }));
   assert.deepEqual(machineView({ slug: 'alpha', environment: m.environment }).held, [], 'a seat finished after the reservation was taken releases it although the reserving process lives');
+  // serve drops it each poll instead of waiting for the next allocation.
+  assert.deepEqual(reclaimStaleSlots({ environment: m.environment }).dropped, ['alpha/alpha-one']);
+  assert.deepEqual(m.slots(), {});
+  assert.deepEqual(reclaimStaleSlots({ environment: m.environment }).dropped, []);
   writeFileSync(file, stringify({ version: 1, slots: {
     'alpha/alpha-two': { slug: 'alpha', id: 'alpha-two', pid: 2147483646, host: hostname(), at: '2026-09-10T00:00:00.000Z' },
     'ghost/ghost-one': { slug: 'ghost', id: 'ghost-one', pid: 2147483645, host: hostname(), at: '2026-09-10T00:00:00.000Z' },

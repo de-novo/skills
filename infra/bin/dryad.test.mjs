@@ -431,7 +431,8 @@ test('plan without --apply creates nothing; with --apply it creates a worktree s
   const json = JSON.parse(f.good(['seat', 'w1', '--json']).stdout);
   assert.equal(json.worktree, f.seatPath('w1'));
   const eventsFile = path.join(f.root, 'state/dryads/events', 'dryad-test', 'w1.events');
-  assert.deepEqual(json.env_vars, { DRYAD_ID: 'w1', DRYAD_ENV: '', DRYAD_BRANCH: 'dryad/w1', DRYAD_PROJECT: f.baseline, DRYAD_SKILL: SKILL, DRYAD_EVENTS: eventsFile, DRYAD_CLAUDE_SETTINGS: path.join(path.dirname(eventsFile), 'w1.claude-settings.json') });
+  assert.deepEqual(json.env_vars, { DRYAD_ID: 'w1', DRYAD_ENV: '', DRYAD_BRANCH: 'dryad/w1', DRYAD_PROJECT: f.baseline, DRYAD_SKILL: SKILL, DRYAD_EVENTS: eventsFile, DRYAD_EVIDENCE: path.join(path.dirname(eventsFile), 'w1.evidence.yml'), DRYAD_CLAUDE_SETTINGS: path.join(path.dirname(eventsFile), 'w1.claude-settings.json') });
+  assert.equal(json.evidence_file, json.env_vars.DRYAD_EVIDENCE);
   // plan --apply laid the events file and the Claude settings that append to it; status reads them back as activity.
   assert.equal(existsSync(eventsFile), true, 'events file laid by plan');
   const settings = JSON.parse(readFileSync(json.env_vars.DRYAD_CLAUDE_SETTINGS, 'utf8'));
@@ -467,7 +468,7 @@ test('plan without --apply creates nothing; with --apply it creates a worktree s
   assert.equal(existsSync(json.skill), true, 'the seat points at a skill file that exists');
   assert.equal(f.good(['seat', 'w1', '--task']).stdout, 'add refund endpoint\n');
   const envLines = f.good(['seat', 'w1', '--env']).stdout.trim().split('\n');
-  assert.equal(envLines.length, 7);
+  assert.equal(envLines.length, 8);
   assert.ok(envLines.includes('DRYAD_ID=w1'));
 
   // The launcher boundary: the --shell line, executed by a real shell, lands
@@ -477,7 +478,7 @@ test('plan without --apply creates nothing; with --apply it creates a worktree s
   assert.equal(probe.status, 0, probe.stderr);
   const probeLines = probe.stdout.trim().split('\n');
   assert.equal(realpathSync(probeLines[0]), f.seatPath('w1'));
-  assert.deepEqual(probeLines.slice(1), ['DRYAD_BRANCH=dryad/w1', `DRYAD_CLAUDE_SETTINGS=${json.env_vars.DRYAD_CLAUDE_SETTINGS}`, 'DRYAD_ENV=', `DRYAD_EVENTS=${eventsFile}`, 'DRYAD_ID=w1', `DRYAD_PROJECT=${f.baseline}`, `DRYAD_SKILL=${SKILL}`]);
+  assert.deepEqual(probeLines.slice(1), ['DRYAD_BRANCH=dryad/w1', `DRYAD_CLAUDE_SETTINGS=${json.env_vars.DRYAD_CLAUDE_SETTINGS}`, 'DRYAD_ENV=', `DRYAD_EVENTS=${eventsFile}`, `DRYAD_EVIDENCE=${json.env_vars.DRYAD_EVIDENCE}`, 'DRYAD_ID=w1', `DRYAD_PROJECT=${f.baseline}`, `DRYAD_SKILL=${SKILL}`]);
 
   // A worker inside the worktree resolves the baseline through DRYAD_PROJECT
   // (the worktree carries its own copy of .agents/).

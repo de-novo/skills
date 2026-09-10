@@ -599,6 +599,23 @@ export function machineView({ slug = null, environment = process.env } = {}) {
   return { parallel, held, held_by_others: heldByOthers, stale, unmanaged };
 }
 
+// Drop every stale reservation now, under the lock, touching no seat. serve
+// calls this each poll so a slot a finished seat held is free within one
+// poll and never waits for the next allocation to notice.
+export function reclaimStaleSlots({ environment = process.env } = {}) {
+  const file = slotsPath(environment);
+  if (!existsSync(file)) return { dropped: [] };
+  const release = acquireStateLock(file, 2000);
+  try {
+    const { slots } = readSlots(environment);
+    const { live, stale } = slotLiveness(slots, environment);
+    if (stale.length > 0) atomicWrite(file, stringify({ version: MACHINE_VERSION, slots: live }));
+    return { dropped: stale.map((row) => row.key) };
+  } finally {
+    release();
+  }
+}
+
 // Take slots for the given seats, in order, up to the cap less what other
 // projects hold, all under one lock on the slots file, so two projects
 // allocating at once never share a slot. Stale reservations are dropped in
@@ -767,7 +784,7 @@ export function renderHandoff({ item, project, observed, briefs }) {
     for (const command of item.verify) lines.push(`  - ${command}`);
   }
   lines.push(
-    `Report: de-novo skills dryad report ${item.id} --status done --evidence <file> after committing on your branch; the rules are in $DRYAD_SKILL under "Rules for a seated worker".`,
+    `Report: write your evidence file at $DRYAD_EVIDENCE (checks: command, cwd, exit, observed; not_measured: boundary, reason), commit on your branch, then de-novo skills dryad report ${item.id} --status done; the rules are in $DRYAD_SKILL under "Rules for a seated worker". Run each command on its own line: a compound line is one a launcher's allow list cannot match.`,
   );
   if (brief != null) {
     lines.push('', `Brief (${brief.path}, sha256:${brief.digest.slice(0, 12)}):`, '', brief.text.trimEnd());

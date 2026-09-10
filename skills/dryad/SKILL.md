@@ -36,7 +36,12 @@ de-novo skills dryad seat "$DRYAD_ID" --task    # the task text alone
 
 `DRYAD_PROJECT` is the baseline checkout; every Dryad command you run from
 the worktree resolves the project through it. `DRYAD_ENV` is empty when the
-project has no overlays. If `DRYAD_ID` is unset, this section does not apply.
+project has no overlays. `DRYAD_EVIDENCE` is the file your done report
+reads. If `DRYAD_ID` is unset, this section does not apply.
+
+Run each of these as its own command, and keep doing so: a launcher's
+allow list matches one command, and a line that chains several with `;`
+or `&&` stops you on a prompt a person has to answer.
 
 ## Rules for a seated worker
 
@@ -55,11 +60,12 @@ project has no overlays. If `DRYAD_ID` is unset, this section does not apply.
    present tense. When Forester's `serve` holds your session, the person
    also sees your tool stream ("now Edit app/api/server.mjs"); your notes
    say *why*, which the stream cannot.
-4. When done: commit on your branch, then run `report --status done
-   --evidence <file>` and stop. The evidence file lists each check you ran
-   (command, cwd, exit, observed count) and each boundary you did not
-   measure with its reason; done records your head and holds the paths
-   you touched against the seat's scope, so a change outside it is refused
+4. When done: write your evidence file at `$DRYAD_EVIDENCE` (each check
+   you ran with command, cwd, exit, observed count; each boundary you did
+   not measure with its reason), commit on your branch, then run `report
+   --status done` and stop. The report reads that file; `--evidence
+   <path>` names another. Done records your head and holds the paths you
+   touched against the seat's scope, so a change outside it is refused
    until a person accepts it. Only what is committed reaches anyone else.
    Do not push, merge, or call `finish`. Those belong to the human.
 5. Before `report --status done`, check whether your tool exposes a session

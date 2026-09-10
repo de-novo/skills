@@ -115,7 +115,7 @@ de-novo skills dryad projects [--json]
 | --- | --- | --- |
 | plan | prints worktree, branch, base, attempt, scope, env; creates nothing | `git worktree add` (or adopt `--worktree`), `overlay create` when the profile has overlays, register the seat. Attempt 1 takes the profile's branch template; attempt n takes `<template>-n`, and earlier branches are kept. A branch that already exists is refused by name, never overwritten. `--resume` continues the previous attempt on its own branch with its base unchanged. The slug must be bound to this repository (below) |
 | seat | always read-only: the seat for a launcher | — |
-| report | always writes the worker's status and a journal line. `done` also reads the seat's head, cleanliness, and touched paths into `result`, records `--evidence`, and holds the paths against the scope: a done that touched a path outside it is refused with the paths named (journalled as `report.refused`, status unchanged) until a person passes `--accept-outside-scope`. Done with uncommitted changes, or without evidence, is recorded and warned about, not refused | — |
+| report | always writes the worker's status and a journal line. `done` also reads the seat's head, cleanliness, and touched paths into `result`, records the evidence file (`--evidence <path>`, else the seat's own `DRYAD_EVIDENCE` file when it exists), and holds the paths against the scope: a done that touched a path outside it is refused with the paths named (journalled as `report.refused`, status unchanged) until a person passes `--accept-outside-scope`. Done with uncommitted changes, or without evidence, is recorded and warned about, not refused | — |
 | integrate | prints what would be recorded | records on the live seat, or the latest finished record of that id, the commit a squash or rebase gave its done result. A ref that is not a commit of this repository is refused |
 | status | always read-only: counts and problems; non-zero on any problem. `--finished --tail N` reads the newest N archived records and says the total, so a reader knows the view is partial. Counts every worktree of the repository (`worktrees n (m unseated)`) and the paths two seats both hold (`overlaps n`, then one `overlap <path> <id> · <id>` line each). With `overlay.create_on: attach` a seat's env shows `unattached` until its first attach and is not a problem. Another seat's in-flight overlay mutation is shown as `in-flight`, not counted as a problem; a stalled one is. An overlap is a fact, not a problem: it never changes the exit code | — |
 | diff | always read-only: the seat's whole difference from its base as one patch (`git diff <base>` in the worktree, so committed and uncommitted alike), then `untracked: <path>` lines; `--json` prints `{ id, worktree, base, head, patch, untracked, truncated }`, the patch capped at 512 KiB | — |
@@ -161,9 +161,14 @@ Seat environment: `DRYAD_ID`, `DRYAD_ENV` (empty without overlays),
 `DRYAD_BRANCH`, `DRYAD_PROJECT`, `DRYAD_SKILL` (the path to this skill's
 SKILL.md inside the installed catalog, so the project need not vendor or
 symlink it), `DRYAD_EVENTS` (the seat's events file, which the agent
-tools' hooks append to), and `DRYAD_CLAUDE_SETTINGS` (a hooks file a
-Claude Code launcher passes as `--settings`). `plan --apply` lays the two
-files under `<state>/dryads/events/<slug>/`; `finish` removes them. Any
+tools' hooks append to), `DRYAD_EVIDENCE` (`<id>.evidence.yml` beside it:
+the file a done report reads when `--evidence` is not passed, so a worker
+never guesses where to put it and never writes it into a worktree, where
+it would fall outside the scope), and `DRYAD_CLAUDE_SETTINGS` (a hooks
+file a Claude Code launcher passes as `--settings`). `plan --apply` lays
+the events and settings files under `<state>/dryads/events/<slug>/`; the
+worker writes the evidence file; `finish` removes all three. `seat --json`
+names the evidence file as `evidence_file`. Any
 launcher that starts a tool with this environment, and `forester hooks
 --apply` once per machine for tools other than Claude Code, gets the
 seat's activity read back by `status`. The task text is not an environment variable; launchers read it

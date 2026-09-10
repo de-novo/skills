@@ -219,6 +219,24 @@ test('F01: done with uncommitted changes, or a worktree that moved after done, i
   assert.match(shape.why, /moved to .*report again/);
 });
 
+test('a seat has one evidence file, named by its environment and the handoff; a done report reads it without --evidence', (t) => {
+  const f = fixture(t);
+  f.good(['forester', 'assign', '--apply']);
+  const seat = f.json(['dryad', 'seat', 'define-shape']);
+  assert.equal(seat.evidence_file, seat.env_vars.DRYAD_EVIDENCE);
+  assert.match(seat.evidence_file, /\/define-shape\.evidence\.yml$/);
+  assert.equal(existsSync(seat.evidence_file), false, 'the worker writes it; Dryad does not');
+  assert.match(f.good(['dryad', 'seat', 'define-shape', '--task']).stdout, /write your evidence file at \$DRYAD_EVIDENCE/);
+  assert.match(f.good(['dryad', 'seat', 'define-shape', '--task']).stdout, /Run each command on its own line/);
+  writeFileSync(seat.evidence_file, stringify({ checks: [{ command: 'npm test', exit: 0, observed: '3/3' }] }));
+  const report = f.good(['dryad', 'report', 'define-shape', '--status', 'done']);
+  assert.doesNotMatch(report.stderr, /unverified/);
+  assert.equal(f.json(['dryad', 'status']).seats[0].result.evidence.checks[0].command, 'npm test');
+  assert.equal(f.item('define-shape').verification, 'verified');
+  f.good(['dryad', 'finish', 'define-shape', '--apply']);
+  assert.equal(existsSync(seat.evidence_file), false, 'finish removes it with the seat');
+});
+
 test('F03/WP-03: evidence is recorded as given and shown as unverified when absent', (t) => {
   const f = fixture(t);
   f.good(['forester', 'assign', '--apply']);
