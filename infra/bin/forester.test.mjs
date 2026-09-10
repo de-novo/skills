@@ -20,7 +20,7 @@ import {
   resolveBudget,
 } from '../lib/forester.mjs';
 import { claudeSettings, doingFromEvents, launchCommand, screenAsksForInput, seedClaudeTrust, stateFromEvents } from '../lib/forester-serve.mjs';
-import { HOOK_MARKER, applyHooks, hookStores, renderStore } from '../lib/forester-hooks.mjs';
+import { HOOK_MARKER, TRUST_MARKER, applyHooks, codexHookHash, hookStores, renderCodexTrust, renderStore } from '../lib/forester-hooks.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CLI = path.join(HERE, 'cli.mjs');
@@ -428,6 +428,11 @@ test('hooks installs one marked entry per event in each tool store, keeps the pe
   mkdirSync(path.join(home, '.grok'), { recursive: true });
   writeFileSync(path.join(home, '.cursor/hooks.json'), JSON.stringify({ hooks: { stop: [{ command: 'their-stop.sh', timeout: 5 }] }, version: 1 }));
   writeFileSync(path.join(home, '.codex/hooks.json'), JSON.stringify({ hooks: { Stop: [{ matcher: '', hooks: [{ type: 'command', command: 'theirs' }] }] } }));
+  // Codex trusts a handler only against a hash it keeps in config.toml; a
+  // person had trusted their own Stop hook, and, say, ours for PreToolUse.
+  const codexConfig = path.join(home, '.codex/config.toml');
+  const theirTrust = `[features]\nmemories = true\n\n[hooks.state."${path.join(home, '.codex/hooks.json')}:stop:0:0"]\ntrusted_hash = "sha256:theirs"\n`;
+  writeFileSync(codexConfig, theirTrust);
   rows = applyHooks({ environment });
   assert.deepEqual(rows.map((row) => [row.tool, row.before, row.action]), [
     ['codex', 'present', 'would install'], ['grok', 'absent', 'would install'], ['cursor-agent', 'present', 'would install'], ['opencode', 'absent', 'skip: tool not installed'],
@@ -436,6 +441,21 @@ test('hooks installs one marked entry per event in each tool store, keeps the pe
 
   rows = applyHooks({ environment, apply: true });
   assert.deepEqual(rows.map((row) => row.action), ['installed', 'installed', 'installed', 'skip: tool not installed']);
+  // Trust records for exactly our five Codex handlers, after the person's own table, which is kept as it was.
+  const trusted = readFileSync(codexConfig, 'utf8');
+  assert.ok(trusted.startsWith(theirTrust), 'the person\'s config is the prefix, byte for byte');
+  assert.equal((trusted.match(new RegExp(`# ${TRUST_MARKER}`, 'g')) ?? []).length, 5);
+  assert.match(trusted, new RegExp(`\\[hooks\\.state\\."${path.join(home, '.codex/hooks.json').replaceAll('/', '\\/')}:stop:1:0"\\]\\ntrusted_hash = "${codexHookHash('Stop', { command: 'x', timeout: 10 }).slice(0, 7)}`), 'our Stop handler is group 1 after the person\'s group 0');
+  assert.match(rows[0].trust, /5 trust records in .*config\.toml/);
+  // The hash is Codex's own recipe: the normalized identity as canonical JSON, sha256.
+  // Pinned from an independent implementation that matched four handlers Codex had trusted itself (2026-09-10).
+  const ourStop = JSON.parse(readFileSync(path.join(home, '.codex/hooks.json'), 'utf8')).hooks.Stop[1].hooks[0];
+  assert.equal(codexHookHash('Stop', ourStop), 'sha256:3d77284b9c368a202db95f330184a6c8c04dc01aa95c8bf6f65ee19a63d37a6c');
+  assert.equal(codexHookHash('SessionEnd', { command: 'x' }), codexHookHash('SessionEnd', { command: 'x', timeout: 1 }), 'SessionEnd defaults to one second');
+  assert.notEqual(codexHookHash('Stop', { command: 'x' }), codexHookHash('Stop', { command: 'x', timeout: 10 }));
+  // A key the person already trusts is left alone; removal returns the file to its bytes.
+  assert.equal(renderCodexTrust('[hooks.state."k:stop:0:0"]\ntrusted_hash = "sha256:theirs"\n', [{ key: 'k:stop:0:0', hash: 'sha256:ours' }]), '[hooks.state."k:stop:0:0"]\ntrusted_hash = "sha256:theirs"\n');
+  assert.equal(renderCodexTrust(renderCodexTrust('a = 1\n', [{ key: 'k:stop:0:0', hash: 'sha256:ours' }]), [], { remove: true }), 'a = 1\n');
   const cursor = JSON.parse(readFileSync(path.join(home, '.cursor/hooks.json'), 'utf8'));
   assert.equal(cursor.version, 1);
   assert.deepEqual(cursor.hooks.stop[0], { command: 'their-stop.sh', timeout: 5 });
@@ -478,6 +498,7 @@ test('hooks installs one marked entry per event in each tool store, keeps the pe
   assert.deepEqual(rows.map((row) => row.action), ['already installed', 'already installed', 'already installed', 'skip: tool not installed']);
   rows = applyHooks({ environment, apply: true, remove: true });
   assert.deepEqual(rows.map((row) => row.action), ['removed', 'removed', 'removed', 'skip: tool not installed']);
+  assert.equal(readFileSync(codexConfig, 'utf8'), theirTrust, 'the trust records are taken back and the person\'s config is what it was');
   assert.deepEqual(JSON.parse(readFileSync(path.join(home, '.cursor/hooks.json'), 'utf8')), { hooks: { stop: [{ command: 'their-stop.sh', timeout: 5 }] }, version: 1 });
   assert.deepEqual(JSON.parse(readFileSync(path.join(home, '.codex/hooks.json'), 'utf8')), { hooks: { Stop: [{ matcher: '', hooks: [{ type: 'command', command: 'theirs' }] }] } });
   assert.equal(existsSync(path.join(home, '.grok/hooks/de-novo-forester.json')), false);

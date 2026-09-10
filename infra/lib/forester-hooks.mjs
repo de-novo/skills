@@ -9,9 +9,10 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 export const HOOK_MARKER = 'de-novo forester hook';
+export const TRUST_MARKER = 'de-novo forester hook trust';
 
 function fail(message) {
   throw new Error(`forester: ${message}`);
@@ -90,6 +91,92 @@ export default {
   },
 };
 `;
+
+// ------------------------------------------------------------- codex trust
+
+// Codex runs a user-level hook only after a person has trusted that exact
+// handler: it keeps `[hooks.state."<hooks.json>:<event>:<group>:<handler>"]
+// trusted_hash = "sha256:…"` in config.toml and skips a handler whose hash
+// is missing or differs (codex-rs/hooks/src/engine/discovery.rs,
+// hook_hash; codex-rs/config/src/fingerprint.rs, version_for_toml). The
+// hash is over the normalized identity {event_name, hooks:[handler]} as
+// canonical JSON, which this reproduces; it matched four handlers Codex
+// itself had trusted on the machine it was written on (2026-09-10).
+// hooks --apply records trust for exactly the entries it installed, and
+// --remove takes those records back; a table a person wrote is never
+// touched, and a key that already has one is left alone.
+const CODEX_EVENT_LABELS = Object.freeze({
+  UserPromptSubmit: 'user_prompt_submit',
+  PreToolUse: 'pre_tool_use',
+  PostToolUse: 'post_tool_use',
+  PermissionRequest: 'permission_request',
+  Stop: 'stop',
+  SessionEnd: 'session_end',
+});
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return value.map(canonicalJson);
+  if (value != null && typeof value === 'object') {
+    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalJson(value[key])]));
+  }
+  return value;
+}
+
+// The trust hash for one command handler, normalized the way Codex does
+// before hashing: timeout as given (default 600, or 1 for SessionEnd),
+// async false, no matcher.
+export function codexHookHash(event, handler) {
+  const label = CODEX_EVENT_LABELS[event];
+  if (label == null) fail(`no Codex event label for ${event}.`);
+  const timeout = handler.timeout ?? (event === 'SessionEnd' ? 1 : 600);
+  const identity = { event_name: label, hooks: [{ type: 'command', command: handler.command, timeout, async: false }] };
+  return `sha256:${createHash('sha256').update(JSON.stringify(canonicalJson(identity))).digest('hex')}`;
+}
+
+// The trust records the rendered store needs: one per handler of ours.
+export function codexTrustRecords(store, renderedText) {
+  const doc = parseJson(renderedText, store.file);
+  const records = [];
+  for (const [event, groups] of Object.entries(doc.hooks ?? {})) {
+    if (!Array.isArray(groups) || CODEX_EVENT_LABELS[event] == null) continue;
+    groups.forEach((group, groupIndex) => {
+      (group.hooks ?? []).forEach((handler, handlerIndex) => {
+        if (!isOurs(handler)) return;
+        records.push({ key: `${store.file}:${CODEX_EVENT_LABELS[event]}:${groupIndex}:${handlerIndex}`, hash: codexHookHash(event, handler) });
+      });
+    });
+  }
+  return records;
+}
+
+function tomlKey(key) {
+  return `[hooks.state.${JSON.stringify(key)}]`;
+}
+
+// config.toml with our trust tables replaced: every block we marked is
+// dropped, then, unless removing, one block per record is appended for a
+// key the file does not already hold. Textual on purpose: the rest of the
+// file is a person's and is copied byte for byte.
+const TRUST_BLOCK = new RegExp(`\\n# ${TRUST_MARKER}\\n\\[hooks\\.state\\."[^"\\n]*"\\]\\ntrusted_hash = "[^"\\n]*"\\n`, 'g');
+
+export function renderCodexTrust(currentText, records, { remove = false } = {}) {
+  // Every block of ours is one leading newline and three lines, so taking
+  // them back returns the file to its bytes. A file that did not end in a
+  // newline gets one before the first block and keeps it after removal.
+  let text = (currentText ?? '').replace(TRUST_BLOCK, '');
+  if (remove) return text;
+  const additions = records.filter((record) => !text.includes(tomlKey(record.key)));
+  if (additions.length === 0) return text;
+  if (text.length > 0 && !text.endsWith('\n')) text += '\n';
+  for (const record of additions) {
+    text += `\n# ${TRUST_MARKER}\n${tomlKey(record.key)}\ntrusted_hash = ${JSON.stringify(record.hash)}\n`;
+  }
+  return text;
+}
+
+function codexConfigFile(store) {
+  return path.join(path.dirname(store.file), 'config.toml');
+}
 
 // ------------------------------------------------------------------ stores
 
@@ -220,7 +307,18 @@ export function applyHooks({ environment = process.env, apply = false, remove = 
     }
     const current = existsSync(store.file) ? readFileSync(store.file, 'utf8') : '';
     const next = renderStore(store, current, { remove });
-    const unchanged = next == null ? !existsSync(store.file) : existsSync(store.file) && current === next;
+    // Codex: the trust records for our entries live in config.toml beside
+    // the store; they change with the store and are reported with it.
+    let trust = null;
+    if (store.tool === 'codex') {
+      const configFile = codexConfigFile(store);
+      const configText = existsSync(configFile) ? readFileSync(configFile, 'utf8') : '';
+      const records = remove ? [] : codexTrustRecords(store, next ?? '');
+      const configNext = renderCodexTrust(configText, records, { remove });
+      trust = { file: configFile, records: records.length, changed: configNext !== configText, next: configNext };
+      row.trust = `${remove ? 'trust records removed from' : `${records.length} trust record${records.length === 1 ? '' : 's'} in`} ${configFile}`;
+    }
+    const unchanged = (next == null ? !existsSync(store.file) : existsSync(store.file) && current === next) && !(trust?.changed);
     if (unchanged) {
       row.action = remove ? 'nothing to remove' : 'already installed';
       rows.push(row);
@@ -230,6 +328,7 @@ export function applyHooks({ environment = process.env, apply = false, remove = 
     if (apply) {
       if (next == null) unlinkSync(store.file);
       else atomicWrite(store.file, next);
+      if (trust?.changed) atomicWrite(trust.file, trust.next);
       row.after = storeState(store);
     }
     rows.push(row);
@@ -240,7 +339,10 @@ export function applyHooks({ environment = process.env, apply = false, remove = 
 export function formatHooksReport(rows, { apply, remove }) {
   const width = Math.max(...rows.map((row) => row.tool.length));
   const lines = [`■ forester hooks${remove ? ' --remove' : ''}${apply ? ' --apply' : ''}`];
-  for (const row of rows) lines.push(`  ${row.tool.padEnd(width)}  ${row.before.padEnd(9)}  ${row.action.padEnd(22)}  ${row.file}`);
+  for (const row of rows) {
+    lines.push(`  ${row.tool.padEnd(width)}  ${row.before.padEnd(9)}  ${row.action.padEnd(22)}  ${row.file}`);
+    if (row.trust) lines.push(`  ${' '.repeat(width)}  ${row.trust}`);
+  }
   const acted = rows.filter((row) => ['installed', 'updated', 'removed'].includes(row.action)).length;
   const would = rows.filter((row) => row.action.startsWith('would')).length;
   lines.push(apply ? `  ${remove ? 'removed' : 'installed'} ${acted}/${rows.length}` : `  would change ${would}/${rows.length}; rerun with --apply`);
