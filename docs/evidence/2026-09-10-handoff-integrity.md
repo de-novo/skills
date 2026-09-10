@@ -345,8 +345,12 @@ validate skills/grove/examples/*          2/2
 bash -n infra/bin/provision               exit 0
 ```
 
-Still not measured, and a person's to decide: the CI matrix on real
-runners (the macOS job was added, not run); a cold-session count of the
+CI on real runners, after the branch was pushed (run 34433021999):
+`test (ubuntu-latest)` 321/321 in 146 s and `test (macos-latest)`
+321/321 in 163 s, both on Node 24, with `doctor --json` and `herbarium
+check` (links 237/237) after the suite.
+
+Still not measured, and a person's to decide: a cold-session count of the
 questions an agent asks on a complete brief; a real Claude Code or Codex
 session through the trust dialog under serve; npm publishing.
 
