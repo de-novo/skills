@@ -123,7 +123,7 @@ test('stale reservations are reclaimed without touching a live seat; unmanaged s
   writeFileSync(file, stringify({ version: 1, slots: {
     'alpha/alpha-two': { slug: 'alpha', id: 'alpha-two', pid: 2147483646, host: hostname(), at: '2026-09-10T00:00:00.000Z' },
     'ghost/ghost-one': { slug: 'ghost', id: 'ghost-one', pid: 2147483645, host: hostname(), at: '2026-09-10T00:00:00.000Z' },
-    'alpha/alpha-three': { slug: 'alpha', id: 'alpha-three', pid: process.pid, host: hostname(), at: '2026-09-10T00:00:00.000Z' },
+    'alpha/alpha-three': { slug: 'alpha', id: 'alpha-three', pid: process.pid, host: hostname(), at: new Date().toISOString() },
   } }));
   const view = machineView({ slug: 'alpha', environment: m.environment });
   assert.deepEqual(view.stale.map((row) => row.key).sort(), ['alpha/alpha-two', 'ghost/ghost-one'], 'dead owners with no seat are stale');
@@ -131,6 +131,22 @@ test('stale reservations are reclaimed without touching a live seat; unmanaged s
   assert.deepEqual(view.unmanaged, [{ slug: 'alpha', id: 'stray' }]);
   assert.equal(view.held_by_others, 0, 'stale reservations hold nothing');
   assert.match(m.cli(['forester', 'machine']).stdout, /unmanaged 1 live seat no reservation names \(shown, not counted\)\n    alpha\/stray/);
+
+  // An in-flight reservation is bounded in time, and one whose seat was
+  // finished after it was taken is stale even while its owner lives: a
+  // serve daemon reserves, plans, and outlives the seat (seen 2026-09-10).
+  const old = { slug: 'alpha', id: 'alpha-one', pid: process.pid, host: hostname(), at: new Date(Date.now() - 10 * 60 * 1000).toISOString() };
+  writeFileSync(file, stringify({ version: 1, slots: { 'alpha/alpha-one': old, 'alpha/alpha-three': { slug: 'alpha', id: 'alpha-three', pid: process.pid, host: hostname(), at: new Date().toISOString() } } }));
+  assert.deepEqual(machineView({ slug: 'alpha', environment: m.environment }).stale.map((row) => row.key), ['alpha/alpha-one'], 'ten minutes is past in flight');
+  a.good(['dryad', 'plan', 'alpha-one', '--task', 'by hand', '--apply']);
+  a.good(['dryad', 'finish', 'alpha-one', '--apply']);
+  writeFileSync(file, stringify({ version: 1, slots: { 'alpha/alpha-one': { ...old, at: new Date(Date.now() - 1000).toISOString() } } }));
+  assert.deepEqual(machineView({ slug: 'alpha', environment: m.environment }).held, [], 'a seat finished after the reservation was taken releases it although the reserving process lives');
+  writeFileSync(file, stringify({ version: 1, slots: {
+    'alpha/alpha-two': { slug: 'alpha', id: 'alpha-two', pid: 2147483646, host: hostname(), at: '2026-09-10T00:00:00.000Z' },
+    'ghost/ghost-one': { slug: 'ghost', id: 'ghost-one', pid: 2147483645, host: hostname(), at: '2026-09-10T00:00:00.000Z' },
+    'alpha/alpha-three': { slug: 'alpha', id: 'alpha-three', pid: process.pid, host: hostname(), at: new Date().toISOString() },
+  } }));
 
   const reserved = reserveSlots({ slug: 'alpha', ids: ['alpha-one', 'alpha-two', 'alpha-three'], environment: m.environment });
   assert.deepEqual(reserved.granted, ['alpha-one', 'alpha-three'], 'the in-flight reservation is kept, one more fits, the third is refused');

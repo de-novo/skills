@@ -349,3 +349,11 @@ Still not measured, and a person's to decide: the CI matrix on real
 runners (the macOS job was added, not run); a cold-session count of the
 questions an agent asks on a complete brief; a real Claude Code or Codex
 session through the trust dialog under serve; npm publishing.
+
+## After the pilot
+
+[The pilot](2026-09-10-pilot-handoff.md) ran two real seats through the
+whole path and found one defect: a finished seat's machine reservation
+stayed held while the serve daemon that took it lived. The in-flight
+rule is now bounded by age and by the finished archive; the regression
+turns red when the bound is reverted (1).

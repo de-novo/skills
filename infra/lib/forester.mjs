@@ -521,12 +521,21 @@ function processAlive(pid) {
   }
 }
 
+// A reservation whose seat is not in the registry yet is in flight only
+// for this long: the reserving process may be a daemon that lives on
+// long after the seat was planned and finished, so its liveness alone
+// cannot hold the slot (seen 2026-09-10: a finished seat's reservation
+// held by a running serve).
+const IN_FLIGHT_MS = 120000;
+
 // Whether each reservation still counts: its seat is live and not done,
-// or the seat is not there yet and the process that reserved it is still
-// alive on this host (it is between the reservation and the plan).
-// Registries are read once per slug.
-function slotLiveness(slots, environment) {
+// or the seat is not there yet, nothing with its id has been finished
+// since it was taken, the process that reserved it is still alive on this
+// host, and it is younger than IN_FLIGHT_MS (it is between the reservation
+// and the plan). Registries are read once per slug.
+function slotLiveness(slots, environment, now = Date.now()) {
   const registries = new Map();
+  const archives = new Map();
   const seatsOf = (slug) => {
     if (!registries.has(slug)) {
       let seats = {};
@@ -539,12 +548,25 @@ function slotLiveness(slots, environment) {
     }
     return registries.get(slug);
   };
+  const finishedSince = (slug, id, at) => {
+    if (!archives.has(slug)) {
+      let seats = [];
+      try {
+        seats = readDryadFinished(slug, environment).seats;
+      } catch {
+        seats = [];
+      }
+      archives.set(slug, seats);
+    }
+    return archives.get(slug).some((record) => record.id === id && typeof record.finished_at === 'string' && record.finished_at >= at);
+  };
   const live = {};
   const stale = [];
   for (const [key, slot] of Object.entries(slots)) {
     const wellFormed = isMap(slot) && typeof slot.slug === 'string' && typeof slot.id === 'string';
     const seat = wellFormed ? seatsOf(slot.slug)[slot.id] ?? null : null;
-    const inFlight = wellFormed && seat == null && slot.host === hostname() && Number.isInteger(slot.pid) && processAlive(slot.pid);
+    const age = typeof slot?.at === 'string' ? now - Date.parse(slot.at) : Infinity;
+    const inFlight = wellFormed && seat == null && age < IN_FLIGHT_MS && !finishedSince(slot.slug, slot.id, slot.at) && slot.host === hostname() && Number.isInteger(slot.pid) && processAlive(slot.pid);
     if ((seat != null && seat.status !== 'done') || inFlight) live[key] = slot;
     else stale.push({ key, ...(isMap(slot) ? slot : {}) });
   }

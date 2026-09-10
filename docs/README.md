@@ -96,6 +96,10 @@ the record is not operating authority.
 - [Handoff scenarios](evaluation/2026-09-10-handoff-scenarios.md): the
   brief's acceptance scenarios, each pointed at the test that measures it
   or marked not measured, with first metric readings.
+- [The handoff pilot](evidence/2026-09-10-pilot-handoff.md): two real
+  Claude Code seats held by serve on the playground sample; the trust
+  dialog answered by a person, the dependent item waiting until the merge,
+  evidence recorded, one defect found and fixed.
 - [Handoff integrity](evidence/2026-09-10-handoff-integrity.md): task
   revisions, done results held against scope, the integration gate a
   dependent item waits on, attempt branches, and no trust seeded by

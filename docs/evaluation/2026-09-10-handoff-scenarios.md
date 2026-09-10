@@ -10,7 +10,7 @@ are correctness bars to keep, not achievements to claim.
 | Scenario | Bar | Measured by |
 | --- | --- | --- |
 | A fresh install | gaps and compatibility named, no unapproved mutation | `doctor.test.mjs`: a tree digest equal before and after `doctor`; states per values file; the plugin version equals the package version |
-| A document edit with a complete brief | only the needed path runs, no stack, daemon, or question | not measured by a test: the Forester skill's "Specify first" is prose; a cold-session evaluation is the way to count questions |
+| A document edit with a complete brief | only the needed path runs, no stack, daemon, or question | [the pilot](../evidence/2026-09-10-pilot-handoff.md): two seats on complete briefs asked no interview question; the Forester interview itself was not run |
 | Two independent items | no scope conflict, verified in two worktrees | `forester.test.mjs` (claims hold), `integrity.test.mjs` F07 (a done outside the scope is refused) |
 | B needs A's result | no start before the result is in B's base; start on the right ref | `integrity.test.mjs` F01: waiting until merged or integrated, then B's base holds A's commit and B's `inputs` name it |
 | A new plan reuses an old task id | no inherited done | `integrity.test.mjs` F02, `forester.test.mjs` (attempts per revision) |
@@ -32,8 +32,8 @@ here generalizes one tool's dialogs to another's.
 
 | Metric | Where it is counted | First reading |
 | --- | --- | --- |
-| Questions before a task starts | not counted by the suite | none yet |
-| Dependents started with the right input | `integrity.test.mjs` F01 | 1/1 in the fixture, and 0 started early |
+| Questions before a task starts | [the pilot](../evidence/2026-09-10-pilot-handoff.md) | 0 interview questions on complete briefs; 1 trust dialog and 1 permission prompt per seat reached a person |
+| Dependents started with the right input | `integrity.test.mjs` F01; the pilot | 1/1 in the fixture and 1/1 in the pilot, 0 started early |
 | Wrong done verdicts | `integrity.test.mjs` F02 | 0 in the fixture |
 | Duplicate daemons | `forester-serve.test.mjs` | 0 of 2 starts |
 | Orphan worktrees or envs | `dryad.test.mjs` finish paths | unchanged from before |
