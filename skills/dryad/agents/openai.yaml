@@ -1,3 +1,0 @@
-interface:
-  display_name: "Seat (Dryad)"
-  short_description: "One agent seat: worktree, overlay env, task, journal. No launch"

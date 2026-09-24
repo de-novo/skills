@@ -28,7 +28,7 @@ export function parseCanopyArgs(args) {
 }
 
 // Asynchronous, shell-free, and bounded in time and output. A nonzero status
-// with a JSON report is useful evidence (for example, a blocked Dryad seat).
+// with a JSON report is useful evidence (for example, a blocked Seat seat).
 // How many finished records a project's card shows; the archive's total is
 // shown beside it so a partial view says so.
 const FINISHED_TAIL = 20;
@@ -83,15 +83,15 @@ export function cliJson(args, { cli = CLI, environment = process.env, timeoutMs 
 }
 
 // The sole discovery call site. Tests can substitute the agreed CLI fixture
-// until dryad projects lands; production always uses the public catalog CLI.
+// until seat projects lands; production always uses the public catalog CLI.
 export function discoverProjects(options = {}) {
-  return cliJson(['dryad', 'projects', '--json'], { ...options, cli: options.projectsCli ?? CLI });
+  return cliJson(['seat', 'projects', '--json'], { ...options, cli: options.projectsCli ?? CLI });
 }
 
 export async function collectState(options = {}) {
   const discovery = await discoverProjects(options);
   if (discovery.error || !Array.isArray(discovery.projects)) {
-    return { updated_at: new Date().toISOString(), projects: [], error: discovery.error ?? 'dryad projects returned no projects list' };
+    return { updated_at: new Date().toISOString(), projects: [], error: discovery.error ?? 'seat projects returned no projects list' };
   }
   const projects = [];
   // Limit process fan-out on machines with many registered projects.
@@ -102,25 +102,25 @@ export async function collectState(options = {}) {
       const project = discovery.projects[index];
       try {
         if (!project || typeof project.root !== 'string') throw new Error('project root is missing');
-        // Dryad's status already asked Grove once and carries the report;
-        // Grove is asked again only by a Dryad old enough not to carry it.
+        // Seat's status already asked Ground once and carries the report;
+        // Ground is asked again only by a Seat old enough not to carry it.
         const [live, archive] = await Promise.all([
-          cliJson(['dryad', 'status', '--json', '--project', project.root], options),
-          cliJson(['dryad', 'status', '--finished', '--json', '--tail', String(FINISHED_TAIL), '--project', project.root], options),
+          cliJson(['seat', 'status', '--json', '--project', project.root], options),
+          cliJson(['seat', 'status', '--finished', '--json', '--tail', String(FINISHED_TAIL), '--project', project.root], options),
         ]);
-        const grove = project.overlay !== true
+        const ground = project.overlay !== true
           ? { inactive: true }
           : live.overlay_report != null
-            ? { ...live.overlay_report, observed_by: 'dryad status' }
+            ? { ...live.overlay_report, observed_by: 'seat status' }
             : await cliJson(['overlay', 'status', '--json', '--project', project.root], options);
         const problems = [...(live.problems ?? [])];
-        for (const [label, report] of [['Seat (Dryad)', live], ['Finished', archive], ['Ground (Grove)', grove]]) {
+        for (const [label, report] of [['Seat', live], ['Finished', archive], ['Ground', ground]]) {
           if (report.error) problems.push(`${label}: ${report.error}`);
         }
-        if (grove.project_status?.error) problems.push(`Ground (Grove): ${grove.project_status.error}`);
+        if (ground.project_status?.error) problems.push(`Ground: ${ground.project_status.error}`);
         projects[index] = {
           ...live, ...project, counts: live.counts ?? null, seats: live.seats ?? [],
-          finished: archive.finished ?? [], finished_total: archive.finished_total ?? (archive.finished ?? []).length, finished_partial: archive.partial === true, grove, problems,
+          finished: archive.finished ?? [], finished_total: archive.finished_total ?? (archive.finished ?? []).length, finished_partial: archive.partial === true, ground, problems,
           ...(live.error ? { error: live.error } : {}),
           ...(archive.error ? { finished_error: archive.error } : {}),
         };
@@ -137,10 +137,10 @@ export async function collectState(options = {}) {
 // the machine, and cannot show a seat the front page would not.
 export async function collectSeat({ slug, id }, options = {}) {
   const discovery = await discoverProjects(options);
-  if (discovery.error || !Array.isArray(discovery.projects)) return { error: discovery.error ?? 'dryad projects returned no projects list' };
+  if (discovery.error || !Array.isArray(discovery.projects)) return { error: discovery.error ?? 'seat projects returned no projects list' };
   const project = discovery.projects.find((p) => p?.slug === slug);
   if (!project || typeof project.root !== 'string') return { error: `no project ${slug}` };
-  const live = await cliJson(['dryad', 'status', id, '--json', '--project', project.root], options);
+  const live = await cliJson(['seat', 'status', id, '--json', '--project', project.root], options);
   if (live.error) return { error: live.error, project };
   const seat = (live.seats ?? []).find((s) => s.id === id);
   if (!seat) return { error: `no seat ${id} in ${slug}`, project };
@@ -201,8 +201,8 @@ export function renderState(state) {
     if (!Number.isFinite(seconds)) return '';
     return seconds < 60 ? `${seconds}s ago` : seconds < 3600 ? `${Math.floor(seconds / 60)}m ago` : seconds < 86400 ? `${Math.floor(seconds / 3600)}h ago` : `${Math.floor(seconds / 86400)}d ago`;
   };
-  const card = (seat, grove, archived = false, slug = null) => {
-    const pending = (grove?.pending ?? []).filter(item => item.env === seat.env).map(item => item.liveness ?? 'unknown');
+  const card = (seat, ground, archived = false, slug = null) => {
+    const pending = (ground?.pending ?? []).filter(item => item.env === seat.env).map(item => item.liveness ?? 'unknown');
     const envState = [...new Set([seat.env ?? 'none', seat.env_state, ...pending].filter(Boolean))].join(' ');
     const files = seat.files;
     return `<article class="card ${archived ? 'archived' : 'seat'}" data-seat="${esc(seat.id)}">
@@ -221,10 +221,10 @@ export function renderState(state) {
     const view = screen(project);
     const c = project.counts;
     const counts = c ? `seats ${c.seats}${view.total == null ? '' : ` · worktrees ${view.total} (${view.unseated.length} unseated)`} · envs ${c.envs_tracked}/${c.envs_wanted}${view.overlapCount == null ? '' : ` · overlaps ${view.overlapCount}`}` : 'counts notMeasured';
-    const grove = project.grove;
-    const gc = grove?.counts;
-    const groveLine = grove?.inactive ? 'overlay inactive' : grove?.error ? esc(grove.error) : `environments ${shown(gc?.environments)} · attachments ${shown(gc?.attachments)} · pending ${shown(gc?.pending)}${(grove?.pending ?? []).map(item => ` · ${esc(item.env)} ${esc(item.verb)} ${esc(item.liveness ?? 'unknown')}`).join('')} · stale ${shown(gc?.stale)} · drift ${shown(gc?.drift)}`;
-    return `<section><h2>${esc(project.slug)} — ${esc(counts)}</h2><p class="grove">Ground (Grove) · ${groveLine}</p>${(project.problems ?? []).map(problem => `<p class="problem">problem · ${esc(problem)}</p>`).join('')}<p class="root">${esc(project.root)}</p><div class="cards">${view.seats.map(seat => card(seat, grove, false, project.slug)).join('')}${view.unseated.map(tree => `<article class="card unseated"><h3>${esc(tree.branch ?? 'detached HEAD')}</h3><p>Not a seat</p><p>${esc(tree.path)}</p><p>HEAD ${esc(tree.head)}</p></article>`).join('')}</div>${view.overlaps.map(item => `<p class="overlap">⚠ overlap · ${esc(item.path)} · ${item.seats.map(esc).join(' · ')}</p>`).join('')}<details data-project="${esc(project.root)}"><summary>finished ${view.finished.length}${project.finished_partial ? ` of ${esc(project.finished_total)} (newest)` : ''}</summary><div class="cards">${view.finished.map(seat => card(seat, grove, true)).join('')}</div></details></section>`;
+    const ground = project.ground;
+    const gc = ground?.counts;
+    const groundLine = ground?.inactive ? 'overlay inactive' : ground?.error ? esc(ground.error) : `environments ${shown(gc?.environments)} · attachments ${shown(gc?.attachments)} · pending ${shown(gc?.pending)}${(ground?.pending ?? []).map(item => ` · ${esc(item.env)} ${esc(item.verb)} ${esc(item.liveness ?? 'unknown')}`).join('')} · stale ${shown(gc?.stale)} · drift ${shown(gc?.drift)}`;
+    return `<section><h2>${esc(project.slug)} — ${esc(counts)}</h2><p class="ground">Ground · ${groundLine}</p>${(project.problems ?? []).map(problem => `<p class="problem">problem · ${esc(problem)}</p>`).join('')}<p class="root">${esc(project.root)}</p><div class="cards">${view.seats.map(seat => card(seat, ground, false, project.slug)).join('')}${view.unseated.map(tree => `<article class="card unseated"><h3>${esc(tree.branch ?? 'detached HEAD')}</h3><p>Not a seat</p><p>${esc(tree.path)}</p><p>HEAD ${esc(tree.head)}</p></article>`).join('')}</div>${view.overlaps.map(item => `<p class="overlap">⚠ overlap · ${esc(item.path)} · ${item.seats.map(esc).join(' · ')}</p>`).join('')}<details data-project="${esc(project.root)}"><summary>finished ${view.finished.length}${project.finished_partial ? ` of ${esc(project.finished_total)} (newest)` : ''}</summary><div class="cards">${view.finished.map(seat => card(seat, ground, true)).join('')}</div></details></section>`;
   }).join('')}`;
 }
 
@@ -259,7 +259,7 @@ export function renderChat({ slug, id, activity, turns }) {
   </style><header><a href="/">Canopy</a><strong>${escapeHtml(slug)} · ${escapeHtml(id)}</strong>${activity?.doing ? ` · now ${escapeHtml(activity.doing)}` : ''}${activity?.state ? ` · ${escapeHtml(activity.state)}` : ''} · ${turns.length} turns · <a href="/diff/${encodeURIComponent(slug)}/${encodeURIComponent(id)}">diff</a> · refresh 5s</header><main>${turns.map(turn).join('')}${turns.length === 0 ? '<p class="who">No conversation yet.</p>' : ''}</main>`;
 }
 
-// The diff page: the seat's work as `dryad diff --json` reports it, one
+// The diff page: the seat's work as `seat diff --json` reports it, one
 // fold per file, additions and deletions coloured, nothing interpreted.
 export function renderDiff({ slug, id, report }) {
   const files = [];
@@ -286,7 +286,7 @@ async function diffPage(pathname, options) {
   const [slug, id] = [decodeURIComponent(match[1]), decodeURIComponent(match[2])];
   const { project, seat } = await collectSeat({ slug, id }, options);
   if (!seat) return { status: 404, body: 'No such seat.' };
-  const diff = await cliJson(['dryad', 'diff', id, '--project', project.root, '--json'], options);
+  const diff = await cliJson(['seat', 'diff', id, '--project', project.root, '--json'], options);
   if (diff.error || diff.patch == null) return { status: 404, body: diff.error ?? 'No diff for this seat.' };
   return { status: 200, body: renderDiff({ slug, id, report: diff }) };
 }

@@ -1,4 +1,4 @@
-# Initial Grove design decisions
+# Initial Ground design decisions
 
 Historical rationale, condensed on 2026-09-06. Current behavior and operating
 instructions live in the [documentation index](../README.md).

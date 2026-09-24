@@ -46,8 +46,8 @@ test('globs: ** spans directories, * stays in one segment', () => {
   assert.ok(globToRegExp('docs/**/*.md').test('docs/a/b/c.md'));
   assert.ok(globToRegExp('docs/**/*.md').test('docs/c.md'));
   assert.ok(!globToRegExp('docs/*.md').test('docs/a/c.md'));
-  assert.ok(globToRegExp('skills/*/README.md').test('skills/grove/README.md'));
-  assert.ok(!globToRegExp('skills/*/README.md').test('skills/grove/references/README.md'));
+  assert.ok(globToRegExp('skills/*/README.md').test('skills/ground/README.md'));
+  assert.ok(!globToRegExp('skills/*/README.md').test('skills/ground/references/README.md'));
   assert.ok(matchesAny('docs/archive/x.md', ['docs/archive/**']));
   assert.ok(!matchesAny('docs/archive.md', ['docs/archive/**']));
 });
@@ -148,7 +148,7 @@ test('a similar paragraph is a paraphrase that kept the bones: shown, not judged
   const original = 'The seat reports its own state through the report verb, and nothing else tells the person what happened; a seat with no done report is not done, whatever its process did, and the human decides when to merge and when to finish.';
   // Every fourteenth word or sooner is changed, so no near-copy run survives; most 4-grams do.
   const paraphrase = 'The seat reports its own state through the report command, and nothing else tells the reader what happened; a seat with no done report is never done, whatever its process did, and the person decides when to merge and stop.';
-  const unrelated = 'Grove prints names and starts no listener; every project keeps one baseline and overlays only the services a task changed, and the shared engines are isolated by database and prefix rather than by port number.';
+  const unrelated = 'Ground prints names and starts no listener; every project keeps one baseline and overlays only the services a task changed, and the shared engines are isolated by database and prefix rather than by port number.';
   const root = fixture(t, {
     'README.md': `# Home\n\nShort.\n`,
     'docs/a.md': `# A\n\n${original}\n`,

@@ -12,18 +12,18 @@ import {
 } from '../lib/k3d-link.mjs';
 
 test('k3d server container name follows k3d-<cluster>-server-0', () => {
-  assert.equal(k3dServerContainer('grove-qa'), 'k3d-grove-qa-server-0');
+  assert.equal(k3dServerContainer('ground-qa'), 'k3d-ground-qa-server-0');
   assert.throws(() => k3dServerContainer(''), /malformed/);
   assert.throws(() => k3dServerContainer('Local'), /malformed/);
 });
 
 test('parseK3dArgs requires --cluster and does not default to local', () => {
   assert.throws(() => parseK3dArgs(['connect']), /--cluster/);
-  const parsed = parseK3dArgs(['connect', '--cluster', 'grove-qa', '--dry-run']);
+  const parsed = parseK3dArgs(['connect', '--cluster', 'ground-qa', '--dry-run']);
   assert.deepEqual(parsed, {
     verb: 'connect',
-    cluster: 'grove-qa',
-    namespace: 'grove-infra',
+    cluster: 'ground-qa',
+    namespace: 'ground-infra',
     kubeconfig: null,
     dryRun: true,
   });
@@ -31,31 +31,31 @@ test('parseK3dArgs requires --cluster and does not default to local', () => {
 
 test('parseK3dArgs rejects a namespace that is not a Kubernetes DNS label', () => {
   assert.throws(
-    () => parseK3dArgs(['status', '--cluster', 'grove-qa', '--namespace', 'bad\nmetadata:']),
+    () => parseK3dArgs(['status', '--cluster', 'ground-qa', '--namespace', 'bad\nmetadata:']),
     /namespace/
   );
   assert.throws(
-    () => parseK3dArgs(['status', '--cluster', 'grove-qa', '--namespace', 'A'.repeat(64)]),
+    () => parseK3dArgs(['status', '--cluster', 'ground-qa', '--namespace', 'A'.repeat(64)]),
     /namespace/
   );
 });
 
 test('k3d --dry-run is only valid for connect', () => {
   assert.throws(
-    () => parseK3dArgs(['status', '--cluster', 'grove-qa', '--dry-run']),
+    () => parseK3dArgs(['status', '--cluster', 'ground-qa', '--dry-run']),
     /dry-run.*connect/
   );
 });
 
 test('renderK3dLinkManifests writes Service + EndpointSlice per engine', () => {
   const yaml = renderK3dLinkManifests({
-    namespace: 'grove-infra',
+    namespace: 'ground-infra',
     links: [
       { name: 'mysql', ip: '192.168.107.2', port: 3306 },
       { name: 'pg', ip: '192.168.107.3', port: 5432 },
     ],
   });
-  assert.match(yaml, /name: grove-infra/);
+  assert.match(yaml, /name: ground-infra/);
   assert.match(yaml, /name: mysql/);
   assert.match(yaml, /kubernetes.io\/service-name: mysql/);
   assert.match(yaml, /192\.168\.107\.2/);
@@ -66,15 +66,15 @@ test('renderK3dLinkManifests writes Service + EndpointSlice per engine', () => {
 
 test('formatK3dLinkReport counts linked engines', () => {
   const text = formatK3dLinkReport({
-    cluster: 'grove-qa',
+    cluster: 'ground-qa',
     network: 'dev-infra',
-    node: 'k3d-grove-qa-server-0',
+    node: 'k3d-ground-qa-server-0',
     nodeOnNetwork: true,
     links: [{ name: 'mysql', ip: '192.168.107.2', port: 3306 }],
     skipped: [{ name: 'kafka', reason: 'not running' }],
     dryRun: true,
   });
-  assert.match(text, /cluster seat \(k3d\) — grove-qa/);
+  assert.match(text, /cluster seat \(k3d\) — ground-qa/);
   assert.match(text, /engines {2}1\/2/);
   assert.match(text, /mysql 192\.168\.107\.2:3306/);
   assert.match(text, /kafka skipped/);
@@ -119,7 +119,7 @@ test('compareK3dLinks reports missing, stale, and unexpected resources', () => {
 
 test('temporary kubeconfig is private and cleanup removes its directory', () => {
   assert.equal(typeof k3d.writeTemporaryKubeconfig, 'function');
-  const temp = k3d.writeTemporaryKubeconfig('grove-qa', 'apiVersion: v1\n');
+  const temp = k3d.writeTemporaryKubeconfig('ground-qa', 'apiVersion: v1\n');
   try {
     assert.equal(statSync(temp.file).mode & 0o777, 0o600);
     assert.equal(statSync(temp.directory).mode & 0o777, 0o700);

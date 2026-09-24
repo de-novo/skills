@@ -87,7 +87,7 @@ able to read why it was made.
 
 ## Not this skill
 
-- Deciding what is true. Mycelium holds facts; this holds the documents
+- Deciding what is true. Facts holds facts; this holds the documents
   that point at them.
 - Writing the record of a sprint. Understory does that, under this rule.
 - A documentation site, a publishing pipeline, a translation workflow.

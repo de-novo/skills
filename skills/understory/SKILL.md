@@ -2,7 +2,7 @@
 name: understory
 description: >-
   de-novo Understory — the story under the canopy. Write the document that
-  lets a person read Forester's graph: what the work is, how it depends and
+  lets a person read Plan's graph: what the work is, how it depends and
   what it claims, what is moving now, what was proven, and what is open.
   Use when a person asks for a shared document, a write-up, a map, or a
   status page of the work graph; when the user runs /understory. The graph
@@ -17,13 +17,13 @@ underneath it: one document a person who was not here can read and know
 what the graph is, where it stands, and what has been proven about it.
 
 This file owns the pattern. The section shapes and the CLI are in
-[references/document.md](references/document.md). The graph itself is Forester's:
-[forester](../forester/SKILL.md).
+[references/document.md](references/document.md). The graph itself is Plan's:
+[plan](../plan/SKILL.md).
 
 ## The one rule
 
 **A map points; it does not copy.** Every fact in the document already has
-a home: the plan file, the Forester reference, the design note, an evidence
+a home: the plan file, the Plan reference, the design note, an evidence
 file. The document names the home and links to it. A fact restated in the
 document is a fact that will be wrong the next time its home changes.
 
@@ -38,7 +38,7 @@ part a person is measured against, and it is the part you write.
    ```bash
    de-novo skills understory graph               # Mermaid, from the project's plan
    de-novo skills understory reading             # one line per item, and the summary
-   de-novo skills understory graph --from plan.json   # from a saved forester plan --json
+   de-novo skills understory graph --from plan.json   # from a saved plan plan --json
    ```
 
    Do not draw the graph by hand and do not reorder the items. Two people
@@ -54,7 +54,7 @@ part a person is measured against, and it is the part you write.
 4. Name what is not proven in the same table as what is. A document that
    only lists successes is not trusted, and should not be.
 
-5. End with the pointers: the plan, the Forester reference, the design note,
+5. End with the pointers: the plan, the Plan reference, the design note,
    the evidence. If a reader needs a schema field or a CLI option, they go
    there; the document does not carry it.
 
@@ -77,7 +77,7 @@ audience's language. Inside this catalog's own `docs/`, that is English.
 
 ## Not this skill
 
-- Changing the graph, assigning items, or verifying work. Forester, Dryad,
+- Changing the graph, assigning items, or verifying work. Plan, Seat,
   and a person do those.
 - A live screen. Canopy is that; Understory is the record.
 - A design note. Reasons live in `docs/`; the document links to them.

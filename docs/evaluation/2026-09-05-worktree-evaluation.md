@@ -26,9 +26,9 @@ worker PIDs, branches, sources, and artifacts are checked, and the monotonic
 clock of the same machine is used to confirm that the edit and build sections
 really overlap.
 
-The profile uses the same project name in both worktrees. The Grove registry and
+The profile uses the same project name in both worktrees. The Ground registry and
 the process backend are shared, and only the work environment names differ. Each
-worker process calls the Grove CLI directly from its own worktree. Whether the
+worker process calls the Ground CLI directly from its own worktree. Whether the
 registry records the real worktree path and the worker identifier separately is
 also checked.
 
@@ -56,8 +56,8 @@ and the leftover experiment-owned processes and HTTP addresses are counted.
 
 ## The problem the concurrent work exposed
 
-At first, a call-site retry was attached only to Grove's explicit lock conflict.
-But Grove saw another operation that was proceeding normally and answered as
+At first, a call-site retry was attached only to Ground's explicit lock conflict.
+But Ground saw another operation that was proceeding normally and answered as
 follows, which stopped the comparison.
 
 ```text
@@ -81,7 +81,7 @@ treated as a failure. It does not run the competing operation's command on its
 behalf, and it does not delete the lock.
 
 **The completed run that was selected includes this call-site addition. It is
-not an automatic wait feature in Grove itself.** The successful re-run does not
+not an automatic wait feature in Ground itself.** The successful re-run does not
 erase the original stop. The time spent going through retries and the counts of
 lock conflicts and in-progress pending responses are recorded separately in the
 results.
@@ -89,7 +89,7 @@ results.
 ## The judgment, and what is still out of scope
 
 Within this scope both approaches kept the other worktree's source, artifacts,
-and running environment, and the baseline app. Grove left the worker's location
+and running environment, and the baseline app. Ground left the worker's location
 and run state in the shared registry. At the same time, a concurrent change
 needed extra time and a call-site wait compared with direct execution.
 
@@ -111,7 +111,7 @@ temporary Git repository; it does not commit the catalog and does not push
 anywhere outside. Give a new output path to preserve existing results.
 
 ```bash
-node docs/evaluation/synthetic/worktrees.mjs /tmp/grove-worktree-result.json
+node docs/evaluation/synthetic/worktrees.mjs /tmp/ground-worktree-result.json
 npm test
 ```
 

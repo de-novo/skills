@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// de-novo skills — Ground (Grove) CLI. yaml is source of truth; the CLI paints it.
+// de-novo skills — Ground CLI. yaml is source of truth; the CLI paints it.
 // Invoke as `de-novo skills …`. de-novo-skills is an alias without the
 // skills namespace. There is no machine down command: several projects live on
 // machine infra, so a human decides when to stop it.
@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import {
   formatUrlsJson,
   formatUrlsReport,
-  loadGroveAddressing,
+  loadGroundAddressing,
   parseUrlsArgs,
   renderProjectUrls,
   resolveAddressing,
@@ -32,12 +32,12 @@ import {
   parseOverlayCliArgs,
   runOverlayLifecycle,
 } from '../lib/overlay.mjs';
-import { dryadHelp, parseDryadCliArgs, recordSeatCliEvent, runDryad } from '../lib/dryad.mjs';
+import { seatHelp, parseSeatCliArgs, recordSeatCliEvent, runSeat } from '../lib/seat.mjs';
 import { doctorHelp, runDoctor } from '../lib/doctor.mjs';
 import { runCanopy } from '../lib/canopy.mjs';
-import { foresterHelp, parseForesterCliArgs, runForester } from '../lib/forester.mjs';
+import { planHelp, parsePlanCliArgs, runPlan } from '../lib/plan.mjs';
 import { parseUnderstoryCliArgs, runUnderstory, understoryHelp } from '../lib/understory.mjs';
-import { myceliumHelp, parseMyceliumCliArgs, runMycelium } from '../lib/mycelium.mjs';
+import { factsHelp, parseFactsCliArgs, runFacts } from '../lib/facts.mjs';
 import { herbariumHelp, parseHerbariumCliArgs, runHerbarium } from '../lib/herbarium.mjs';
 import { guardPlaygroundInvocation, runPlayground } from '../lib/playground.mjs';
 import {
@@ -51,18 +51,6 @@ import {
 } from './setup.mjs';
 
 export const CLI = 'de-novo skills';
-
-// Newcomer names for the forest commands. The old subcommands stay.
-export const COMMAND_ALIASES = Object.freeze({
-  seat: 'dryad',
-  plan: 'forester',
-  facts: 'mycelium',
-});
-
-export function canonicalCommand(command) {
-  if (command == null) return command;
-  return COMMAND_ALIASES[command] ?? command;
-}
 
 export function invokedName(argv1 = process.argv[1]) {
   if (!argv1) return 'cli';
@@ -149,12 +137,12 @@ function cmdUp(args) {
 }
 
 export function formatInfraStatus() {
-  const grove = loadGroveAddressing();
-  const tld = grove.localTld ?? grove.tld ?? 'localhost';
-  const tldSource = grove.localTld ? 'grove.local' : grove.tld ? 'grove' : 'default';
+  const ground = loadGroundAddressing();
+  const tld = ground.localTld ?? ground.tld ?? 'localhost';
+  const tldSource = ground.localTld ? 'ground.local' : ground.tld ? 'ground' : 'default';
   const names = Object.keys(ENGINES);
   const lines = [
-    '■ ground (grove) — machine infra',
+    '■ ground — machine infra',
     `  tld      ${tld}  (${tldSource})`,
     `  catalog  ${names.join(' ')}`,
   ];
@@ -205,7 +193,7 @@ function cmdInfra(args) {
 }
 
 function printInfraHelp() {
-  console.log(`machine infra for Ground (Grove-central). Catalog: infra/docker-compose.yml.
+  console.log(`machine infra for Ground. Catalog: infra/docker-compose.yml.
 TLD: infra/addressing.yml. Projects declare isolation units, not engines.
 
 usage:
@@ -225,22 +213,22 @@ function cmdProvision(args) {
   return result.status ?? 1;
 }
 
-function cmdDryad(args) {
-  const options = parseDryadCliArgs(args);
+function cmdSeat(args) {
+  const options = parseSeatCliArgs(args);
   if (options.help) {
-    console.log(dryadHelp(CLI));
+    console.log(seatHelp(CLI));
     return 0;
   }
-  return runDryad({ options });
+  return runSeat({ options });
 }
 
-function cmdForester(args) {
-  const options = parseForesterCliArgs(args);
+function cmdPlan(args) {
+  const options = parsePlanCliArgs(args);
   if (options.help) {
-    console.log(foresterHelp(CLI));
+    console.log(planHelp(CLI));
     return 0;
   }
-  return runForester({ options });
+  return runPlan({ options });
 }
 
 function cmdUnderstory(args) {
@@ -252,13 +240,13 @@ function cmdUnderstory(args) {
   return runUnderstory({ options });
 }
 
-function cmdMycelium(args) {
-  const options = parseMyceliumCliArgs(args);
+function cmdFacts(args) {
+  const options = parseFactsCliArgs(args);
   if (options.help) {
-    console.log(myceliumHelp(CLI));
+    console.log(factsHelp(CLI));
     return 0;
   }
-  return runMycelium({ options });
+  return runFacts({ options });
 }
 
 function cmdHerbarium(args) {
@@ -322,7 +310,7 @@ function readKubernetesResources(kubeconfig, namespace) {
       'get',
       resource,
       '-l',
-      'app.kubernetes.io/managed-by=grove',
+      'app.kubernetes.io/managed-by=ground',
       '-o',
       'json',
     ]);
@@ -441,11 +429,11 @@ function cmdInfraK3d(args) {
 }
 
 function printHelp() {
-  console.log(`${CLI} — Ground (Grove) CLI (yaml is source of truth; the CLI paints it)
+  console.log(`${CLI} — Ground CLI (yaml is source of truth; the CLI paints it)
 
-Names: Ground (grove), Seat (dryad), Plan (forester), Facts (mycelium).
-seat, plan, and facts are aliases of dryad, forester, and mycelium.
+Names: Ground, Seat, Plan, Facts.
 Cluster seat is the k3d/k3s backend (infra k3d). See docs/glossary.md.
+\`plan plan\` prints the Plan graph. \`seat plan\` prepares one seat.
 
 machine (Ground — compose + addressing.yml):
   ${CLI} infra status                  catalog, tld, ready n/n
@@ -467,10 +455,10 @@ project:
   ${CLI} setup [project-root|profile]  owner-authorized engines + DB/account provisioning
   ${CLI} overlay <verb> ...            create/attach/detach/destroy/status/touch/prune
   ${CLI} overlay verify [--image REF]   drive this project's adapter through the contract
-  ${CLI} dryad|seat <verb> ...         Seat: worktree, overlay env, journal. Does not launch an agent
-  ${CLI} forester|plan <verb> ...      Plan: items, dependencies, budget, serve
+  ${CLI} seat <verb> ...         Seat: worktree, overlay env, journal. Does not launch an agent
+  ${CLI} plan <verb> ...      Plan: items, dependencies, budget, serve
   ${CLI} understory graph|reading      Plan's graph as a Mermaid flowchart, and one readable line per item
-  ${CLI} mycelium|facts <verb> ...     Facts: the assertion log, separate from Plan
+  ${CLI} facts <verb> ...     Facts: the assertion log, separate from Plan
   ${CLI} herbarium check               links, copies, script, page length over the project's documents
 
 local overview:
@@ -491,8 +479,7 @@ function main(argv) {
     console.error(parsed.error);
     return 1;
   }
-  const [typed, ...rest] = parsed.args;
-  const command = canonicalCommand(typed);
+  const [command, ...rest] = parsed.args;
   guardPlaygroundInvocation(parsed.args);
   switch (command) {
     case 'playground':
@@ -526,14 +513,14 @@ function main(argv) {
     }
     case 'overlay':
       return cmdOverlay(rest);
-    case 'dryad':
-      return cmdDryad(rest);
-    case 'forester':
-      return cmdForester(rest);
+    case 'seat':
+      return cmdSeat(rest);
+    case 'plan':
+      return cmdPlan(rest);
     case 'understory':
       return cmdUnderstory(rest);
-    case 'mycelium':
-      return cmdMycelium(rest);
+    case 'facts':
+      return cmdFacts(rest);
     case 'herbarium':
       return cmdHerbarium(rest);
     case 'canopy':
@@ -553,7 +540,7 @@ function main(argv) {
       printHelp();
       return 0;
     default:
-      console.error(`${CLI}: unknown command "${typed}"\n`);
+      console.error(`${CLI}: unknown command "${command}"\n`);
       printHelp();
       return 1;
   }

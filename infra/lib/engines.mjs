@@ -1,5 +1,5 @@
 // Engine catalog is docker-compose.yml. Do not keep a second name list.
-// Engine id = the compose profile. container_name, grove.provision, grove.aliases
+// Engine id = the compose profile. container_name, ground.provision, ground.aliases
 // are read from the service. CLI paints compose; it does not own the catalog.
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -69,9 +69,9 @@ export function parseComposeEngines(doc, source = 'docker-compose.yml') {
       fail(source, `service ${service}: an explicit enabled healthcheck is required.`);
     }
     const labels = labelsOf(spec);
-    const provision = labels['grove.provision'] || null;
+    const provision = labels['ground.provision'] || null;
     if (provision != null && provision !== 'mysql' && provision !== 'pg') {
-      fail(source, `service ${service}: grove.provision must be mysql or pg.`);
+      fail(source, `service ${service}: ground.provision must be mysql or pg.`);
     }
     const port = clusterPortOf(spec, labels, source, service);
     engines[name] = {
@@ -82,7 +82,7 @@ export function parseComposeEngines(doc, source = 'docker-compose.yml') {
       hasHealthcheck: true,
       ...(provision ? { provision } : {}),
     };
-    const aliasCsv = labels['grove.aliases'];
+    const aliasCsv = labels['ground.aliases'];
     if (typeof aliasCsv === 'string' && aliasCsv.trim()) {
       for (const alias of aliasCsv.split(',').map((item) => item.trim()).filter(Boolean)) {
         if (aliases[alias] && aliases[alias] !== name) {
@@ -105,13 +105,13 @@ export function parseComposeEngines(doc, source = 'docker-compose.yml') {
 }
 
 function clusterPortOf(spec, labels, source, service) {
-  const labeled = labels['grove.port'];
+  const labeled = labels['ground.port'];
   if (labeled != null && labeled !== '') {
     return validPort(labeled, source, service);
   }
   const ports = spec.ports;
   if (!Array.isArray(ports) || ports.length === 0) {
-    fail(source, `service ${service}: grove.port or ports is required.`);
+    fail(source, `service ${service}: ground.port or ports is required.`);
   }
   const first = ports[0];
   if (typeof first === 'number') return validPort(first, source, service);

@@ -1,4 +1,4 @@
-# The playground sample project. Values only — the pattern lives in the grove
+# The playground sample project. Values only — the pattern lives in the ground
 # skill. Every instance of this project runs inside a throwaway sandbox, so
 # these values name services and hosts and never a port: each listener binds
 # port 0 and records what the kernel gave it.
@@ -9,7 +9,7 @@ project:
 
 addressing:
   tld: localhost
-  proxy: project              # the project's own router listens; Grove prints names
+  proxy: project              # the project's own router listens; Ground prints names
   scheme:
     shared: "{service}.{project}.{tld}"          # web.playground.localhost
     overlay: "{service}--{env}.{project}.{tld}"  # web--w1.playground.localhost

@@ -1,0 +1,59 @@
+# Multi-service tier: 4 backends + 3 webs, k3d overlay.
+# Names are fictional — this shows the shape of values.
+version: 1
+
+project:
+  slug: acme                    # omitted namespace = "acme" for every isolation unit
+                                # (DB, prefix, bucket, k8s namespace)
+
+addressing:
+  tld: local.acme.dev           # owned real domain (wildcard → 127.0.0.1).
+  proxy: project                # project listens (k3d Gateway). Ground prints names only
+  scheme:                       # this project owns the TLD, so no {project}
+    shared: "{service}.{tld}"
+    overlay: "{service}--{env}.{tld}"
+  ports:
+    blocks: { api: 5000, web: 5100 }
+    registry: README.md
+
+runtime:
+  default: developer
+  single_stack: true
+  writers: 1
+  profiles:
+    planner:                    # light checks / planning
+      backend: docker-compose
+      compose_file: docker-compose.yml
+    developer:                  # development that needs overlay
+      backend: k3d
+      cluster: local            # app cluster. Ground k3d connect never defaults to this
+  commands:
+    profile: node tools/dev-environment.mjs profile
+    status: node tools/dev-environment.mjs status
+    up: node tools/dev-environment.mjs up --apply
+    overlay: node tools/dev-overlay.mjs
+
+services:
+  auth-api:       { kind: api, port: 5001, health: /health,     reflect: rebuild }
+  catalog-api:    { kind: api, port: 5002, health: /api/health, reflect: rebuild } # health path differs per service — measured
+  order-api:      { kind: api, port: 5003, health: /health,     reflect: source }  # backend served from source — measured
+  billing-worker: { kind: worker, port: 5004,                   reflect: rebuild }
+  store-web:      { kind: web, port: 5101, health: /,           reflect: source }
+  admin-web:      { kind: web, port: 5102, health: /,           reflect: source }
+  kiosk:          { kind: web, port: 5103, health: /,           reflect: rebuild } # env baked in at bundle time
+
+overlay:
+  attachable: [store-web, admin-web, kiosk, catalog-api, order-api]
+  shared_only: [auth-api, billing-worker]   # auth and consumers — never attach
+  image_tag: full-git-sha
+  stale_after: 1d            # example policy; each consuming project chooses its own
+
+data:
+  infra: machine              # engines on machine-shared infra — do not start them here
+  engines:
+    mysql: [acme]             # created by `de-novo skills setup` from this declaration
+    redis: { prefix: "acme:" }
+    kafka: { topic_prefix: "acme." }
+  migrate: pnpm run db:migrate:local
+  fixtures: [ui, official-api, fixture-endpoint, seed-script]
+  forbid_direct_db_writes: true

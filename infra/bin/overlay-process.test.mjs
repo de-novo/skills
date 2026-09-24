@@ -13,11 +13,11 @@ const CLI = path.join(HERE, 'cli.mjs');
 const BACKEND = path.join(HERE, 'fixtures/process-overlay.mjs');
 
 // The running process derives identity from its executable bytes, not an attach
-// receipt or Grove's registry. HTTP readiness is measured by the backend.
+// receipt or Ground's registry. HTTP readiness is measured by the backend.
 const WORKLOAD = readFileSync(path.join(HERE, 'fixtures/process-workload.mjs'), 'utf8');
 
 test('real process overlay verifies artifact replacement, readiness, recovery, and removal', async (t) => {
-  const root = mkdtempSync(path.join(tmpdir(), 'grove-process-'));
+  const root = mkdtempSync(path.join(tmpdir(), 'ground-process-'));
   const stateDir = path.join(root, 'state');
   const stateFile = path.join(stateDir, 'process-test.yml');
   const endpointFile = path.join(root, 'w1', 'endpoint.json');
@@ -50,8 +50,8 @@ test('real process overlay verifies artifact replacement, readiness, recovery, a
   }));
   const run = (args, extra = {}) => spawnSync(process.execPath, [CLI, 'overlay', ...args, '--project', root], {
     encoding: 'utf8', timeout: 10000,
-    env: { ...process.env, GROVE_STATE_DIR: stateDir, GROVE_PROCESS_TEST_ROOT: root,
-      GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '3000', ...extra },
+    env: { ...process.env, GROUND_STATE_DIR: stateDir, GROUND_PROCESS_TEST_ROOT: root,
+      GROUND_OVERLAY_VERIFY_TIMEOUT_MS: '3000', ...extra },
   });
   const succeed = args => {
     const result = run(args);
@@ -69,14 +69,14 @@ test('real process overlay verifies artifact replacement, readiness, recovery, a
   succeed(attach(imageA));
   assert.deepEqual((await probe()).image, imageA);
 
-  const oldImage = run(attach(imageB), { GROVE_PROCESS_TEST_SKIP_REPLACE: 'true', GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '600' });
+  const oldImage = run(attach(imageB), { GROUND_PROCESS_TEST_SKIP_REPLACE: 'true', GROUND_OVERLAY_VERIFY_TIMEOUT_MS: '600' });
   assert.notEqual(oldImage.status, 0);
   assert.equal(state().pending_by_env.w1.image, imageB);
   assert.equal(state().envs.w1.services.api.image, imageA);
   assert.equal((await probe()).image, imageA);
 
   writeFileSync(path.join(root, 'w1', 'not-ready'), 'readiness gate');
-  const unready = run(attach(imageB), { GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '600' });
+  const unready = run(attach(imageB), { GROUND_OVERLAY_VERIFY_TIMEOUT_MS: '600' });
   assert.notEqual(unready.status, 0);
   assert.equal(state().pending_by_env.w1.image, imageB);
   assert.equal((await probe()).status, 503);
@@ -98,7 +98,7 @@ test('real process overlay verifies artifact replacement, readiness, recovery, a
 });
 
 test('overlay verify passes against the process backend that really starts a workload', (t) => {
-  const root = mkdtempSync(path.join(tmpdir(), 'grove-verify-process-'));
+  const root = mkdtempSync(path.join(tmpdir(), 'ground-verify-process-'));
   const endpointFile = path.join(root, 'w1', 'endpoint.json');
   t.after(() => {
     if (existsSync(endpointFile)) {
@@ -131,9 +131,9 @@ test('overlay verify passes against the process backend that really starts a wor
       timeout: 60000,
       env: {
         ...process.env,
-        GROVE_STATE_DIR: path.join(root, 'state'),
-        GROVE_PROCESS_TEST_ROOT: root,
-        GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '5000',
+        GROUND_STATE_DIR: path.join(root, 'state'),
+        GROUND_PROCESS_TEST_ROOT: root,
+        GROUND_OVERLAY_VERIFY_TIMEOUT_MS: '5000',
       },
     }
   );

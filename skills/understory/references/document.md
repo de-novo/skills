@@ -2,10 +2,10 @@
 
 The long facts of Understory. Pattern: [SKILL.md](../SKILL.md). The human
 page: [README.md](../README.md). The graph belongs to
-[Forester](../../forester/references/plan.md).
+[Plan](../../plan/references/plan.md).
 
 ```
-forester plan --json ──▶ understory graph     ──▶ ┐
+plan plan --json ──▶ understory graph     ──▶ ┐
                      ──▶ understory reading   ──▶ ├─▶ the document (an agent writes the prose)
 plan · design note · evidence ──(links only)──▶ ┘
 ```
@@ -17,11 +17,11 @@ plan · design note · evidence ──(links only)──▶ ┘
 | 1 | What this graph is | One sentence: nodes, edges, claims, budget. Why this kind of graph, in three lines | design note (link) |
 | 2 | The graph now | The Mermaid flowchart from `understory graph`, as it came out | CLI |
 | 3 | How to read it | The `understory reading` lines, and one line per state saying what a reader does about it | CLI |
-| 4 | How the plan was written | The five rules from the Forester skill, pointed to, not restated | Forester SKILL (link) |
+| 4 | How the plan was written | The five rules from the Plan skill, pointed to, not restated | Plan SKILL (link) |
 | 5 | What is proven | One table: what was run, what happened, what was not run. Failures in the same table | evidence files (link) |
-| 6 | Words | One line each for the names a reader meets: Grove, Dryad, Forester, Canopy, Understory, Playground | root README (link) |
+| 6 | Words | One line each for the names a reader meets: Ground, Seat, Plan, Canopy, Understory, Playground | root README (link) |
 | 7 | Open | What is not decided or not measured yet | design note, evidence |
-| 8 | Pointers | The plan file, the Forester README, the design note, the evidence | — |
+| 8 | Pointers | The plan file, the Plan README, the design note, the evidence | — |
 
 Never in the document: schema field tables, CLI option lists, hook store
 paths, machine paths. Those have homes.
@@ -56,11 +56,11 @@ generated and a person reads how old it is.
 | failed | `gave up: <why>` |
 
 `--json` prints `{ summary, reading: [{ id, state, line, facts }] }`.
-`facts` is the list of ids of the active Mycelium facts whose subject is
-the item, read through Mycelium's own query and never restated; the text
+`facts` is the list of ids of the active Facts whose subject is
+the item, read through Facts's own query and never restated; the text
 form appends `· facts a-…, a-…` to the line. A project without
-`.agents/mycelium.yml` gets an empty list, and so does `--from`, which has
-no project to ask. Pattern: [mycelium](../../mycelium/SKILL.md).
+`.agents/facts.yml` gets an empty list, and so does `--from`, which has
+no project to ask. Pattern: [facts](../../facts/SKILL.md).
 
 ## CLI
 
@@ -69,6 +69,6 @@ de-novo skills understory graph   [--project ROOT | --from plan.json]
 de-novo skills understory reading [--project ROOT | --from plan.json] [--json]
 ```
 
-Both are pure functions of `forester plan --json`. `--from` reads a saved
+Both are pure functions of `plan plan --json`. `--from` reads a saved
 copy of that output, so a document can be drawn from a plan captured
-earlier or on another machine. `--project` resolves as Forester does.
+earlier or on another machine. `--project` resolves as Plan does.

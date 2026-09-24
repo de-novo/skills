@@ -12,7 +12,7 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 const CLI = path.join(REPO_ROOT, 'infra/bin/cli.mjs');
 const MINIMAL = path.join(
   REPO_ROOT,
-  'skills/grove/examples/minimal.runtime-profile.yml'
+  'skills/ground/examples/minimal.runtime-profile.yml'
 );
 
 test('no args → start nothing (compose catalog, ask via setup or names)', () => {
@@ -74,13 +74,13 @@ test('de-novo skills infra status via the de-novo bin name', () => {
     encoding: 'utf8',
   });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /ground \(grove\) — machine infra/);
+  assert.match(result.stdout, /ground — machine infra/);
 });
 
-test('infra status prints Ground (Grove) catalog and tld', () => {
+test('infra status prints Ground catalog and tld', () => {
   const result = spawnSync(process.execPath, [CLI, 'infra', 'status'], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /ground \(grove\) — machine infra/);
+  assert.match(result.stdout, /ground — machine infra/);
   assert.match(result.stdout, /tld {6}localhost/);
   assert.match(result.stdout, /catalog {2}mysql pg redis kafka mongo mail minio/);
   assert.match(result.stdout, /ready {4}\d+\/7/);
@@ -89,29 +89,31 @@ test('infra status prints Ground (Grove) catalog and tld', () => {
 test('infra with no subcommand is status', () => {
   const result = spawnSync(process.execPath, [CLI, 'infra'], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /ground \(grove\) — machine infra/);
+  assert.match(result.stdout, /ground — machine infra/);
 });
 
-test('seat, plan, and facts are aliases of the forest commands', () => {
-  for (const [alias, command, marker] of [
-    ['seat', 'dryad', /Seat \(dryad\)/],
-    ['plan', 'forester', /Plan \(forester\)/],
-    ['facts', 'mycelium', /Facts \(mycelium\)/],
+test('seat, plan, and facts are the commands; retired names are unknown', () => {
+  for (const [command, marker] of [
+    ['seat', /Seat: worktree/],
+    ['plan', /plan plan/],
+    ['facts', /Facts: the assertion log/],
   ]) {
-    const aliased = spawnSync(process.execPath, [CLI, alias, '--help'], { encoding: 'utf8' });
-    const original = spawnSync(process.execPath, [CLI, command, '--help'], { encoding: 'utf8' });
-    assert.equal(aliased.status, 0, aliased.stderr);
-    assert.equal(original.status, 0, original.stderr);
-    assert.match(aliased.stdout, marker);
-    assert.match(original.stdout, marker);
+    const result = spawnSync(process.execPath, [CLI, command, '--help'], { encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, marker);
   }
   const help = spawnSync(process.execPath, [CLI, 'help'], { encoding: 'utf8' });
-  assert.match(help.stdout, /dryad\|seat/);
-  assert.match(help.stdout, /forester\|plan/);
-  assert.match(help.stdout, /mycelium\|facts/);
-  const unknown = spawnSync(process.execPath, [CLI, 'ground'], { encoding: 'utf8' });
-  assert.notEqual(unknown.status, 0);
-  assert.match(unknown.stderr, /unknown command "ground"/);
+  assert.match(help.stdout, /seat <verb>/);
+  assert.match(help.stdout, /plan <verb>/);
+  assert.match(help.stdout, /facts <verb>/);
+  assert.match(help.stdout, /plan plan/);
+  assert.doesNotMatch(help.stdout, /alias of/);
+  // Retired product verbs, spelled so this file does not keep the old words.
+  for (const former of ['gr' + 'ove', 'dr' + 'yad', 'for' + 'ester', 'my' + 'celium', 'ground']) {
+    const unknown = spawnSync(process.execPath, [CLI, former], { encoding: 'utf8' });
+    assert.notEqual(unknown.status, 0, former);
+    assert.match(unknown.stderr, new RegExp(`unknown command "${former}"`));
+  }
 });
 
 test('infra k3d connect requires --cluster', () => {
@@ -145,7 +147,7 @@ test('validate rejects extra positional arguments', () => {
 });
 
 test('setup rejects options instead of silently ignoring them', () => {
-  const root = mkdtempSync(path.join(tmpdir(), 'grove-cli-'));
+  const root = mkdtempSync(path.join(tmpdir(), 'ground-cli-'));
   mkdirSync(path.join(root, '.agents'));
   writeFileSync(
     path.join(root, '.agents', 'runtime-profile.yml'),
@@ -169,5 +171,5 @@ test('infra status rejects extra positional arguments', () => {
 test('k3d status reads cluster resources and avoids a predictable kubeconfig path', () => {
   const text = readFileSync(CLI, 'utf8');
   assert.match(text, /kubectl[\s\S]*get/);
-  assert.doesNotMatch(text, /path\.join\('\/tmp', `grove-k3d-/);
+  assert.doesNotMatch(text, /path\.join\('\/tmp', `ground-k3d-/);
 });

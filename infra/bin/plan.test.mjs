@@ -1,0 +1,520 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { spawn, spawnSync } from 'node:child_process';
+import { createConnection } from 'node:net';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { stringify } from 'yaml';
+
+import {
+  allocate,
+  claimSegments,
+  claimsIntersect,
+  itemRevision,
+  itemStates,
+  parsePlanCliArgs,
+  parsePlanLocal,
+  parsePlan,
+  resolveBudget,
+} from '../lib/plan.mjs';
+import { claudeSettings, doingFromEvents, launchCommand, screenAsksForInput, seedClaudeTrust, stateFromEvents } from '../lib/plan-serve.mjs';
+import { HOOK_MARKER, TRUST_MARKER, applyHooks, codexHookHash, hookStores, renderCodexTrust, renderStore } from '../lib/plan-hooks.mjs';
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const CLI = path.join(HERE, 'cli.mjs');
+const TOOL = path.join(HERE, 'fixtures/plan-tool.mjs');
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const PLAN = `version: 1
+tasks:
+  define-shape:
+    task: "Decide the response shape and write it into the reference"
+    owns: [docs/reference/**]
+  api-endpoint:
+    task: "Add the endpoint returning that shape"
+    owns: [src/api/**]
+    depends_on: [define-shape]
+  web-panel:
+    task: "Show it in the page"
+    owns: [src/web/**]
+    depends_on: [define-shape]
+    retry: { max_attempts: 2 }
+  docs-pass:
+    task: "Sweep the docs"
+    owns: [docs/**]
+`;
+
+function gitIn(cwd, args) {
+  const result = spawnSync(
+    'git',
+    ['-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgSign=false', '-c', 'user.name=Plan Test', '-c', 'user.email=test@example.invalid', ...args],
+    { cwd, encoding: 'utf8' }
+  );
+  assert.equal(result.status, 0, result.stderr);
+  return result.stdout.trim();
+}
+
+// A disposable baseline with Ground (overlay: none) and Seat profiles, its
+// own state directory, and a plan. No overlay backend: allocation is the
+// thing under test, seats are real Seat worktrees.
+function fixture(t, { plan = PLAN, local = null } = {}) {
+  const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'plan-')));
+  const baseline = path.join(root, 'baseline');
+  mkdirSync(path.join(baseline, '.agents'), { recursive: true });
+  const environment = { ...process.env, GROUND_STATE_DIR: path.join(root, 'state') };
+  delete environment.SEAT_PROJECT;
+  delete environment.SEAT_ID;
+  writeFileSync(path.join(baseline, '.agents/runtime-profile.yml'), stringify({ project: { slug: 'plan-test' }, services: { api: {} }, data: { infra: 'project' }, overlay: 'none' }));
+  writeFileSync(path.join(baseline, '.agents/seat-profile.yml'), stringify({ version: 1, worktrees: { root: '../seats', branch: 'seat/{id}' } }));
+  writeFileSync(path.join(baseline, '.agents/plan.yml'), plan);
+  if (local != null) writeFileSync(path.join(baseline, '.agents/plan.local.yml'), local);
+  writeFileSync(path.join(baseline, 'app.txt'), 'baseline\n');
+  gitIn(baseline, ['init', '-b', 'main']);
+  gitIn(baseline, ['add', '.']);
+  gitIn(baseline, ['commit', '-m', 'baseline']);
+  const run = (args, { cwd = baseline } = {}) =>
+    spawnSync(process.execPath, [CLI, ...args, '--project', baseline], { cwd, env: environment, encoding: 'utf8', timeout: 20000 });
+  const good = (args, options) => {
+    const result = run(args, options);
+    assert.equal(result.status, 0, `${args.join(' ')}\n${result.stdout}\n${result.stderr}`);
+    return result;
+  };
+  const bad = (args, options) => {
+    const result = run(args, options);
+    assert.notEqual(result.status, 0, `${args.join(' ')} unexpectedly succeeded\n${result.stdout}`);
+    return result;
+  };
+  const json = (args) => JSON.parse(good([...args, '--json']).stdout);
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  return { root, baseline, environment, run, good, bad, json };
+}
+
+test('plan parser accepts the documented shape and names the offending item on every rejection', () => {
+  const plan = parsePlan(PLAN);
+  assert.equal(plan.parallel, null);
+  assert.deepEqual(plan.tasks.map((item) => item.id), ['define-shape', 'api-endpoint', 'web-panel', 'docs-pass']);
+  assert.deepEqual(plan.tasks[1].dependsOn, ['define-shape']);
+  assert.deepEqual(plan.tasks[2].retry, { maxAttempts: 2 });
+  assert.deepEqual(plan.tasks[3].retry, { maxAttempts: 1 });
+  assert.equal(parsePlan('version: 1\nparallel: 2\ntasks:\n  a: { task: x }\n').parallel, 2);
+
+  const rejected = [
+    ['version: 2\ntasks:\n  a: { task: x }\n', /version must be 1/],
+    ['version: 1\nqueue: []\ntasks:\n  a: { task: x }\n', /unknown key "queue"/],
+    ['version: 1\ntasks: []\n', /tasks must be a map/],
+    ['version: 1\ntasks: {}\n', /at least one item/],
+    ['version: 1\ntasks:\n  Bad_Id: { task: x }\n', /item id "Bad_Id"/],
+    ['version: 1\ntasks:\n  a: { task: "" }\n', /tasks\.a\.task must be a non-empty string/],
+    ['version: 1\ntasks:\n  a: { task: x, files: [y] }\n', /tasks\.a has unknown key "files"/],
+    ['version: 1\ntasks:\n  a: { task: x, depends_on: [b] }\n', /tasks\.a depends on unknown item "b"/],
+    ['version: 1\ntasks:\n  a: { task: x, depends_on: [a] }\n', /tasks\.a depends on itself/],
+    ['version: 1\ntasks:\n  a: { task: x, depends_on: [c] }\n  b: { task: x, depends_on: [a] }\n  c: { task: x, depends_on: [b] }\n', /dependency cycle a -> c -> b -> a/],
+    ['version: 1\ntasks:\n  a: { task: x }\n  a: { task: y }\n', /a/],
+    ['version: 1\ntasks:\n  a: { task: x, retry: { max_attempts: 0 } }\n', /retry\.max_attempts must be an integer of at least 1/],
+    ['version: 1\ntasks:\n  a: { task: x, retry: { until: ok } }\n', /tasks\.a\.retry has unknown key "until"/],
+    ['version: 1\nparallel: 0\ntasks:\n  a: { task: x }\n', /parallel must be an integer of at least 1/],
+  ];
+  for (const [text, pattern] of rejected) assert.throws(() => parsePlan(text), pattern, text);
+});
+
+test('the budget is the plan first, the local file second, and an error third', () => {
+  assert.deepEqual(parsePlanLocal('version: 1\nparallel: 5\n'), { version: 1, parallel: 5, tool: null, tools: {} });
+  const withTools = parsePlanLocal('version: 1\nparallel: 1\ntool: claude\ntools:\n  claude: { command: [claude, "{task}"] }\n  codex: { command: [codex, "{task}"] }\n');
+  assert.deepEqual(withTools, { version: 1, parallel: 1, tool: 'claude', tools: { claude: { command: ['claude', '{task}'], pretrustWorktrees: false }, codex: { command: ['codex', '{task}'], pretrustWorktrees: false } } });
+  assert.equal(parsePlanLocal('version: 1\ntools:\n  claude: { command: [claude], pretrust_worktrees: true }\n').tools.claude.pretrustWorktrees, true);
+  assert.throws(() => parsePlanLocal('version: 1\ntools:\n  claude: { command: [claude], pretrust_worktrees: yes }\n'), /pretrust_worktrees must be true or false/);
+  assert.throws(() => parsePlanLocal('version: 1\nengines: {}\n'), /unknown key "engines"/);
+  assert.throws(() => parsePlanLocal('version: 1\ntool: grok\ntools: {}\n'), /tool "grok" is not declared under tools/);
+  assert.throws(() => parsePlanLocal('version: 1\ntools:\n  claude: { command: [] }\n'), /tools\.claude\.command must name the executable/);
+  assert.throws(() => parsePlanLocal('version: 1\ntools:\n  claude: { command: [claude], mode: headless }\n'), /tools\.claude has unknown key "mode"/);
+  const files = { planFile: '/p/.agents/plan.yml', localFile: '/p/.agents/plan.local.yml' };
+  assert.deepEqual(resolveBudget({ plan: { parallel: 2 }, local: { parallel: 5 }, ...files }), { parallel: 2, source: 'plan' });
+  assert.deepEqual(resolveBudget({ plan: { parallel: null }, local: { parallel: 5 }, ...files }), { parallel: 5, source: 'local' });
+  assert.throws(() => resolveBudget({ plan: { parallel: null }, local: null, ...files }), /no budget: set parallel in \/p\/.agents\/plan.yml or in \/p\/.agents\/plan.local.yml/);
+});
+
+test('claims intersect by literal path segments, conservatively past the first wildcard', () => {
+  assert.deepEqual(claimSegments('src/api/**'), ['src', 'api']);
+  assert.deepEqual(claimSegments('./docs/reference/'), ['docs', 'reference']);
+  assert.deepEqual(claimSegments('src/**/*.test.mjs'), ['src']);
+  assert.deepEqual(claimSegments('src/api*'), ['src']);
+  assert.equal(claimsIntersect('src/api/**', 'src/web/**'), false);
+  assert.equal(claimsIntersect('docs/**', 'docs/reference/**'), true);
+  assert.equal(claimsIntersect('src/**/*.test.mjs', 'src/api/**'), true);
+  assert.equal(claimsIntersect('src/api', 'src/api-v2/**'), false);
+  assert.equal(claimsIntersect('README.md', 'README.md'), true);
+});
+
+test('item states and allocation are a pure function of plan, seats, budget, and what the baseline holds', () => {
+  const plan = parsePlan(PLAN);
+  const empty = { seats: {} };
+  const none = { seats: [] };
+  const states = (rows) => Object.fromEntries(rows.map((row) => [row.id, row.state]));
+  // The baseline holds h1 and nothing else; no worktree has moved.
+  const observed = { head: 'base1', contains: (sha) => sha === 'h1', headOf: () => null };
+  const shapeRevision = itemRevision(plan.tasks[0]);
+
+  let rows = itemStates({ plan, state: empty, finished: none, observed });
+  assert.deepEqual(states(rows), { 'define-shape': 'ready', 'api-endpoint': 'blocked', 'web-panel': 'blocked', 'docs-pass': 'ready' });
+  let out = allocate({ items: rows, budget: { parallel: 3 } });
+  assert.deepEqual(out.chosen.map((item) => item.id), ['define-shape']);
+  assert.deepEqual(out.held, [{ id: 'docs-pass', reason: 'claim docs/** intersects docs/reference/** of define-shape (ready)' }]);
+
+  rows = itemStates({ plan, state: { seats: { 'define-shape': { status: 'working', worktree: '/w', env: null } } }, finished: none, observed });
+  assert.deepEqual(states(rows), { 'define-shape': 'active', 'api-endpoint': 'blocked', 'web-panel': 'blocked', 'docs-pass': 'ready' });
+  out = allocate({ items: rows, budget: { parallel: 3 } });
+  assert.deepEqual(out.chosen, []);
+  assert.equal(out.held[0].reason, 'claim docs/** intersects docs/reference/** of define-shape (active)');
+
+  // done with a result the baseline does not hold yet: dependents wait; the claim is released.
+  rows = itemStates({ plan, state: { seats: { 'define-shape': { status: 'done', worktree: '/w', env: null, revision: shapeRevision, result: { head: 'h9', clean: true } } } }, finished: none, observed });
+  assert.deepEqual(states(rows), { 'define-shape': 'done', 'api-endpoint': 'waiting', 'web-panel': 'waiting', 'docs-pass': 'ready' });
+  assert.match(rows.find((row) => row.id === 'api-endpoint').why, /define-shape done at h9 is not in baseline HEAD base1/);
+  out = allocate({ items: rows, budget: { parallel: 2 } });
+  assert.deepEqual(out.chosen.map((item) => item.id), ['docs-pass']);
+
+  // done with a result the baseline holds: dependents are ready and carry it as input.
+  rows = itemStates({ plan, state: { seats: { 'define-shape': { status: 'done', worktree: '/w', env: null, revision: shapeRevision, result: { head: 'h1', clean: true } } } }, finished: none, observed });
+  assert.deepEqual(states(rows), { 'define-shape': 'done', 'api-endpoint': 'ready', 'web-panel': 'ready', 'docs-pass': 'ready' });
+  assert.deepEqual(rows.find((row) => row.id === 'api-endpoint').inputs, { 'define-shape': 'h1' });
+  out = allocate({ items: rows, budget: { parallel: 2 } });
+  assert.deepEqual(out.chosen.map((item) => item.id), ['api-endpoint', 'web-panel']);
+  assert.deepEqual(out.held, [{ id: 'docs-pass', reason: 'budget full (2)' }]);
+  assert.deepEqual({ active: out.active, free: out.free }, { active: 0, free: 2 });
+
+  const finished = { seats: [{ id: 'define-shape', status: 'done', revision: shapeRevision, result: { head: 'h1', clean: true } }, { id: 'docs-pass', status: 'blocked' }, { id: 'web-panel', status: 'working' }] };
+  rows = itemStates({ plan, state: empty, finished, observed });
+  assert.deepEqual(states(rows), { 'define-shape': 'done', 'api-endpoint': 'ready', 'web-panel': 'ready', 'docs-pass': 'failed' });
+  assert.equal(rows.find((row) => row.id === 'docs-pass').why, '1/1 attempt finished without done');
+  assert.equal(rows.find((row) => row.id === 'web-panel').attempts, 1);
+  rows = itemStates({ plan, state: empty, finished: { seats: [...finished.seats, { id: 'web-panel', status: 'planned' }] }, observed });
+  assert.equal(rows.find((row) => row.id === 'web-panel').state, 'failed');
+  // An attempt spent on another revision of the item is not this item's attempt.
+  rows = itemStates({ plan, state: empty, finished: { seats: [...finished.seats, { id: 'web-panel', status: 'planned', revision: 'other' }] }, observed });
+  assert.equal(rows.find((row) => row.id === 'web-panel').state, 'ready');
+});
+
+test('cli args accept the nine verbs, and only attach and restart take a positional', () => {
+  assert.deepEqual(parsePlanCliArgs(['assign', '--apply', '--project', '/p']), { help: false, verb: 'assign', project: '/p', json: false, watch: false, apply: true, remove: false, id: null, parallel: null });
+  assert.equal(parsePlanCliArgs(['machine', '--parallel', '3', '--apply']).parallel, '3');
+  assert.throws(() => parsePlanCliArgs(['machine', '--project', '/p']), /--project is not valid for machine/);
+  assert.equal(parsePlanCliArgs(['attach', 'web-panel']).id, 'web-panel');
+  assert.equal(parsePlanCliArgs(['restart', 'web-panel']).id, 'web-panel');
+  assert.throws(() => parsePlanCliArgs(['restart']), /restart requires a seat id/);
+  assert.throws(() => parsePlanCliArgs(['attach']), /attach requires a seat id/);
+  assert.throws(() => parsePlanCliArgs(['attach', 'a', 'b']), /attach takes one seat id/);
+  assert.throws(() => parsePlanCliArgs(['serve', '--json']), /--json is not valid for serve/);
+  assert.equal(parsePlanCliArgs(['hooks', '--remove', '--apply']).remove, true);
+  assert.throws(() => parsePlanCliArgs(['hooks', '--project', '/p']), /--project is not valid for hooks/);
+  assert.equal(parsePlanCliArgs([]).help, true);
+  assert.throws(() => parsePlanCliArgs(['plan', 'x']), /takes no positional/);
+  assert.throws(() => parsePlanCliArgs(['plan', '--apply']), /--apply is not valid for plan/);
+  assert.throws(() => parsePlanCliArgs(['seat']), /unknown command "seat"/);
+  assert.throws(() => parsePlanCliArgs(['next', '--project']), /--project requires a value/);
+});
+
+test('assign --apply seats exactly the budget through Seat, and a done report frees exactly one slot', (t) => {
+  const f = fixture(t, { local: 'version: 1\nparallel: 2\n' });
+  let plan = f.json(['plan', 'plan']);
+  assert.deepEqual(plan.budget, { parallel: 2, source: 'local' });
+  assert.deepEqual(plan.next, ['define-shape']);
+  assert.match(f.good(['plan', 'plan']).stdout, /items 4 · done 0 · active 0 · ready 2 · waiting 0 · blocked 2 · failed 0/);
+  assert.match(f.good(['plan', 'next']).stdout, /would assign 1\/2; changes nothing/);
+
+  let out = f.good(['plan', 'assign', '--apply']).stdout;
+  assert.match(out, /assigned 1\/1 · slots 1\/2/);
+  assert.match(f.good(['seat', 'status']).stdout, /define-shape/);
+  const handoff = f.good(['seat', 'seat', 'define-shape', '--task']).stdout;
+  assert.match(handoff, /^# define-shape: Decide the response shape/);
+  assert.match(handoff, /Scope: edit only docs\/reference\/\*\*/);
+
+  // Nothing else can go while define-shape holds docs/reference/**.
+  out = f.good(['plan', 'assign', '--apply']).stdout;
+  assert.match(out, /assigned 0\/0 · slots 1\/2/);
+
+  f.good(['seat', 'report', 'define-shape', '--status', 'done', '--note', 'shape written']);
+  plan = f.json(['plan', 'plan']);
+  assert.equal(plan.items.find((item) => item.id === 'define-shape').state, 'done');
+  assert.deepEqual(plan.next, ['api-endpoint', 'web-panel']);
+  out = f.good(['plan', 'assign', '--apply']).stdout;
+  assert.match(out, /assigned 2\/2 · slots 2\/2/);
+  const status = f.good(['plan', 'status']).stdout;
+  assert.match(status, /slots    2\/2/);
+  assert.match(status, /waiting  1 ready · 0 waiting for integration · 0 blocked/);
+
+  // One done report, one slot, one more item — docs-pass, since define-shape's claim is released.
+  f.good(['seat', 'report', 'api-endpoint', '--status', 'done']);
+  assert.match(f.good(['plan', 'next']).stdout, /assign  docs-pass/);
+  assert.match(f.good(['plan', 'assign', '--apply']).stdout, /assigned 1\/1 · slots 2\/2/);
+});
+
+test('the plan budget beats the local one, and no budget is an error naming both files', (t) => {
+  const f = fixture(t, { plan: PLAN.replace('version: 1\n', 'version: 1\nparallel: 1\n'), local: 'version: 1\nparallel: 5\n' });
+  assert.deepEqual(f.json(['plan', 'status']).budget, { parallel: 1, source: 'plan' });
+  const g = fixture(t);
+  const result = g.bad(['plan', 'plan']);
+  assert.match(result.stderr, /no budget: set parallel in .*plan\.yml or in .*plan\.local\.yml/);
+});
+
+test('a seat finished without done spends an attempt; failed shows in status and exits non-zero', (t) => {
+  const f = fixture(t, { local: 'version: 1\nparallel: 3\n' });
+  f.good(['plan', 'assign', '--apply']);
+  f.good(['seat', 'finish', 'define-shape', '--apply']);
+  const plan = f.json(['plan', 'plan']);
+  const row = plan.items.find((item) => item.id === 'define-shape');
+  assert.deepEqual({ state: row.state, attempts: row.attempts }, { state: 'failed', attempts: 1 });
+  const status = f.bad(['plan', 'status']);
+  assert.match(status.stdout, /failed   1  define-shape/);
+  // web-panel has two attempts: after one finished seat it is ready again.
+  f.good(['seat', 'plan', 'web-panel', '--task', 'manual', '--apply']);
+  f.good(['seat', 'finish', 'web-panel', '--apply']);
+  const again = f.json(['plan', 'plan']).items.find((item) => item.id === 'web-panel');
+  assert.deepEqual({ state: again.state, attempts: again.attempts }, { state: 'blocked', attempts: 1 });
+  // A seat the plan does not name takes no slot but is counted as outside.
+  f.good(['seat', 'plan', 'stray', '--task', 'somebody else', '--apply']);
+  // status still exits non-zero here: define-shape is failed.
+  const withStray = JSON.parse(f.bad(['plan', 'status', '--json']).stdout);
+  assert.deepEqual(withStray.seats_outside_plan, ['stray']);
+  assert.equal(withStray.slots.active, 0);
+  assert.match(f.bad(['plan', 'status']).stdout, /outside  1 seat not in the plan  stray/);
+});
+
+test('status --watch is a flag of status alone and never with --json', () => {
+  assert.equal(parsePlanCliArgs(['status', '--watch']).watch, true);
+  assert.throws(() => parsePlanCliArgs(['plan', '--watch']), /--watch is not valid for plan/);
+  const result = spawnSync(process.execPath, [CLI, 'plan', 'status', '--watch', '--json', '--project', '/nowhere'], { encoding: 'utf8' });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /--watch prints the text form; drop --json/);
+});
+
+test('launch templates, Claude hook settings, event states, and trust seeding', (t) => {
+  const tool = { command: ['claude', '{task}', '--model', 'x'] };
+  assert.deepEqual(launchCommand({ toolName: 'claude', tool, task: 'do it', settingsFile: '/s.json' }), { file: 'claude', args: ['do it', '--model', 'x', '--settings', '/s.json'], tool: 'claude' });
+  assert.deepEqual(launchCommand({ toolName: 'codex', tool: { command: ['codex', '{task}'] }, task: 'do it', settingsFile: '/s.json' }).args, ['do it']);
+
+  const settings = claudeSettings("/tmp/it's.events");
+  assert.deepEqual(Object.keys(settings.hooks), ['UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop', 'StopFailure', 'SessionEnd', 'Notification']);
+  assert.equal(stateFromEvents('{"hook_event_name":"Notification","notification_type":"permission_prompt"}\n{"hook_event_name":"PreToolUse"}\n'), 'running');
+  assert.match(settings.hooks.Stop[0].hooks[0].command, /cat >> '\/tmp\/it'\\''s\.events'/);
+
+  assert.equal(stateFromEvents(''), null);
+  // The doing line is the last tool event's name and target; other events do not touch it.
+  assert.equal(doingFromEvents(''), null);
+  assert.equal(doingFromEvents('{"hook_event_name":"UserPromptSubmit"}\n'), null);
+  assert.equal(doingFromEvents('{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{"file_path":"app/api/server.mjs"}}\n'), 'Edit app/api/server.mjs');
+  assert.equal(doingFromEvents('{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"node tools/overlay.mjs   attach w1 api\\n--apply"}}\n{"hook_event_name":"Stop"}\n'), 'Bash node tools/overlay.mjs attach w1 api --apply');
+  assert.equal(doingFromEvents('{"hook_event_name":"PostToolUse","tool_name":"Read","tool_input":{"file_path":"a.md"}}\n{"hook_event_name":"PreToolUse","tool_name":"Grep","tool_input":{"pattern":"seat"}}\n'), 'Grep seat');
+  assert.equal(doingFromEvents('{"hookEventName":"preToolUse","toolName":"Skill","toolInput":{"skill":"facts"}}\n'), 'Skill facts');
+  assert.equal(doingFromEvents('{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"' + 'x'.repeat(200) + '"}}\n').length, 'Bash '.length + 80);
+  assert.equal(stateFromEvents('{"hook_event_name":"UserPromptSubmit"}\n'), 'running');
+  assert.equal(stateFromEvents('{"hook_event_name":"UserPromptSubmit"}\n{"hook_event_name":"Stop"}\n'), 'idle');
+  assert.equal(stateFromEvents('{"hook_event_name":"Stop"}\n{"hook_event_name":"Notification","notification_type":"idle_prompt"}\n'), 'needs-input');
+  assert.equal(stateFromEvents('{"hook_event_name":"Stop"}\n{"hook_event_name":"Notification","notification_type":"auth_success"}\n'), 'idle');
+  assert.equal(stateFromEvents('not json\n{"hook_event_name":"SessionEnd"}\n'), 'exited');
+  // Grok, as recorded on 2026-09-08: camelCase key, snake_case lowercase value.
+  assert.equal(stateFromEvents('{"hookEventName":"user_prompt_submit","sessionId":"x"}\n{"hookEventName":"pre_tool_use"}\n'), 'running');
+  assert.equal(stateFromEvents('{"hookEventName":"user_prompt_submit"}\n{"hookEventName":"stop","reason":"end_turn"}\n'), 'idle');
+
+  // The screen fallback for a session parked before its first prompt.
+  assert.equal(screenAsksForInput('\x1b[2J  Allow external CLAUDE.md file imports?\r\n ❯ No, disable\r\n   Yes, allow\r\n Enter to confirm · Esc to cancel\r\n\x1b[>0q'), true);
+  assert.equal(screenAsksForInput('Welcome to Claude Code\r\n> \r\n'), false);
+  // Spaces drawn by cursor movement are absent from the byte stream.
+  assert.equal(screenAsksForInput('Quicksafetycheck\r\n❯No,exit\r\nYes,Itrustthisfolder\r\nEntertoconfirm·Esctocancel\r\n\x1b[>0q'), true);
+  assert.equal(screenAsksForInput(''), false);
+  // Cursor Agent, not logged in, as recorded on 2026-09-08.
+  assert.equal(screenAsksForInput('Cursor Agent\r\nv2026.09.02\r\nPress any key to log in...\r\n'), true);
+  assert.equal(screenAsksForInput('│ [q] Quit │\r\n│ Use arrow keys to navigate, Enter to select, or press the key shown │\r\n'), true);
+
+  const configDir = mkdtempSync(path.join(tmpdir(), 'plan-claude-'));
+  t.after(() => rmSync(configDir, { recursive: true, force: true }));
+  const environment = { CLAUDE_CONFIG_DIR: configDir };
+  assert.equal(seedClaudeTrust('/w/one', environment).result, 'absent');
+  writeFileSync(path.join(configDir, '.claude.json'), JSON.stringify({ projects: { '/w/other': { allowedTools: ['x'] } }, theme: 'dark' }));
+  assert.equal(seedClaudeTrust('/w/one', environment).result, 'seeded');
+  assert.equal(seedClaudeTrust('/w/one', environment).result, 'already');
+  const written = JSON.parse(readFileSync(path.join(configDir, '.claude.json'), 'utf8'));
+  assert.deepEqual(written, { projects: { '/w/other': { allowedTools: ['x'] }, '/w/one': { hasTrustDialogAccepted: true } }, theme: 'dark' });
+  writeFileSync(path.join(configDir, '.claude.json'), '{ broken');
+  assert.equal(seedClaudeTrust('/w/one', environment).result, 'unreadable');
+});
+
+// serve holds the fixture tool in a real pseudo-terminal, a viewer types the
+// answer through the socket, the tool reports done, the slot refills.
+test('serve seats the budget, holds real sessions, relays a viewer, and refills after done', async (t) => {
+  const f = fixture(t, {
+    plan: PLAN,
+    local: `version: 1\nparallel: 1\ntool: fixture\ntools:\n  fixture: { command: [${JSON.stringify(process.execPath)}, ${JSON.stringify(TOOL)}, "{task}"] }\n`,
+  });
+  const snapshot = path.join(f.root, 'state', 'plans', 'plan-test.yml');
+  // A previous session's last event must not become this session's state.
+  const staleEvents = path.join(f.root, 'state/seats/events/plan-test/define-shape.events');
+  mkdirSync(path.dirname(staleEvents), { recursive: true });
+  writeFileSync(staleEvents, '{"hook_event_name":"SessionEnd"}\n');
+  const serve = spawn(process.execPath, [CLI, 'plan', 'serve', '--project', f.baseline], { env: { ...f.environment, PLAN_POLL_MS: '300' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  let log = '';
+  serve.stdout.on('data', (chunk) => { log += chunk; });
+  serve.stderr.on('data', (chunk) => { log += chunk; });
+  t.after(() => { if (serve.exitCode == null) serve.kill('SIGKILL'); });
+  const until = async (pred, what, ms = 15000) => {
+    const deadline = Date.now() + ms;
+    while (Date.now() < deadline) { if (pred()) return; await sleep(100); }
+    let last = null;
+    try { last = f.run(['plan', 'status', '--json']); } catch {}
+    assert.fail(`${what}\n${log}\n--- status: ${last?.stdout}\n${last?.stderr}`);
+  };
+  const sessions = () => (existsSync(snapshot) ? f.json(['plan', 'status']).items.map((item) => [item.id, item.session?.state ?? null]) : []);
+  await until(() => sessions().some(([id, state]) => id === 'define-shape' && state === 'needs-input'), 'define-shape session reached needs-input');
+  const status = f.json(['plan', 'status']);
+  assert.equal(status.serve.alive, true);
+  assert.doesNotMatch(readFileSync(staleEvents, 'utf8'), /SessionEnd/, 'events file starts empty per launch');
+  assert.deepEqual(status.slots, { active: 1, free: 0, parallel: 1 });
+  const text = f.good(['plan', 'status']).stdout;
+  assert.match(text, /serve    pid \d+ · sessions 1/);
+  assert.match(text, /define-shape  fixture  needs-input/);
+
+  // A viewer attaches over the socket, sees the prompt, and answers it.
+  const seen = await new Promise((resolve, reject) => {
+    const socket = createConnection(status.serve.socket);
+    let out = '';
+    socket.on('data', (chunk) => { out += chunk; if (out.includes('allow? (y/N)') && !socket.answered) { socket.answered = true; socket.write('y\r'); } if (out.includes('report exit 0')) { socket.end(); resolve(out); } });
+    socket.once('connect', () => socket.write(JSON.stringify({ attach: 'define-shape', cols: 100, rows: 30 }) + '\n'));
+    socket.on('error', reject);
+    // A loaded CI runner spawns the fixture tool's report processes slowly; two minutes
+    // still fails a hang. One post-merge run on main timed out at fifteen seconds
+    // (2026-09-09), and one full-suite run on a laptop timed out at sixty once the
+    // fixture also commits its work (2026-09-10).
+    setTimeout(() => reject(new Error('viewer timed out\n' + out)), 120000);
+  });
+  assert.match(seen, /"ok":true/);
+  assert.match(seen, /fixture tool · seat define-shape · task: # define-shape: Decide the response shape/);
+  assert.match(readFileSync(path.join(f.root, 'seats', 'define-shape', 'docs/reference/done.txt'), 'utf8'), /^# define-shape: Decide the response shape and write it into the reference\n/);
+
+  // Done closes that session and the freed slot goes to the next ready item:
+  // docs-pass, whose claim define-shape held; api-endpoint waits until a
+  // person integrates define-shape's commit into the baseline.
+  await until(() => { const s = Object.fromEntries(sessions()); return s['define-shape'] === 'closed' && s['docs-pass'] === 'needs-input'; }, 'slot refilled with docs-pass after define-shape reported done');
+  const after = f.json(['plan', 'status']);
+  assert.equal(after.items.find((item) => item.id === 'define-shape').state, 'done');
+  assert.equal(after.items.find((item) => item.id === 'api-endpoint').state, 'waiting');
+  // What the session was doing came from its tool events, not from the worker's report.
+  const closed = after.items.find((item) => item.id === 'define-shape').session;
+  assert.equal(closed.doing, 'Write docs/reference/done.txt');
+  assert.match(closed.doing_since, /^\d{4}-\d{2}-\d{2}T/);
+  assert.match(f.good(['plan', 'status']).stdout, /define-shape  fixture  closed \d+  · Write docs\/reference\/done\.txt \(\d+[smh]\)/);
+  assert.deepEqual(after.slots, { active: 1, free: 0, parallel: 1 });
+  // A closed session has nothing to attach to; the daemon says so by name.
+  assert.match(f.bad(['plan', 'attach', 'define-shape']).stderr, /no live session for "define-shape"/);
+
+  serve.kill('SIGINT');
+  await until(() => serve.exitCode != null, 'serve exits on SIGINT', 8000);
+  assert.equal(existsSync(snapshot), false, 'snapshot removed on stop');
+  assert.equal(existsSync(after.serve.socket), false, 'socket removed on stop');
+});
+
+test('hooks installs one marked entry per event in each tool store, keeps the person\'s entries, and removes exactly its own', (t) => {
+  const home = mkdtempSync(path.join(tmpdir(), 'plan-home-'));
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  const environment = { HOME: home, CODEX_HOME: path.join(home, '.codex'), OPENCODE_CONFIG_DIR: path.join(home, 'opencode') };
+  // Nothing installed: every store is skipped and nothing is written.
+  let rows = applyHooks({ environment, apply: true });
+  assert.deepEqual(rows.map((row) => row.action), Array(4).fill('skip: tool not installed'));
+  assert.equal(existsSync(path.join(home, '.cursor')), false);
+
+  // Three tools present; cursor and codex already carry the person's own entries.
+  mkdirSync(path.join(home, '.codex'), { recursive: true });
+  mkdirSync(path.join(home, '.cursor'), { recursive: true });
+  mkdirSync(path.join(home, '.grok'), { recursive: true });
+  writeFileSync(path.join(home, '.cursor/hooks.json'), JSON.stringify({ hooks: { stop: [{ command: 'their-stop.sh', timeout: 5 }] }, version: 1 }));
+  writeFileSync(path.join(home, '.codex/hooks.json'), JSON.stringify({ hooks: { Stop: [{ matcher: '', hooks: [{ type: 'command', command: 'theirs' }] }] } }));
+  // Codex trusts a handler only against a hash it keeps in config.toml; a
+  // person had trusted their own Stop hook, and, say, ours for PreToolUse.
+  const codexConfig = path.join(home, '.codex/config.toml');
+  const theirTrust = `[features]\nmemories = true\n\n[hooks.state."${path.join(home, '.codex/hooks.json')}:stop:0:0"]\ntrusted_hash = "sha256:theirs"\n`;
+  writeFileSync(codexConfig, theirTrust);
+  rows = applyHooks({ environment });
+  assert.deepEqual(rows.map((row) => [row.tool, row.before, row.action]), [
+    ['codex', 'present', 'would install'], ['grok', 'absent', 'would install'], ['cursor-agent', 'present', 'would install'], ['opencode', 'absent', 'skip: tool not installed'],
+  ]);
+  assert.equal(readFileSync(path.join(home, '.cursor/hooks.json'), 'utf8').includes(HOOK_MARKER), false, 'nothing written without --apply');
+
+  rows = applyHooks({ environment, apply: true });
+  assert.deepEqual(rows.map((row) => row.action), ['installed', 'installed', 'installed', 'skip: tool not installed']);
+  // Trust records for exactly our five Codex handlers, after the person's own table, which is kept as it was.
+  const trusted = readFileSync(codexConfig, 'utf8');
+  assert.ok(trusted.startsWith(theirTrust), 'the person\'s config is the prefix, byte for byte');
+  assert.equal((trusted.match(new RegExp(`# ${TRUST_MARKER}`, 'g')) ?? []).length, 5);
+  assert.match(trusted, new RegExp(`\\[hooks\\.state\\."${path.join(home, '.codex/hooks.json').replaceAll('/', '\\/')}:stop:1:0"\\]\\ntrusted_hash = "${codexHookHash('Stop', { command: 'x', timeout: 10 }).slice(0, 7)}`), 'our Stop handler is group 1 after the person\'s group 0');
+  assert.match(rows[0].trust, /5 trust records in .*config\.toml/);
+  // Codex hashes the normalized handler identity as canonical JSON.
+  // The command text names PLAN_EVENTS, so the pin is the hash of that command.
+  const ourStopGroup = JSON.parse(readFileSync(path.join(home, '.codex/hooks.json'), 'utf8')).hooks.Stop[1];
+  assert.equal('matcher' in ourStopGroup, false, 'a Codex group of ours carries no matcher key, which Codex would hash into the identity');
+  const ourStop = ourStopGroup.hooks[0];
+  assert.equal(codexHookHash('Stop', ourStop), 'sha256:f7d047dff3376391af6a91228b51707c481272b407c9a1617fe1d25a5fae180b');
+  assert.equal(codexHookHash('SessionEnd', { command: 'x' }), codexHookHash('SessionEnd', { command: 'x', timeout: 1 }), 'SessionEnd defaults to one second');
+  assert.notEqual(codexHookHash('Stop', { command: 'x' }), codexHookHash('Stop', { command: 'x', timeout: 10 }));
+  // A key the person already trusts is left alone; removal returns the file to its bytes.
+  assert.equal(renderCodexTrust('[hooks.state."k:stop:0:0"]\ntrusted_hash = "sha256:theirs"\n', [{ key: 'k:stop:0:0', hash: 'sha256:ours' }]), '[hooks.state."k:stop:0:0"]\ntrusted_hash = "sha256:theirs"\n');
+  assert.equal(renderCodexTrust(renderCodexTrust('a = 1\n', [{ key: 'k:stop:0:0', hash: 'sha256:ours' }]), [], { remove: true }), 'a = 1\n');
+  assert.equal(renderCodexTrust('a = 1\n\n# de-novo plan hook trust\n\n[b]\nc = 2\n', [], { remove: true }), 'a = 1\n\n[b]\nc = 2\n', 'an orphan marker is dropped too');
+  const cursor = JSON.parse(readFileSync(path.join(home, '.cursor/hooks.json'), 'utf8'));
+  assert.equal(cursor.version, 1);
+  assert.deepEqual(cursor.hooks.stop[0], { command: 'their-stop.sh', timeout: 5 });
+  assert.match(cursor.hooks.stop[1].command, /PLAN_EVENTS.*"hook_event_name":"Stop"/s);
+  assert.match(cursor.hooks.beforeSubmitPrompt[0].command, /"hook_event_name":"UserPromptSubmit"/);
+  const codex = JSON.parse(readFileSync(path.join(home, '.codex/hooks.json'), 'utf8'));
+  assert.equal(codex.hooks.Stop[0].hooks[0].command, 'theirs');
+  assert.match(codex.hooks.Stop[1].hooks[0].command, /cat >> "\$E"/);
+  assert.deepEqual(Object.keys(codex.hooks), ['Stop', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PermissionRequest']);
+  const grok = JSON.parse(readFileSync(path.join(home, '.grok/hooks/de-novo-plan.json'), 'utf8'));
+  assert.deepEqual(Object.keys(grok.hooks), ['UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop', 'StopFailure', 'SessionEnd', 'Notification']);
+  // Every command is gated: without PLAN_EVENTS it consumes stdin and
+  // exits 0, and with PLAN_EVENTS outside Plan's state directory it
+  // writes nothing, so a global hook is not an append-anywhere primitive.
+  mkdirSync(path.join(home, '.dev-infra/plans/slug'), { recursive: true });
+  mkdirSync(path.join(home, 'override/plans/slug'), { recursive: true });
+  for (const command of [cursor.hooks.stop[1].command, codex.hooks.Stop[1].hooks[0].command]) {
+    const gated = spawnSync('sh', ['-c', command], { input: '{"x":1}', env: { PATH: process.env.PATH, HOME: home }, encoding: 'utf8' });
+    assert.equal(gated.status, 0);
+    const inside = path.join(home, '.dev-infra/plans/slug/w1.events');
+    spawnSync('sh', ['-c', command], { input: '{"hook_event_name":"Stop"}', env: { PATH: process.env.PATH, HOME: home, PLAN_EVENTS: inside }, encoding: 'utf8' });
+    assert.match(readFileSync(inside, 'utf8'), /"hook_event_name":"Stop"/);
+    const outside = path.join(home, 'events.log');
+    const refused = spawnSync('sh', ['-c', command], { input: '{"hook_event_name":"Stop"}', env: { PATH: process.env.PATH, HOME: home, PLAN_EVENTS: outside }, encoding: 'utf8' });
+    assert.equal(refused.status, 0);
+    assert.equal(existsSync(outside), false, 'a path outside the state directory is not written');
+    const overridden = path.join(home, 'override/plans/slug/w1.events');
+    spawnSync('sh', ['-c', command], { input: '{"hook_event_name":"Stop"}', env: { PATH: process.env.PATH, HOME: home, GROUND_STATE_DIR: path.join(home, 'override'), PLAN_EVENTS: overridden }, encoding: 'utf8' });
+    assert.match(readFileSync(overridden, 'utf8'), /"hook_event_name":"Stop"/, 'GROUND_STATE_DIR moves the allowed root with it');
+    // A seat's own events file (SEAT_EVENTS) is the first address, whoever launched the tool.
+    mkdirSync(path.join(home, '.dev-infra/seats/events/slug'), { recursive: true });
+    const seatFile = path.join(home, '.dev-infra/seats/events/slug/w1.events');
+    spawnSync('sh', ['-c', command], { input: '{"hook_event_name":"Stop"}', env: { PATH: process.env.PATH, HOME: home, SEAT_EVENTS: seatFile, PLAN_EVENTS: outside }, encoding: 'utf8' });
+    assert.match(readFileSync(seatFile, 'utf8'), /"hook_event_name":"Stop"/, 'SEAT_EVENTS wins and its root is allowed');
+    assert.equal(existsSync(outside), false);
+  }
+
+  // Idempotent: a second apply changes nothing; a remove takes back only ours.
+  rows = applyHooks({ environment, apply: true });
+  assert.deepEqual(rows.map((row) => row.action), ['already installed', 'already installed', 'already installed', 'skip: tool not installed']);
+  rows = applyHooks({ environment, apply: true, remove: true });
+  assert.deepEqual(rows.map((row) => row.action), ['removed', 'removed', 'removed', 'skip: tool not installed']);
+  assert.equal(readFileSync(codexConfig, 'utf8'), theirTrust, 'the trust records are taken back and the person\'s config is what it was');
+  assert.deepEqual(JSON.parse(readFileSync(path.join(home, '.cursor/hooks.json'), 'utf8')), { hooks: { stop: [{ command: 'their-stop.sh', timeout: 5 }] }, version: 1 });
+  assert.deepEqual(JSON.parse(readFileSync(path.join(home, '.codex/hooks.json'), 'utf8')), { hooks: { Stop: [{ matcher: '', hooks: [{ type: 'command', command: 'theirs' }] }] } });
+  assert.equal(existsSync(path.join(home, '.grok/hooks/de-novo-plan.json')), false);
+
+  // OpenCode: the plugin file is written whole and removed whole.
+  mkdirSync(path.join(home, 'opencode'), { recursive: true });
+  rows = applyHooks({ environment, apply: true });
+  assert.equal(rows[3].action, 'installed');
+  assert.match(readFileSync(path.join(home, 'opencode/plugins/de-novo-plan.js'), 'utf8'), /PLAN_EVENTS/);
+  // A store that is not JSON is refused by name, not clobbered.
+  writeFileSync(path.join(home, '.codex/hooks.json'), '{ broken');
+  assert.throws(() => applyHooks({ environment, apply: true }), /hooks\.json: not JSON/);
+  assert.equal(readFileSync(path.join(home, '.codex/hooks.json'), 'utf8'), '{ broken');
+  assert.equal(hookStores(environment).length, 4);
+  assert.equal(renderStore({ kind: 'plugin' }, null, { remove: true }), null);
+});

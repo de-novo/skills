@@ -56,7 +56,7 @@
       "id": "web-count",
       "state": "done",
       "why": "seat reported done",
-      "task": "Show the notes count from the api on the web page (app/web/server.mjs). You are seated by Dryad: DRYAD_ID names your seat. Edit only inside this worktree, commit on your branch, then run exactly: node de-novo skills dryad report \"$DRYAD_ID\" --status done --note \"<one line on what you did>\". Do not push or merge.",
+      "task": "Show the notes count from the api on the web page (app/web/server.mjs). You are seated by Seat: SEAT_ID names your seat. Edit only inside this worktree, commit on your branch, then run exactly: node de-novo skills seat report \"$SEAT_ID\" --status done --note \"<one line on what you did>\". Do not push or merge.",
       "owns": [
         "app/web/**"
       ],
@@ -78,7 +78,7 @@
       "id": "readme-notes",
       "state": "done",
       "why": "seat reported done",
-      "task": "Add a short section to README.md documenting that /notes returns a count field. You are seated by Dryad: DRYAD_ID names your seat. Edit only inside this worktree, commit on your branch, then run exactly: node de-novo skills dryad report \"$DRYAD_ID\" --status done --note \"<one line on what you did>\". Do not push or merge.",
+      "task": "Add a short section to README.md documenting that /notes returns a count field. You are seated by Seat: SEAT_ID names your seat. Edit only inside this worktree, commit on your branch, then run exactly: node de-novo skills seat report \"$SEAT_ID\" --status done --note \"<one line on what you did>\". Do not push or merge.",
       "owns": [
         "README.md"
       ],
@@ -98,7 +98,7 @@
       "id": "changelog-codex",
       "state": "done",
       "why": "seat reported done",
-      "task": "Create CHANGELOG.md with one line: \"notes count shown on the web page\". You are seated by Dryad: DRYAD_ID names your seat. Edit only inside this worktree, commit on your branch, then run exactly: node de-novo skills dryad report \"$DRYAD_ID\" --status done --note \"<one line on what you did>\". Do not push or merge.",
+      "task": "Create CHANGELOG.md with one line: \"notes count shown on the web page\". You are seated by Seat: SEAT_ID names your seat. Edit only inside this worktree, commit on your branch, then run exactly: node de-novo skills seat report \"$SEAT_ID\" --status done --note \"<one line on what you did>\". Do not push or merge.",
       "owns": [
         "CHANGELOG.md"
       ],
@@ -118,7 +118,7 @@
       "id": "authors-grok",
       "state": "done",
       "why": "seat reported done",
-      "task": "Create AUTHORS.md with one line: \"playground sample\". You are seated by Dryad: DRYAD_ID names your seat. Edit only inside this worktree, commit on your branch, then run exactly: node de-novo skills dryad report \"$DRYAD_ID\" --status done --note \"<one line on what you did>\". Do not push or merge.",
+      "task": "Create AUTHORS.md with one line: \"playground sample\". You are seated by Seat: SEAT_ID names your seat. Edit only inside this worktree, commit on your branch, then run exactly: node de-novo skills seat report \"$SEAT_ID\" --status done --note \"<one line on what you did>\". Do not push or merge.",
       "owns": [
         "AUTHORS.md"
       ],
@@ -138,7 +138,7 @@
       "id": "license-codex",
       "state": "done",
       "why": "seat reported done",
-      "task": "Create LICENSE-NOTE.md with one line: \"sample project, no license\". You are seated by Dryad: DRYAD_ID names your seat. Edit only inside this worktree, commit on your branch, then run exactly: node de-novo skills dryad report \"$DRYAD_ID\" --status done --note \"<one line on what you did>\". Do not push or merge.",
+      "task": "Create LICENSE-NOTE.md with one line: \"sample project, no license\". You are seated by Seat: SEAT_ID names your seat. Edit only inside this worktree, commit on your branch, then run exactly: node de-novo skills seat report \"$SEAT_ID\" --status done --note \"<one line on what you did>\". Do not push or merge.",
       "owns": [
         "LICENSE-NOTE.md"
       ],
@@ -158,7 +158,7 @@
       "id": "contrib-grok",
       "state": "done",
       "why": "seat reported done",
-      "task": "Create CONTRIBUTING.md with one line: \"open a pull request\". You are seated by Dryad: DRYAD_ID names your seat. Edit only inside this worktree, commit on your branch, then run exactly: node de-novo skills dryad report \"$DRYAD_ID\" --status done --note \"<one line on what you did>\". Do not push or merge.",
+      "task": "Create CONTRIBUTING.md with one line: \"open a pull request\". You are seated by Seat: SEAT_ID names your seat. Edit only inside this worktree, commit on your branch, then run exactly: node de-novo skills seat report \"$SEAT_ID\" --status done --note \"<one line on what you did>\". Do not push or merge.",
       "owns": [
         "CONTRIBUTING.md"
       ],
@@ -178,7 +178,7 @@
       "id": "support-cursor",
       "state": "active",
       "why": "seat planned",
-      "task": "Create SUPPORT.md with one line: \"no support\". You are seated by Dryad: DRYAD_ID names your seat. Edit only inside this worktree, commit on your branch, then run exactly: node de-novo skills dryad report \"$DRYAD_ID\" --status done --note \"<one line on what you did>\". Do not push or merge.",
+      "task": "Create SUPPORT.md with one line: \"no support\". You are seated by Seat: SEAT_ID names your seat. Edit only inside this worktree, commit on your branch, then run exactly: node de-novo skills seat report \"$SEAT_ID\" --status done --note \"<one line on what you did>\". Do not push or merge.",
       "owns": [
         "SUPPORT.md"
       ],
@@ -198,7 +198,7 @@
       "id": "security-opencode",
       "state": "done",
       "why": "seat reported done",
-      "task": "Create SECURITY.md with one line: \"report privately\". You are seated by Dryad: DRYAD_ID names your seat. Edit only inside this worktree, commit on your branch, then run exactly: node de-novo skills dryad report \"$DRYAD_ID\" --status done --note \"<one line on what you did>\". Do not push or merge.",
+      "task": "Create SECURITY.md with one line: \"report privately\". You are seated by Seat: SEAT_ID names your seat. Edit only inside this worktree, commit on your branch, then run exactly: node de-novo skills seat report \"$SEAT_ID\" --status done --note \"<one line on what you did>\". Do not push or merge.",
       "owns": [
         "SECURITY.md"
       ],

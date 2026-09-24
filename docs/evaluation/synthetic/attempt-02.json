@@ -57,7 +57,7 @@
     {
       "project": "board",
       "pair": 1,
-      "method": "grove",
+      "method": "ground",
       "ready_ms": 613.0648339999999,
       "cleanup_ms": 288.84950000000003,
       "reader_checks": 20,
@@ -67,7 +67,7 @@
     {
       "project": "board",
       "pair": 2,
-      "method": "grove",
+      "method": "ground",
       "ready_ms": 656.1431249999998,
       "cleanup_ms": 252.74745799999982,
       "reader_checks": 20,
@@ -97,7 +97,7 @@
     {
       "project": "board",
       "pair": 3,
-      "method": "grove",
+      "method": "ground",
       "ready_ms": 663.5995419999999,
       "cleanup_ms": 386.19574999999986,
       "reader_checks": 20,
@@ -107,7 +107,7 @@
     {
       "project": "board",
       "pair": 4,
-      "method": "grove",
+      "method": "ground",
       "ready_ms": 624.3015000000005,
       "cleanup_ms": 343.31825000000026,
       "reader_checks": 20,
@@ -137,7 +137,7 @@
     {
       "project": "board",
       "pair": 5,
-      "method": "grove",
+      "method": "ground",
       "ready_ms": 615.0641670000005,
       "cleanup_ms": 270.52245800000037,
       "reader_checks": 20,
@@ -157,7 +157,7 @@
     {
       "project": "shop",
       "pair": 1,
-      "method": "grove",
+      "method": "ground",
       "ready_ms": 554.3371250000018,
       "cleanup_ms": 271.731834000002,
       "reader_checks": 20,
@@ -167,7 +167,7 @@
     {
       "project": "shop",
       "pair": 2,
-      "method": "grove",
+      "method": "ground",
       "ready_ms": 579.2840829999986,
       "cleanup_ms": 246.76529200000004,
       "reader_checks": 20,
@@ -197,7 +197,7 @@
     {
       "project": "shop",
       "pair": 3,
-      "method": "grove",
+      "method": "ground",
       "ready_ms": 564.497540999997,
       "cleanup_ms": 248.61525000000256,
       "reader_checks": 20,
@@ -207,7 +207,7 @@
     {
       "project": "shop",
       "pair": 4,
-      "method": "grove",
+      "method": "ground",
       "ready_ms": 651.5224170000001,
       "cleanup_ms": 266.7082499999997,
       "reader_checks": 20,
@@ -237,7 +237,7 @@
     {
       "project": "shop",
       "pair": 5,
-      "method": "grove",
+      "method": "ground",
       "ready_ms": 630.0070410000008,
       "cleanup_ms": 252.0477499999979,
       "reader_checks": 20,
@@ -261,7 +261,7 @@
     {
       "project": "board",
       "scenario": "old-image",
-      "method": "grove",
+      "method": "ground",
       "rejected": true,
       "failure_ms": 994.7786669999987,
       "recovery_ms": 218.5192079999997,
@@ -285,7 +285,7 @@
     {
       "project": "board",
       "scenario": "unready",
-      "method": "grove",
+      "method": "ground",
       "rejected": true,
       "failure_ms": 1066.0100000000002,
       "recovery_ms": 159.30099999999948,
@@ -309,7 +309,7 @@
     {
       "project": "board",
       "scenario": "interrupted-dispatch",
-      "method": "grove",
+      "method": "ground",
       "rejected": true,
       "failure_ms": 190.1388339999994,
       "recovery_ms": 147.91229199999907,
@@ -333,7 +333,7 @@
     {
       "project": "board",
       "scenario": "cleanup-failure",
-      "method": "grove",
+      "method": "ground",
       "rejected": true,
       "failure_ms": 82.27299999999923,
       "recovery_ms": 128.54491700000108,
@@ -357,7 +357,7 @@
     {
       "project": "shop",
       "scenario": "old-image",
-      "method": "grove",
+      "method": "ground",
       "rejected": true,
       "failure_ms": 991.1002090000002,
       "recovery_ms": 210.91175000000294,
@@ -381,7 +381,7 @@
     {
       "project": "shop",
       "scenario": "unready",
-      "method": "grove",
+      "method": "ground",
       "rejected": true,
       "failure_ms": 1075.2748749999992,
       "recovery_ms": 158.3338330000006,
@@ -405,7 +405,7 @@
     {
       "project": "shop",
       "scenario": "interrupted-dispatch",
-      "method": "grove",
+      "method": "ground",
       "rejected": true,
       "failure_ms": 148.3037089999998,
       "recovery_ms": 137.5161659999976,
@@ -429,7 +429,7 @@
     {
       "project": "shop",
       "scenario": "cleanup-failure",
-      "method": "grove",
+      "method": "ground",
       "rejected": true,
       "failure_ms": 76.69558300000062,
       "recovery_ms": 126.62158400000044,
@@ -449,7 +449,7 @@
     },
     {
       "project": "board",
-      "method": "grove",
+      "method": "ground",
       "blocked": true,
       "retries": 1,
       "independent_readers_passed": 2
@@ -463,7 +463,7 @@
     },
     {
       "project": "shop",
-      "method": "grove",
+      "method": "ground",
       "blocked": true,
       "retries": 1,
       "independent_readers_passed": 2

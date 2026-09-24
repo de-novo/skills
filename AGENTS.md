@@ -7,8 +7,8 @@ still owns its pattern.
 
 This checkout is a **skill catalog**, not a consuming app. Do not plant
 `.agents/runtime-profile.yml` here — that file belongs in projects that *use*
-Grove. `.agents/dryad-profile.yml` *is* here: the catalog seats its own
-workers with Dryad (worktrees and reports, no overlay envs).
+Ground. `.agents/seat-profile.yml` *is* here: the catalog seats its own
+workers with Seat (worktrees and reports, no overlay envs).
 
 Remote: `git@github.com:de-novo/skills.git`. CLI: `de-novo skills` (alias `de-novo-skills`).
 
@@ -19,23 +19,23 @@ Remote: `git@github.com:de-novo/skills.git`. CLI: `de-novo skills` (alias `de-no
 | Product names (Ground, Seat, Plan, Facts, Cluster seat, Egress) | `docs/glossary.md` |
 | Published skill (pattern) | `skills/<name>/SKILL.md` |
 | Human diagram / apply | `skills/<name>/README.md` |
-| Grove profile schema | `skills/grove/references/runtime-profile.md` |
-| Grove addressing (this checkout) | `infra/addressing.yml` (+ `addressing.local.yml`, gitignored) |
+| Ground profile schema | `skills/ground/references/runtime-profile.md` |
+| Ground addressing (this checkout) | `infra/addressing.yml` (+ `addressing.local.yml`, gitignored) |
 | Project addressing | that project's `.agents/runtime-profile.yml` (+ `.local.yml`) |
-| Engine catalog | `infra/docker-compose.yml` (profile = engine id; grove.* labels) |
+| Engine catalog | `infra/docker-compose.yml` (profile = engine id; ground.* labels) |
 | Machine infra commands | `de-novo skills infra` (`infra/bin/cli.mjs`) |
 | CLI | `infra/bin/cli.mjs` |
 | Doctor and capabilities (read-only entry point) | `infra/lib/doctor.mjs` only |
 | Profile parse + invariants | `infra/lib/profile.mjs` only |
-| Dryad profile schema + CLI | `skills/dryad/references/seats.md` |
-| Dryad profile parse + seat registry | `infra/lib/dryad.mjs` only |
-| Forester plan schema + CLI | `skills/forester/references/plan.md` |
-| Forester plan parse + allocation rule | `infra/lib/forester.mjs` only |
+| Seat profile schema + CLI | `skills/seat/references/seats.md` |
+| Seat profile parse + seat registry | `infra/lib/seat.mjs` only |
+| Plan schema + CLI | `skills/plan/references/plan.md` |
+| Plan parse + allocation rule | `infra/lib/plan.mjs` only |
 | Path claims (normalize, intersect, match a seat's changes) | `infra/lib/claims.mjs` only |
 | Understory document shape | `skills/understory/references/document.md` |
 | Understory graph + reading lines | `infra/lib/understory.mjs` only |
-| Mycelium envelope, transitions, CLI | `skills/mycelium/references/log.md` |
-| Mycelium log fold + conflict rule | `infra/lib/mycelium.mjs` only |
+| Facts envelope, transitions, CLI | `skills/facts/references/log.md` |
+| Facts log fold + conflict rule | `infra/lib/facts.mjs` only |
 | Hostname render | `infra/lib/addressing.mjs` |
 | DNS and TLS wildcard rules (as their RFCs state them) | `infra/lib/wildcards.mjs` only |
 | How to work in this catalog | this file |
@@ -53,12 +53,12 @@ AGENTS.md        this file
 CLAUDE.md        pointer here — do not duplicate
 .agents/         load adapter + repo-only skills
 skills/          published skill sources
-  grove/         first skill
-  dryad/         seats on Grove's ground (no agent launch)
-  forester/      plan + budget + allocator over Dryad seats
+  ground/         first skill
+  seat/         seats on Ground (no agent launch)
+  plan/      plan + budget + allocator over Seat seats
   understory/    the graph drawn and written up for people
-  mycelium/      the facts under the forest: an assertion log per project
-infra/           machine-shared engines Grove's CLI drives
+  facts/      the facts under the forest: an assertion log per project
+infra/           machine-shared engines Ground's CLI drives
 docs/            glossary.md (product names), then design notes (not the user-facing spec)
 ```
 
@@ -66,7 +66,7 @@ docs/            glossary.md (product names), then design notes (not the user-fa
 
 1. Say which house you are changing: a published skill (pattern), `infra/`
    (this catalog's machine backend + CLI), or agent load paths.
-2. Read that house. Grove pattern → `skills/grove/SKILL.md`. Schema →
+2. Read that house. Ground pattern → `skills/ground/SKILL.md`. Schema →
    `references/runtime-profile.md`. CLI / engines → `infra/`.
 3. Leave other people's uncommitted work alone.
 4. Adding or renaming a published skill → load
@@ -99,7 +99,7 @@ Values may change. These may not.
   an untouched boundary, never the behavior introduced or modified by the PR.
 - **Profile whitelist.** Top-level keys are `version` `project` `addressing`
   `runtime` `services` `overlay` `data`. Unknown keys (including `qa`) are
-  rejected in `infra/lib/profile.mjs`. Grove does not own browser QA or e2e.
+  rejected in `infra/lib/profile.mjs`. Ground does not own browser QA or e2e.
 - **Overlay is opt-in.** Default `overlay: none`. Run overlay verbs only when
   `runtime.commands.overlay` exists.
 - **Proxy omit = `none`.** Do not default a listener onto `:80`. `urls`
@@ -122,8 +122,8 @@ npm test          # node --test 'infra/bin/*.test.mjs'
 
 The runner prints how many tests ran. Docker is not required for validate /
 init tests, nor for the playground sandbox arcs the suite runs
-(`infra/bin/playground.test.mjs`, `infra/bin/mycelium-arc.test.mjs`): those
-seat a real Dryad worker in a throwaway sandbox and tear it down. Do not
+(`infra/bin/playground.test.mjs`, `infra/bin/facts-arc.test.mjs`): those
+seat a real Seat worker in a throwaway sandbox and tear it down. Do not
 start or stop shared engines to land a docs or parser change.
 
 Every PR must preserve its execution evidence in the PR description. Record
@@ -141,7 +141,7 @@ went red. A guard you have not seen fail is not a guard.
 After editing `infra/lib/profile.mjs` or examples, validate every example:
 
 ```bash
-for profile in skills/grove/examples/*.runtime-profile.yml; do
+for profile in skills/ground/examples/*.runtime-profile.yml; do
   node infra/bin/cli.mjs validate "$profile" || exit 1
 done
 ```
@@ -182,7 +182,7 @@ Guesses stay out. Dated incidents only.
 
 - Commit or push unless the task asks.
 - Invent a required backend, a `qa:` profile field, or a down command.
-- Copy `skills/grove/SKILL.md` into a profile, this file, or a tool-specific
+- Copy `skills/ground/SKILL.md` into a profile, this file, or a tool-specific
   skills directory.
 - Add an `AGENTS.md` under `skills/` or `infra/` unless that tree truly has
   different rules — it does not today.

@@ -2,7 +2,7 @@
 // No registry reads: status fixtures are enabled explicitly by the test runner.
 const args = process.argv.slice(2);
 const projects = JSON.parse(process.env.CANOPY_TEST_PROJECTS ?? '[]');
-if (args.join(' ') === 'dryad projects --json') {
+if (args.join(' ') === 'seat projects --json') {
   console.log(JSON.stringify({ projects }));
 } else if (process.env.CANOPY_TEST_SCREEN === '1') {
   const changes = {
@@ -30,7 +30,7 @@ if (args.join(' ') === 'dryad projects --json') {
   let report;
   if (args[0] === 'overlay' && args[1] === 'status') {
     report = { counts: { environments: 2, attachments: 2, pending: 1, stale: 0, drift: 0 }, pending: [{ env: 'w1', verb: 'attach', liveness: 'in-flight' }] };
-  } else if (args[0] === 'dryad' && args[1] === 'status') {
+  } else if (args[0] === 'seat' && args[1] === 'status') {
     report = args.includes('--finished') ? { finished: [] } : {
       seats, worktrees, overlaps: [{ path: 'shared.txt', seats: ['w1', 'w2'] }],
       counts: { seats: 2, worktrees_present: 2, worktrees: 3, unseated: 1, envs_tracked: 2, envs_wanted: 2, overlaps: 1 },

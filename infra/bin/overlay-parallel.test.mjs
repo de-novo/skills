@@ -15,13 +15,13 @@ const BACKEND = path.join(HERE, 'fixtures/process-overlay.mjs');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 function fixture(t) {
-  const root = mkdtempSync(path.join(tmpdir(), 'grove-parallel-'));
+  const root = mkdtempSync(path.join(tmpdir(), 'ground-parallel-'));
   const main = path.join(root, 'main'); mkdirSync(path.join(main, '.agents'), { recursive: true });
   const trees = Object.fromEntries(['w1', 'w2'].map(env => [env, path.join(root, env + '-tree')]));
   const stateDir = path.join(root, 'state');
   const stateFile = path.join(stateDir, 'parallel-test.yml');
-  const environment = { ...process.env, GROVE_PROCESS_TEST_ROOT: root, GROVE_STATE_DIR: stateDir,
-    GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '3000', GROVE_OVERLAY_TIMEOUT_MS: '10000' };
+  const environment = { ...process.env, GROUND_PROCESS_TEST_ROOT: root, GROUND_STATE_DIR: stateDir,
+    GROUND_OVERLAY_VERIFY_TIMEOUT_MS: '3000', GROUND_OVERLAY_TIMEOUT_MS: '10000' };
   writeFileSync(path.join(root, 'process-test-marker'), 'owned fixture');
   writeFileSync(path.join(main, '.agents/runtime-profile.yml'), stringify({
     project: { slug: 'parallel-test' }, addressing: { scheme: { overlay: '{service}--{env}.{project}.{tld}' } },
@@ -33,7 +33,7 @@ function fixture(t) {
     assert.equal(result.status, 0, result.stderr);
   };
   git(['init', '-b', 'main']); git(['add', '.']);
-  git(['-c', 'user.name=Grove Test', '-c', 'user.email=test@example.invalid', 'commit', '-m', 'isolated baseline']);
+  git(['-c', 'user.name=Ground Test', '-c', 'user.email=test@example.invalid', 'commit', '-m', 'isolated baseline']);
   for (const env of ['w1', 'w2']) git(['worktree', 'add', '-b', env, trees[env]]);
   const artifacts = {}; const images = [];
   for (const revision of ['a', 'b']) {

@@ -1,4 +1,4 @@
-// overlay — this project's Grove overlay adapter.
+// overlay — this project's Ground overlay adapter.
 //
 //   node tools/overlay.mjs create  <env> [--apply]
 //   node tools/overlay.mjs attach  <env> <service> --image REF [--apply]
@@ -11,7 +11,7 @@
 // endpoint; status asks each recorded endpoint what it is running and whether
 // it is ready, so the inventory is an observation of the runtime and never a
 // copy of what was requested. Every refusal is decided before anything is
-// touched and carries mutated: false, which is what lets Grove withdraw the
+// touched and carries mutated: false, which is what lets Ground withdraw the
 // journal it wrote and leave the environment usable.
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
@@ -221,7 +221,7 @@ if (entry) {
     emit(await run(request, profile));
   } catch (error) {
     if (error instanceof Refusal) {
-      // Refused before the runtime was touched, so Grove withdraws the
+      // Refused before the runtime was touched, so Ground withdraws the
       // pending journal it wrote and the environment stays usable.
       emit({ ok: false, verb: request.verb, env: request.env, service: request.service, image: request.image, mutated: false, error: error.message });
     } else {

@@ -1,0 +1,11 @@
+# Shape of values only. Names are fictional.
+# Sits next to .agents/runtime-profile.yml; Seat reads project.slug and the
+# overlay mode from there and keeps no copy.
+version: 1
+
+worktrees:
+  root: ../acme-seats          # outside the checkout; plan creates <root>/<id>
+  branch: "seat/{id}"         # {id} is the seat id, e.g. seat/w1
+
+# No launcher section on purpose. Which tool sits in a seat (and with which
+# flags) is the launcher's configuration, not a Seat value.

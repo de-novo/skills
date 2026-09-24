@@ -1,3 +1,0 @@
-interface:
-  display_name: "Facts (Mycelium)"
-  short_description: "Assertions apart from Plan: propose, commit, invalidate, query"

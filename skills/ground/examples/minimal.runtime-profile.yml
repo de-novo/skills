@@ -1,0 +1,43 @@
+# Minimal tier: two services, no overlay, no k3d.
+# What remains is addressing and ownership — enough to stop port fights
+# and cloned stacks among parallel agents.
+version: 1
+
+project:
+  slug: sideapp
+
+addressing:
+  tld: localhost                # pin in this project. omit to inherit Ground addressing.yml
+  scheme:
+    shared: "{service}.{project}.{tld}"   # web.sideapp.localhost
+    # no overlay scheme — overlay: none
+  ports:
+    blocks: { api: 6000, web: 6100 }      # do not overlap other projects' blocks
+    registry: README.md
+
+runtime:
+  default: planner
+  single_stack: true
+  writers: 1
+  profiles:
+    planner:
+      backend: docker-compose
+      compose_file: docker-compose.yml
+  commands:
+    status: docker compose ps
+    up: docker compose up -d --wait
+
+services:
+  api: { kind: api, port: 6001, health: /health, reflect: restart }
+  web: { kind: web, port: 6101, health: /, reflect: source }
+
+overlay: none
+
+data:
+  infra: machine              # engines on machine-shared infra — do not start them here
+  engines:
+    pg: [sideapp]             # created by `de-novo skills setup` from this declaration
+    redis: { prefix: "sideapp:" }
+  migrate: pnpm run db:migrate
+  fixtures: [seed-script]
+  forbid_direct_db_writes: true

@@ -6,7 +6,7 @@
 
 Goal only. Do not implement in the current CLI or skill procedure.
 
-Let a second machine reach Grove ground over **Tailscale or Headscale**
+Let a second machine reach Ground ground over **Tailscale or Headscale**
 (same WireGuard overlay; Headscale if we self-host). One engine set, one
 writer. Typical split: homelab (or the always-on box) owns engines and k3s;
 the laptop is a client. Named URLs and DBeaver still point at that one host.

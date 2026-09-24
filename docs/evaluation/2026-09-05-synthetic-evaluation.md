@@ -1,4 +1,4 @@
-# Grove's cost and recovery experience, measured by developing a synthetic app
+# Ground's cost and recovery experience, measured by developing a synthetic app
 
 This document is a measurement record from before the parallel-execution fix.
 For the change that followed and the results of the re-run, see
@@ -34,15 +34,15 @@ returns it. The shop's response also includes the price read from the shared
 product service and that service's hash. The verifying client cross-checks the
 HTTP status, the requested hash, the changed feature's result, the work
 environment, and the shared service's hash. The desired state recorded in the
-Grove registry is not used as response evidence.
+Ground registry is not used as response evidence.
 
 ## How the comparison was made, and the boundary of the run
 
 Direct execution is an experiment-only process management tool with the same
 HTTP completion condition attached. It is not an existing team's operating
-procedure. Grove calls the same process management functions through a project
+procedure. Ground calls the same process management functions through a project
 adapter, but goes through the operating CLI's create, attach, and destroy paths.
-Direct execution does not call Grove adapter commands by a side path; it uses a
+Direct execution does not call Ground adapter commands by a side path; it uses a
 separate entry point.
 
 The normal comparison alternates the run order per project. Setup time includes
@@ -58,7 +58,7 @@ injected: leaving the previous executable file in place; a real HTTP readiness
 failure; killing the adapter process after the running process is created but
 before the receipt is printed; and a failing cleanup function. The real response
 is checked immediately after the failure, then the cause is released and the
-same command is retried. Under Grove, the pending record and the blocking of
+same command is retried. Under Ground, the pending record and the blocking of
 other changes are also checked.
 
 In the concurrent-change experiment, the first change is held after the real
@@ -69,25 +69,25 @@ measure for collaboration time.
 
 Ports are ephemeral ports on loopback. The shared product service is also a
 process the experiment creates itself. Shared Docker, Kubernetes, DB, DNS, and
-proxy are not touched. The processes and the Grove registry live in a temporary
+proxy are not touched. The processes and the Ground registry live in a temporary
 directory and are removed on exit.
 
 ## The value confirmed, and the limits
 
-Both direct execution and Grove met the conditions for a normal change and for
-failure detection. In this comparison Grove did not make startup or recovery
+Both direct execution and Ground met the conditions for a normal change and for
+failure detection. In this comparison Ground did not make startup or recovery
 faster. Both approaches recovered by releasing the cause and running the same
 change again. Direct execution with enough verification attached can prevent the
 same kind of false completion.
 
-What Grove additionally showed is **a durable pending-operation record and a
+What Ground additionally showed is **a durable pending-operation record and a
 shared recovery order**. Even when the adapter exits partway, the request
 remains, and other changes are blocked until that request is recovered. This may
 reduce the need to implement that state management and contract in each project.
 The saving in real implementation and maintenance time is not yet measured.
 
 On the other side, **a project-level lock serializes changes to different work
-environments too.** A second Grove command that competed with a command in
+environments too.** A second Ground command that competed with a command in
 progress was rejected rather than made to wait. The caller had to run it again
 after the first operation finished. Direct execution writes different process
 files, so it completed this situation in parallel. That fact does not prove that
@@ -107,7 +107,7 @@ Run it from a checkout root that has the catalog's dependencies installed. Give
 a new output path so past results are not overwritten.
 
 ```bash
-node docs/evaluation/synthetic/run.mjs /tmp/grove-synthetic-result.json
+node docs/evaluation/synthetic/run.mjs /tmp/ground-synthetic-result.json
 npm test
 ```
 

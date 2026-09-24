@@ -18,8 +18,8 @@ const BACKEND = path.join(HERE, 'fixtures/process-overlay.mjs');
 function fixture(t) {
   const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'canopy-')));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  const environment = { ...process.env, GROVE_STATE_DIR: path.join(root, 'state'), GROVE_PROCESS_TEST_ROOT: root };
-  delete environment.DRYAD_PROJECT;
+  const environment = { ...process.env, GROUND_STATE_DIR: path.join(root, 'state'), GROUND_PROCESS_TEST_ROOT: root };
+  delete environment.SEAT_PROJECT;
   writeFileSync(path.join(root, 'process-test-marker'), 'owned fixture');
   const run = (args) => {
     const result = spawnSync(process.execPath, [CLI, ...args], { env: environment, encoding: 'utf8', timeout: 20000 });
@@ -30,7 +30,7 @@ function fixture(t) {
     const slug = `canopy-${index}`;
     const baseline = path.join(root, slug);
     mkdirSync(path.join(baseline, '.agents'), { recursive: true });
-    const dryad = { version: 1, worktrees: { root: `../seats-${index}`, branch: 'dryad/{id}' } };
+    const seat = { version: 1, worktrees: { root: `../seats-${index}`, branch: 'seat/{id}' } };
     if (overlay) {
       writeFileSync(path.join(baseline, '.agents/runtime-profile.yml'), stringify({
         project: { slug }, services: { api: {} }, data: { infra: 'project' },
@@ -38,19 +38,19 @@ function fixture(t) {
         runtime: { commands: { overlay: `${JSON.stringify(process.execPath)} ${JSON.stringify(BACKEND)}` } },
         overlay: { attachable: ['api'], stale_after: '1h' },
       }));
-    } else dryad.project = { slug };
-    writeFileSync(path.join(baseline, '.agents/dryad-profile.yml'), stringify(dryad));
+    } else seat.project = { slug };
+    writeFileSync(path.join(baseline, '.agents/seat-profile.yml'), stringify(seat));
     for (const args of [['init', '-b', 'main'], ['add', '.'], ['commit', '-m', 'baseline']]) {
       const result = spawnSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgSign=false', '-c', 'user.name=Canopy Test', '-c', 'user.email=test@example.invalid', ...args], { cwd: baseline, encoding: 'utf8' });
       assert.equal(result.status, 0, result.stderr);
     }
-    run(['dryad', 'plan', 'w1', '--task', 'Read-only overview', '--by', 'worker', '--apply', '--project', baseline]);
-    run(['dryad', 'report', 'w1', '--status', 'blocked', '--note', 'Waiting <script>alert(1)</script>', '--session', 'session-fixture', '--project', baseline]);
+    run(['seat', 'plan', 'w1', '--task', 'Read-only overview', '--by', 'worker', '--apply', '--project', baseline]);
+    run(['seat', 'report', 'w1', '--status', 'blocked', '--note', 'Waiting <script>alert(1)</script>', '--session', 'session-fixture', '--project', baseline]);
     // Exercise the public finished archive with a disposable no-overlay seat.
     if (!overlay) {
-      run(['dryad', 'plan', 'w2', '--task', 'Archived task', '--apply', '--project', baseline]);
-      run(['dryad', 'report', 'w2', '--status', 'done', '--note', 'Archive journal proof', '--session', 'archive-session', '--project', baseline]);
-      run(['dryad', 'finish', 'w2', '--apply', '--project', baseline]);
+      run(['seat', 'plan', 'w2', '--task', 'Archived task', '--apply', '--project', baseline]);
+      run(['seat', 'report', 'w2', '--status', 'done', '--note', 'Archive journal proof', '--session', 'archive-session', '--project', baseline]);
+      run(['seat', 'finish', 'w2', '--apply', '--project', baseline]);
     }
     return { slug, root: baseline, root_present: true, seats: 1, finished: overlay ? 0 : 1, overlay, updated_at: new Date().toISOString() };
   });
@@ -62,7 +62,7 @@ async function closeServer(server) {
   await new Promise((resolve, reject) => { server.close(error => error ? reject(error) : resolve()); server.closeAllConnections(); });
 }
 
-test('--once aggregates real seated projects, Grove, problems and finished journals', async (t) => {
+test('--once aggregates real seated projects, Ground, problems and finished journals', async (t) => {
   const f = fixture(t);
   const result = spawnSync(process.execPath, [RUNNER, '--once'], { env: f.environment, encoding: 'utf8', timeout: 30000 });
   assert.equal(result.status, 0, result.stderr);
@@ -73,8 +73,8 @@ test('--once aggregates real seated projects, Grove, problems and finished journ
   assert.deepEqual(state.projects.map(p => p.problems), [['w1: blocked'], ['w1: blocked']]);
   assert.equal(state.projects[0].finished.length, 1);
   assert.ok(state.projects[0].finished[0].journal.some(entry => entry.detail.includes('Archive journal proof')));
-  assert.equal(state.projects[1].grove.counts.environments, 1);
-  assert.equal(state.projects[1].grove.project_status.ok, true);
+  assert.equal(state.projects[1].ground.counts.environments, 1);
+  assert.equal(state.projects[1].ground.project_status.ok, true);
   assert.equal(state.projects[1].seats[0].env_state, 'tracked');
   // Compare rendered counts to the public status values, without registry access.
   assert.equal(state.projects[1].counts.envs_tracked, 1);
@@ -166,7 +166,7 @@ test('CLI failures, malformed JSON, timeouts and excess output become error docu
   const state = await collectState({ projectsCli: PROJECTS, environment });
   assert.equal(state.projects.length, 1);
   assert.ok(state.projects[0].error);
-  assert.ok(state.projects[0].grove.error);
+  assert.ok(state.projects[0].ground.error);
   assert.ok(state.projects[0].finished_error);
 });
 
@@ -175,7 +175,7 @@ test('renderer preserves pending liveness, hostnames and null measurements witho
     slug: 'example', root: '/example', overlay: true,
     counts: { seats: 1, worktrees_present: 1, envs_tracked: 1, envs_wanted: 1, envs_in_flight: 1, reported: { working: 1 } },
     seats: [{ id: 'w1', branch: 'task', ahead: 2, env: 'w1', env_state: 'in-flight', status: 'working', by: 'worker', session: '<session>', journal: [], hostnames: ['api--w1.example.localhost', 'https://example.invalid/path', 'javascript://example.invalid', 'http://user:pass@example.invalid'], activity: { state: 'running', doing: 'Edit <src>/x.ts', changed_at: new Date().toISOString() } }],
-    finished: [], problems: ['<unsafe>'], grove: { counts: { environments: 1, attachments: 1, pending: 2, stale: null, drift: null }, pending: [{ env: 'w1', verb: 'attach', liveness: 'in-flight' }, { env: 'w2', verb: 'create', liveness: 'stalled' }] },
+    finished: [], problems: ['<unsafe>'], ground: { counts: { environments: 1, attachments: 1, pending: 2, stale: null, drift: null }, pending: [{ env: 'w1', verb: 'attach', liveness: 'in-flight' }, { env: 'w2', verb: 'create', liveness: 'stalled' }] },
   }] };
   const html = renderPage(state).split('<script>')[0];
   assert.match(html, /envs 1\/1/);
@@ -212,8 +212,8 @@ test('second-screen --once and socket first paint agree on worktrees, skills, fi
   assert.equal((first.match(/<article class="card /g) ?? []).length, project.worktrees.length);
   assert.equal((first.match(/class="overlap"/g) ?? []).length, project.overlaps.length);
   assert.match(first, /example — seats 2 · worktrees 3 \(1 unseated\) · envs 2\/2 · overlaps 1/);
-  assert.match(first, /Ground \(Grove\) · environments 2 · attachments 2 · pending 1 · w1 attach in-flight · stale 0 · drift 0/);
-  assert.ok(first.indexOf('class="grove"') < first.indexOf('problem · w1: attachment pending'));
+  assert.match(first, /Ground · environments 2 · attachments 2 · pending 1 · w1 attach in-flight · stale 0 · drift 0/);
+  assert.ok(first.indexOf('class="ground"') < first.indexOf('problem · w1: attachment pending'));
   assert.ok(first.indexOf('data-seat="w2"') < first.indexOf('data-seat="w1"'));
   assert.ok(first.indexOf('data-seat="w1"') < first.indexOf('class="card unseated"'));
   const cards = [...first.matchAll(/<article class="card seat"[^>]*>([\s\S]*?)<\/article>/g)];
@@ -249,7 +249,7 @@ test('a long report note is cut on the card and never printed twice in one card'
     updated_at: at,
     projects: [{
       slug: 'clip', root: '/tmp/clip', counts: { seats: 1 },
-      seats: [{ id: 'w1', by: 'worker', status: 'done', branch: 'dryad/w1', worktree: '/tmp/clip/w1',
+      seats: [{ id: 'w1', by: 'worker', status: 'done', branch: 'seat/w1', worktree: '/tmp/clip/w1',
         journal: [{ at, actor: 'seat', event: 'report', detail: `done: ${note}` }] }],
     }],
   });
@@ -278,7 +278,7 @@ test('/chat/<slug>/<id> renders the seat\'s transcript as turns, escaped, and re
     JSON.stringify({ type: 'user', timestamp: at, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: 'const server = createServer(...)' }] } }),
     JSON.stringify({ type: 'assistant', timestamp: at, message: { role: 'assistant', content: [{ type: 'text', text: 'Done: POST /notes added.' }] } }),
   ].join('\n') + '\n');
-  const events = path.join(f.environment.GROVE_STATE_DIR, 'dryads/events/canopy-0/w1.events');
+  const events = path.join(f.environment.GROUND_STATE_DIR, 'seats/events/canopy-0/w1.events');
   mkdirSync(path.dirname(events), { recursive: true });
   writeFileSync(events, JSON.stringify({ hook_event_name: 'PreToolUse', session_id: 's1', transcript_path: transcript, tool_name: 'Read', tool_input: { file_path: 'app/api/server.mjs' } }) + '\n');
   const page = await fetch(url + '/chat/canopy-0/w1');
@@ -300,7 +300,7 @@ test('/chat/<slug>/<id> renders the seat\'s transcript as turns, escaped, and re
   assert.match(await gone.text(), /not there/);
 });
 
-test('/diff/<slug>/<id> shows the seat\'s patch from dryad diff, per file, escaped, and links both ways with the chat page', async (t) => {
+test('/diff/<slug>/<id> shows the seat\'s patch from seat diff, per file, escaped, and links both ways with the chat page', async (t) => {
   const f = fixture(t);
   const server = await startCanopy({ ...f, port: 0 });
   t.after(() => closeServer(server));

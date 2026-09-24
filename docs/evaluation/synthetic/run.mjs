@@ -31,7 +31,7 @@ const report = {
     unmeasured: ['human effort', 'real application integration cost', 'shared Docker or Kubernetes', 'database isolation', 'DNS and proxy routing', 'actual human or agent collaboration'] },
   normal: [], failures: [], contention: [], checks: {}, errors: [],
 };
-const root = mkdtempSync(path.join(tmpdir(), 'grove-synthetic-'));
+const root = mkdtempSync(path.join(tmpdir(), 'ground-synthetic-'));
 const contexts = [];
 const liveCommands = new Set();
 const workload = spec => `
@@ -57,7 +57,7 @@ setTimeout(()=>{server.close();process.exit(0)},300000).unref();
 
 function run(ctx, method, verb, env, image) {
   const lifecycle = [verb, env, ...(verb === 'attach' ? ['app', '--image', image] : []), '--apply'];
-  const args = method === 'grove' ? [cli, 'overlay', ...lifecycle, '--project', ctx.root] : [backend, 'direct', ...lifecycle];
+  const args = method === 'ground' ? [cli, 'overlay', ...lifecycle, '--project', ctx.root] : [backend, 'direct', ...lifecycle];
   const started = performance.now();
   const child = spawn(process.execPath, args, { cwd: ctx.root, env: ctx.env, stdio: ['ignore', 'pipe', 'pipe'] });
   liveCommands.add(child);
@@ -109,8 +109,8 @@ try {
     writeFileSync(path.join(projectRoot, 'synthetic-marker'), 'owned by synthetic experiment');
     const ctx = { root: projectRoot, kind, name: `synthetic-${kind}`, images: {} };
     contexts.push(ctx);
-    ctx.env = { PATH: process.env.PATH, GROVE_SYNTHETIC_ROOT: projectRoot,
-      GROVE_STATE_DIR: path.join(projectRoot, 'registry'), GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '900', GROVE_OVERLAY_TIMEOUT_MS: '12000' };
+    ctx.env = { PATH: process.env.PATH, GROUND_SYNTHETIC_ROOT: projectRoot,
+      GROUND_STATE_DIR: path.join(projectRoot, 'registry'), GROUND_OVERLAY_VERIFY_TIMEOUT_MS: '900', GROUND_OVERLAY_TIMEOUT_MS: '12000' };
     const artifacts = {};
     for (const revision of ['base', 'r1', 'r2', 'catalog']) {
       const source = workload({ kind: revision === 'catalog' ? 'catalog' : kind, revision, discount: revision === 'r1' ? 10 : revision === 'r2' ? 20 : 0 });
@@ -130,7 +130,7 @@ try {
     assert.equal(result.status, 0, result.stderr);
     await probe(ctx, 'baseline', 'base');
     for (let pair = 1; pair <= 5; pair++) {
-      for (const method of pair % 2 ? ['direct', 'grove'] : ['grove', 'direct']) {
+      for (const method of pair % 2 ? ['direct', 'ground'] : ['ground', 'direct']) {
         const started = performance.now();
         for (const worker of ['w1', 'w2']) {
           await good(ctx, method, 'create', worker);
@@ -152,7 +152,7 @@ try {
       }
     }
     for (const scenario of report.protocol.failure_cases) {
-      for (const method of ['direct', 'grove']) {
+      for (const method of ['direct', 'ground']) {
         await good(ctx, method, 'create', 'w1'); await good(ctx, method, 'attach', 'w1', ctx.images.r1);
         let verb = 'attach'; let requested = ctx.images.r2; let failed;
         if (scenario === 'old-image') setFault(ctx, { oldImage: true });
@@ -168,24 +168,24 @@ try {
         assert.equal(actual.body.image, ctx.images[scenario === 'old-image' || scenario === 'cleanup-failure' ? 'r1' : 'r2']);
         assert.equal(actual.status, scenario === 'unready' ? 503 : 200);
         let unrelatedBlocked = null;
-        if (method === 'grove') {
+        if (method === 'ground') {
           assert.equal(state(ctx).pending_by_env.w1.verb, verb);
           await good(ctx, method, 'create', 'w2');
           unrelatedBlocked = false;
         }
         setFault(ctx, {}); rmSync(path.join(ctx.root, 'w1.unready'), { force: true }); clearPaused(ctx);
-        if (method === 'grove') await good(ctx, method, 'destroy', 'w2');
+        if (method === 'ground') await good(ctx, method, 'destroy', 'w2');
         const recovery = await good(ctx, method, verb, 'w1', requested);
         if (verb === 'attach') { await probe(ctx, 'w1', 'r2'); await good(ctx, method, 'destroy', 'w1'); }
         else assert.equal(existsSync(path.join(ctx.root, 'w1.json')), false);
-        if (method === 'grove') assert.equal(state(ctx).pending_by_env.w1, undefined);
+        if (method === 'ground') assert.equal(state(ctx).pending_by_env.w1, undefined);
         await probe(ctx, 'baseline', 'base');
         const row = { project: kind, scenario, method, rejected: true, failure_ms: failed.ms, recovery_ms: recovery.ms,
-          recovery_retries: 1, durable_pending: method === 'grove', unrelated_mutation_blocked: unrelatedBlocked, runtime_checked: true };
+          recovery_retries: 1, durable_pending: method === 'ground', unrelated_mutation_blocked: unrelatedBlocked, runtime_checked: true };
         report.failures.push(row); console.log(JSON.stringify({ failure: row }));
       }
     }
-    for (const method of ['direct', 'grove']) {
+    for (const method of ['direct', 'ground']) {
       for (const worker of ['w1', 'w2']) await good(ctx, method, 'create', worker);
       clearPaused(ctx); setFault(ctx, { pause: true });
       const first = run(ctx, method, 'attach', 'w1', ctx.images.r1); await waitPaused(ctx);

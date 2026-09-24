@@ -16,7 +16,7 @@ const workerFile = path.join(here, 'worktree-worker.mjs');
 const hash = value => createHash('sha256').update(value).digest('hex');
 const read = file => JSON.parse(readFileSync(file, 'utf8'));
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-const root = mkdtempSync(path.join(tmpdir(), 'grove-worktrees-'));
+const root = mkdtempSync(path.join(tmpdir(), 'ground-worktrees-'));
 const output = process.argv[2];
 const contexts = [];
 const report = { kind: 'actual-git-worktrees-synthetic-developer-processes', started_at: new Date().toISOString(),
@@ -24,12 +24,12 @@ const report = { kind: 'actual-git-worktrees-synthetic-developer-processes', sta
   production_sources: Object.fromEntries(['infra/lib/overlay.mjs', 'infra/bin/cli.mjs'].map(file => [file, hash(readFileSync(path.join(repo, file)))])),
   sources: Object.fromEntries([fileURLToPath(import.meta.url), workerFile, backend].map(file => [path.basename(file), hash(readFileSync(file))])),
   machine: { node: process.version, platform: platform(), arch: arch(), load_start: loadavg() },
-  protocol: { pairs: 5, worktrees_per_run: 2, common_base: true, common_grove_project_and_registry: true,
+  protocol: { pairs: 5, worktrees_per_run: 2, common_base: true, common_ground_project_and_registry: true,
     timing: 'simultaneous edit request through independent readiness of both builds',
     build: 'per-worktree feature edit, executable assembly and real node --check; not a container build',
     artifact_registration: 'coordinator merges manifests after both parallel builds; not timed as developer labor',
     contention: 'one attempt per lifecycle command; no evaluation-only waiting or retries',
-    baseline: 'same isolated process backend and HTTP identity checks, without Grove lifecycle journal',
+    baseline: 'same isolated process backend and HTTP identity checks, without Ground lifecycle journal',
     unmeasured: ['human or AI coding productivity', 'Git merge conflict resolution', 'Docker or Kubernetes', 'DB isolation', 'DNS routing', 'production adapter integration cost'] },
   runs: [], errors: [], cleanup: {},
 };
@@ -96,14 +96,14 @@ function register(ctx, builds) {
 }
 try {
   for (let pair = 1; pair <= 5; pair++) {
-    for (const method of pair % 2 ? ['direct', 'grove'] : ['grove', 'direct']) {
+    for (const method of pair % 2 ? ['direct', 'ground'] : ['ground', 'direct']) {
       const setupAt = performance.now();
       const location = path.join(root, `${pair}-${method}`);
       const ctx = { method, base: path.join(location, 'main'), runtime: path.join(location, 'runtime'),
         trees: { w1: path.join(location, 'w1'), w2: path.join(location, 'w2') }, workers: [] };
       contexts.push(ctx); mkdirSync(path.join(ctx.base, '.agents'), { recursive: true }); mkdirSync(ctx.runtime);
-      ctx.env = { PATH: process.env.PATH, GROVE_SYNTHETIC_ROOT: ctx.runtime, GROVE_STATE_DIR: path.join(ctx.runtime, 'registry'),
-        GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '2000', GROVE_OVERLAY_TIMEOUT_MS: '10000' };
+      ctx.env = { PATH: process.env.PATH, GROUND_SYNTHETIC_ROOT: ctx.runtime, GROUND_STATE_DIR: path.join(ctx.runtime, 'registry'),
+        GROUND_OVERLAY_VERIFY_TIMEOUT_MS: '2000', GROUND_OVERLAY_TIMEOUT_MS: '10000' };
       writeFileSync(path.join(ctx.runtime, 'synthetic-marker'), 'owned worktree experiment');
       writeFileSync(path.join(ctx.base, 'server.mjs'), server);
       writeFileSync(path.join(ctx.base, 'feature.json'), JSON.stringify({ feature: 'base' }) + '\n');
@@ -143,8 +143,8 @@ try {
       await Promise.all([w1.next('ready'), w2.next('ready')]);
       await Promise.all([probe(ctx, 'w1', a.image, 'w1-first'), probe(ctx, 'w2', b.image, 'w2-first')]);
       const readyMs = performance.now() - start;
-      if (method === 'grove') {
-        const state = parse(readFileSync(path.join(ctx.env.GROVE_STATE_DIR, 'synthetic-worktrees.yml'), 'utf8'));
+      if (method === 'ground') {
+        const state = parse(readFileSync(path.join(ctx.env.GROUND_STATE_DIR, 'synthetic-worktrees.yml'), 'utf8'));
         for (const id of ['w1', 'w2']) {
           assert.equal(state.envs[id].worktree, realpathSync(ctx.trees[id]));
           assert.equal(state.envs[id].agent, `synthetic-${id}`);
@@ -180,7 +180,7 @@ try {
       const row = { pair, method, setup_ms: setupMs, initial_edit_build_ready_ms: readyMs,
         redeploy_ms: redeployMs, first_worktree_cleanup_ms: firstCleanupMs,
         independent_worktrees: 2, edit_build_overlap_ms: Number(overlapNs) / 1e6,
-        distinct_branch_sources_and_builds: true, registry_worktree_identity_checked: method === 'grove',
+        distinct_branch_sources_and_builds: true, registry_worktree_identity_checked: method === 'ground',
         peer_source_and_build_unchanged: true, baseline_unchanged: true, removed_worktrees: 2,
         observation: observed.observation, workers: { w1: firstDone.commands, w2: secondDone.commands } };
       report.runs.push(row); console.log(JSON.stringify({ run: row }));

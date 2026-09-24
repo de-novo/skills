@@ -6,7 +6,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 const [id, method, cli, backend] = process.argv.slice(2);
-const root = process.env.GROVE_SYNTHETIC_ROOT;
+const root = process.env.GROUND_SYNTHETIC_ROOT;
 const read = file => JSON.parse(readFileSync(file, 'utf8'));
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const send = value => process.send(value);
@@ -24,7 +24,7 @@ function command(executable, args) {
 }
 async function lifecycle(verb) {
   const args = [verb, id, ...(verb === 'attach' ? ['app', '--image', image] : []), '--apply'];
-  const executableArgs = method === 'grove' ? [cli, 'overlay', ...args, '--project', '.'] : [backend, 'direct', ...args];
+  const executableArgs = method === 'ground' ? [cli, 'overlay', ...args, '--project', '.'] : [backend, 'direct', ...args];
   const started = performance.now();
   const result = await command(process.execPath, executableArgs);
   assert.equal(result.code, 0, result.stderr);

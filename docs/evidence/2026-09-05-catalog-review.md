@@ -4,7 +4,7 @@ Base: `a77f0800269792f014d0ccad37886cb959f95d81`.
 Execution snapshot: the candidate was uncommitted when these checks ran.
 The measured changes were subsequently committed and pushed as
 `d7fa8c9988887b605512f3bb5d2f1fa9b6a48f54`.
-Target: Grove skill/docs, profile validation, and overlay lifecycle verification
+Target: Ground skill/docs, profile validation, and overlay lifecycle verification
 in the catalog checkout.
 
 ## Result and compatibility
@@ -32,15 +32,15 @@ choice; runtime compatibility was not deleted without consumer evidence.
 | --- | --- |
 | `npm test` | 172 tests passed, 0 failed, 0 skipped |
 | `node --test infra/bin/overlay-process.test.mjs` | 1 passed; executable artifacts 2/2, rejected transitions 2/2, detached endpoints 1/1, destroyed environments 1/1 |
-| `node infra/bin/cli.mjs validate skills/grove/examples/minimal.runtime-profile.yml` | configuration invariants 5/5 |
-| `node infra/bin/cli.mjs validate skills/grove/examples/multi-service.runtime-profile.yml` | configuration invariants 5/5 |
-| `node infra/bin/cli.mjs urls skills/grove/examples/minimal.runtime-profile.yml` | URL rendering succeeded |
-| `node infra/bin/cli.mjs urls skills/grove/examples/multi-service.runtime-profile.yml` | URL rendering succeeded |
+| `node infra/bin/cli.mjs validate skills/ground/examples/minimal.runtime-profile.yml` | configuration invariants 5/5 |
+| `node infra/bin/cli.mjs validate skills/ground/examples/multi-service.runtime-profile.yml` | configuration invariants 5/5 |
+| `node infra/bin/cli.mjs urls skills/ground/examples/minimal.runtime-profile.yml` | URL rendering succeeded |
+| `node infra/bin/cli.mjs urls skills/ground/examples/multi-service.runtime-profile.yml` | URL rendering succeeded |
 | `node infra/bin/cli.mjs --help` | owner-authorized setup help rendered |
 | `bash -n infra/bin/provision` | shell syntax accepted |
 | `git diff --check` | no whitespace errors |
 
-Additional direct CLI executions used a temporary `grove-review-cli-*` directory
+Additional direct CLI executions used a temporary `ground-review-cli-*` directory
 and removed it afterward: init plus validation succeeded; the complete schema
 YAML passed; invalid service fields, invalid runtime/default command values,
 and `runtime.writer` typo were rejected 3/3. The canonical schema block is also

@@ -39,7 +39,7 @@ and a repeated heading gets `-1`, `-2`, … as GitHub gives it.
 
 A **generated snapshot** is prose or a diagram a command produced and a
 document keeps for a reader who cannot run the command: an Understory
-reading, a Forester graph, a status line. It is a copy by construction,
+reading, a Plan graph, a status line. It is a copy by construction,
 so it is not counted as one, on one condition: its block names what made
 it and the revision or moment it was made at.
 
@@ -75,9 +75,9 @@ One house per kind. A document that is two kinds is two documents.
 | Long facts | fields, registries, CLI tables, state machines | `skills/<name>/references/*.md` | same |
 | Design note | why it is shaped this way, what was decided against | `docs/<name>-design.md` | same |
 | Evidence | one dated execution: what ran, what was counted, what was not | `docs/evidence/<date>-<what>.md` | same |
-| Cases | every situation the thing must carry, each marked measured, tested, pattern, or gap | `docs/<name>-cases.md` | `docs/mycelium-cases.md` |
-| Vocabulary | the words a project uses and the ones it avoids | `.agents/mycelium.yml` (types, predicates, domains) | same |
-| Decision | one locked choice with its source and time | a Mycelium `decided` fact | same |
+| Cases | every situation the thing must carry, each marked measured, tested, pattern, or gap | `docs/<name>-cases.md` | `docs/facts-cases.md` |
+| Vocabulary | the words a project uses and the ones it avoids | `.agents/facts.yml` (types, predicates, domains) | same |
+| Decision | one locked choice with its source and time | a Facts `decided` fact | same |
 | Record | what a sprint was, where it stands, what was proven, for a reader who was not here | wherever the project publishes, written by Understory | `docs/notes-sprint.md` in the pilot |
 | Retired | a design that is no longer operating authority | `docs/archive/<date>-<what>.md`, dated, pointing at its replacement | same |
 

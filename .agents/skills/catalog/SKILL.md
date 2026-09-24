@@ -5,7 +5,7 @@ description: >-
   catalog (skills/<name>/). Use when creating a new skill, splitting
   SKILL.md vs README vs examples, wiring .agents load paths, updating the
   catalog README table, or when the user runs /catalog. Not for planting
-  Grove on a consuming project — that is grove.
+  Ground on a consuming project — that is ground.
 metadata:
   internal: true    # repo-only: the skills CLI hides it unless INSTALL_INTERNAL_SKILLS=1
 ---
@@ -41,28 +41,28 @@ Every skill is one of two:
 
 - **Model-invoked** (the default): a model or a person may reach for it.
   The description is model-facing and keeps its trigger phrases ("Use
-  when…", `/name`). Grove, Dryad, Understory, Mycelium: a seat reaches for
+  when…", `/name`). Ground, Seat, Understory, Facts: a seat reaches for
   them on its own when its work meets them.
 - **User-invoked**: only a person typing `/name`. Frontmatter carries
   `disable-model-invocation: true` and `agents/openai.yaml` carries
   `policy.allow_implicit_invocation: false`; the two are always set
   together or neither. The description is human-facing, one or two
-  sentences, no trigger list. Forester: the plan is a person's ask.
+  sentences, no trigger list. Plan: the plan is a person's ask.
 
 A skill that tells the agent to run another skill says so as a tool call,
-one skill per call: `Call the Skill tool with "dryad"`. A relative link
-(`[dryad](../dryad/SKILL.md)`) is router prose for a person and fires
+one skill per call: `Call the Skill tool with "seat"`. A relative link
+(`[seat](../seat/SKILL.md)`) is router prose for a person and fires
 nothing. Nothing may name a user-invoked skill to the Skill tool; tell the
 person to run it instead. In a host with no Skill tool the same sentence
 means: read that skill's `SKILL.md` from the installed copy (a seat has
-Dryad's path in `$DRYAD_SKILL`; the others sit beside it) and follow it.
+Seat's path in `$SEAT_SKILL`; the others sit beside it) and follow it.
 That fallback is the root README's, stated once; skills do not repeat it.
 
 ## Add a skill
 
 1. Create `skills/<name>/SKILL.md`. Pattern only — no domains, ports, service
    lists, or real commands. Those go in a consuming project's
-   `.agents/runtime-profile.yml` (Grove) or the equivalent values file the
+   `.agents/runtime-profile.yml` (Ground) or the equivalent values file the
    skill names.
 2. Write `README.md` next to it in the seven-section shape above, and put
    every field or CLI table in `references/`. Do not paste the SKILL body
@@ -87,12 +87,12 @@ Do not add the new skill's pattern to `AGENTS.md`. Point at `skills/<name>/`.
 Change the house that owns the fact. If the same sentence exists in SKILL
 and README, edit the owner and make the other a pointer.
 
-Grove-specific: schema lives in `references/runtime-profile.md`; invariants
+Ground-specific: schema lives in `references/runtime-profile.md`; invariants
 are judged in `infra/lib/profile.mjs`. Do not restate the schema in SKILL.md.
 
 ## Not this skill
 
-- Planting Grove on another repo → `grove`
+- Planting Ground on another repo → `ground`
 - Starting or stopping machine engines → `infra/` CLI, and only when asked
 - Changing how agents work in this catalog (invariants, verify, no-down) →
   `AGENTS.md`

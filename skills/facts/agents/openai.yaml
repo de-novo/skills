@@ -1,0 +1,3 @@
+interface:
+  display_name: "Facts"
+  short_description: "Assertions apart from Plan: propose, commit, invalidate, query"

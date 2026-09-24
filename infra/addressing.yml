@@ -1,4 +1,4 @@
-# Addressing for this Grove checkout. Yaml is source of truth; the CLI paints it.
+# Addressing for this Ground checkout. Yaml is source of truth; the CLI paints it.
 # Clone-specific TLD: addressing.local.yml next to this file (gitignored).
 # A consuming project inherits tld when its profile omits addressing.tld.
 # Pin a domain in that project repo with addressing.tld, or

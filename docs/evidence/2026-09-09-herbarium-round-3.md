@@ -22,12 +22,12 @@ person. The catalog shows 0. Guards reverted once: the finding itself
 ## A reader who was not here
 
 A fresh headless Claude Code session in a directory holding only
-`docs/mycelium-cases.md`, told to read nothing else, asked three things.
+`docs/facts-cases.md`, told to read nothing else, asked three things.
 
 | Asked | Answered |
 | --- | --- |
-| What Mycelium is, holds, and what is open, in three sentences | correct on all three: an append-only log of assertions, the envelope's fields and the three corrections, and the open rows by number (A8, C8, B4, E4 to E6) |
-| Terms or sentences it could not understand from the file alone | 22, every one a name defined elsewhere in the catalog: Dryad, Forester, Understory, Grove, Herbarium, the catalog, the sandbox, the fold, the values file, the envelope's fields, the conflict rule, the guards |
+| What Facts is, holds, and what is open, in three sentences | correct on all three: an append-only log of assertions, the envelope's fields and the three corrections, and the open rows by number (A8, C8, B4, E4 to E6) |
+| Terms or sentences it could not understand from the file alone | 22, every one a name defined elsewhere in the catalog: Seat, Plan, Understory, Ground, Herbarium, the catalog, the sandbox, the fold, the values file, the envelope's fields, the conflict rule, the guards |
 | Did the file alone say what is measured and what is not | "Yes for the classification and no for the evidence": the marks are clear, the counts behind them live in the evidence records |
 
 That is the houses rule read back from the outside: the note is a cases

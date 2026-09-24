@@ -36,13 +36,13 @@ day because nothing counted scripts.
   wrong-script file, which is the right ratio for a rule that has been
   followed by hand.
 - **A page's cap is on its prose.** A diagram or a command block in a
-  fence is looked at, not read. Without that rule Grove's README, which is
+  fence is looked at, not read. Without that rule Ground's README, which is
   mostly one drawing, fails a cap it honours in every sentence.
 - **Archive links are shown, not judged.** A design note citing what it
   replaced is a citation; an active instruction leaning on an archived
   plan is a defect. The same link, two meanings; a person tells them apart.
 - **Vocabulary and decisions are not new houses.** A project's words live
-  in `.agents/mycelium.yml` and its locked decisions are Mycelium
+  in `.agents/facts.yml` and its locked decisions are Facts
   `decided` facts. Herbarium names those houses and adds nothing beside
   them.
 
@@ -58,7 +58,7 @@ From `mattpocock/skills` (MIT), read on 2026-09-09:
   in the right column are this catalog's.
 - The three-part test for recording a decision (hard to reverse,
   surprising without context, a real trade-off) is its ADR format's, and
-  went into Mycelium's commit rules rather than here, because a decision's
+  went into Facts's commit rules rather than here, because a decision's
   house is the log.
 - "Be opinionated: one word, and the ones to avoid" is its `CONTEXT.md`
   format's attitude toward vocabulary; the values file already is that

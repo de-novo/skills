@@ -1,17 +1,17 @@
 // A seat's session events: the file the agent tools' hooks append to, and
-// what is read from it. One place, so Dryad (which owns the seat), Forester
+// what is read from it. One place, so Seat (which owns the seat), Plan
 // serve (which may hold the session), Canopy, and Understory all read the
 // same state and the same "doing" line whoever launched the tool.
 //
-//   <state>/dryads/events/<slug>/<id>.events            one JSON object per hook event
-//   <state>/dryads/events/<slug>/<id>.claude-settings.json   hooks for a Claude Code session
+//   <state>/seats/events/<slug>/<id>.events            one JSON object per hook event
+//   <state>/seats/events/<slug>/<id>.claude-settings.json   hooks for a Claude Code session
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 
-import { dryadStateDirectory } from './dryad.mjs';
+import { seatStateDirectory } from './seat.mjs';
 
 export function seatEventsDirectory(slug, environment = process.env) {
-  return path.join(dryadStateDirectory(environment), 'events', slug);
+  return path.join(seatStateDirectory(environment), 'events', slug);
 }
 
 export function seatEventsPath(slug, id, environment = process.env) {
@@ -23,7 +23,7 @@ export function seatSettingsPath(slug, id, environment = process.env) {
 }
 
 // Where a seat writes its evidence file: beside its events, under the
-// directory Dryad owns, so it is never a path outside the seat's scope
+// directory Seat owns, so it is never a path outside the seat's scope
 // and never a guess. report --status done reads it when --evidence is
 // not passed; finish removes it with the seat.
 export function seatEvidencePath(slug, id, environment = process.env) {

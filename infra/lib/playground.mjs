@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import net from 'node:net';
 import { parse } from 'yaml';
 import { splitOverlayCommand, overlayStateDirectory } from './overlay.mjs';
-import { dryadStateDirectory } from './dryad.mjs';
+import { seatStateDirectory } from './seat.mjs';
 import { parseProfile } from './profile.mjs';
 import { renderProjectUrls, resolveAddressing } from './addressing.mjs';
 
@@ -34,8 +34,8 @@ export function assertTree(root) {
 
 export function assertState(sandbox, environment = process.env) {
   const expected = path.join(sandbox, 'state');
-  if (!environment.GROVE_STATE_DIR || path.resolve(environment.GROVE_STATE_DIR) !== expected || realpathSync(expected) !== expected) {
-    fail(`GROVE_STATE_DIR must be ${expected}`); // guard: state
+  if (!environment.GROUND_STATE_DIR || path.resolve(environment.GROUND_STATE_DIR) !== expected || realpathSync(expected) !== expected) {
+    fail(`GROUND_STATE_DIR must be ${expected}`); // guard: state
   }
 }
 
@@ -48,7 +48,7 @@ export function processGuard() {
   const cp = require('node:child_process');
   const net = require('node:net');
   const root = process.env.PLAYGROUND_SANDBOX;
-  if (!root || process.env.GROVE_STATE_DIR !== path.join(root, 'state')) throw Error('playground: GROVE_STATE_DIR must be inside the sandbox');
+  if (!root || process.env.GROUND_STATE_DIR !== path.join(root, 'state')) throw Error('playground: GROUND_STATE_DIR must be inside the sandbox');
   const record = { pid: process.pid, name: path.basename(process.argv[1] || 'node'), ports: [], host: '127.0.0.1', started: cp.spawnSync('ps', ['-p', String(process.pid), '-o', 'lstart='], { encoding: 'utf8' }).stdout.trim() };
   const file = path.join(root, 'run/processes', `${process.pid}.json`);
   // Anything reading the process directory must see only finished records, so
@@ -84,20 +84,20 @@ export function processGuard() {
 
 // `playground` verbs take the sandbox as an argument, so they derive their own
 // state directory rather than asking the caller to restate what they were just
-// given. A GROVE_STATE_DIR naming a different sandbox is still a conflict and is
+// given. A GROUND_STATE_DIR naming a different sandbox is still a conflict and is
 // refused: isolation rule 2 governs which state directory is used, not who types
 // it. Ordinary catalog verbs are unchanged and still require the variable.
 export function environmentForSandbox(sandbox, source = process.env) {
   const expected = path.join(sandbox, 'state');
-  if (source.GROVE_STATE_DIR && path.resolve(source.GROVE_STATE_DIR) !== expected) {
-    fail(`GROVE_STATE_DIR ${source.GROVE_STATE_DIR} does not belong to ${sandbox}`); // guard: state
+  if (source.GROUND_STATE_DIR && path.resolve(source.GROUND_STATE_DIR) !== expected) {
+    fail(`GROUND_STATE_DIR ${source.GROUND_STATE_DIR} does not belong to ${sandbox}`); // guard: state
   }
   return environmentFor(sandbox, source);
 }
 
 function environmentFor(sandbox, source = process.env) {
-  const environment = { ...source, GROVE_STATE_DIR: path.join(sandbox, 'state'), PLAYGROUND_SANDBOX: sandbox };
-  for (const key of Object.keys(environment)) if (key.startsWith('DRYAD_') || key.startsWith('GIT_')) delete environment[key];
+  const environment = { ...source, GROUND_STATE_DIR: path.join(sandbox, 'state'), PLAYGROUND_SANDBOX: sandbox };
+  for (const key of Object.keys(environment)) if (key.startsWith('SEAT_') || key.startsWith('GIT_')) delete environment[key];
   environment.NODE_OPTIONS = `--require ${JSON.stringify(path.join(sandbox, 'run/guard.cjs'))}`;
   return environment;
 }
@@ -118,13 +118,13 @@ function findSandbox(start) {
 // Protect ordinary catalog verbs before profile resolution or registry writes.
 export function guardPlaygroundInvocation(args, environment = process.env, cwd = process.cwd()) {
   if (args[0] === 'playground') return;
-  const candidates = [cwd, environment.PLAYGROUND_SANDBOX, environment.DRYAD_PROJECT, ...args.filter(a => !a.startsWith('-') && existsSync(path.resolve(cwd, a)))].filter(Boolean);
+  const candidates = [cwd, environment.PLAYGROUND_SANDBOX, environment.SEAT_PROJECT, ...args.filter(a => !a.startsWith('-') && existsSync(path.resolve(cwd, a)))].filter(Boolean);
   const roots = [...new Set(candidates.map(findSandbox).filter(Boolean))];
   if (roots.length > 1) fail('one CLI call cannot address multiple sandboxes');
   if (!roots.length) return;
   const sandbox = roots[0];
   // Even a refused call must not journal into the caller's machine seat.
-  for (const key of Object.keys(environment)) if (key.startsWith('DRYAD_')) delete environment[key];
+  for (const key of Object.keys(environment)) if (key.startsWith('SEAT_')) delete environment[key];
   assertState(sandbox, environment);
   assertTree(sandbox);
   for (const flag of ['--project', '--worktree']) {
@@ -134,8 +134,8 @@ export function guardPlaygroundInvocation(args, environment = process.env, cwd =
   if (['infra', 'setup', 'up', 'provision', 'canopy', 'init'].includes(args[0])) fail('machine and provisioning verbs are not available inside a sandbox');
   Object.assign(environment, environmentFor(sandbox, environment));
   // Explicit --project still wins; all inherited seat context is removed.
-  for (const key of Object.keys(environment)) if (key.startsWith('DRYAD_') || key.startsWith('GIT_')) delete environment[key];
-  environment.DRYAD_PROJECT = path.join(sandbox, 'project');
+  for (const key of Object.keys(environment)) if (key.startsWith('SEAT_') || key.startsWith('GIT_')) delete environment[key];
+  environment.SEAT_PROJECT = path.join(sandbox, 'project');
 }
 
 // Every string value in a registry record, so a path can be judged as a whole
@@ -175,7 +175,7 @@ export function machineMentions(sandbox) {
     }
     return matches;
   };
-  return { dryad: inspect(dryadStateDirectory({})), overlays: inspect(overlayStateDirectory({})) };
+  return { seat: inspect(seatStateDirectory({})), overlays: inspect(overlayStateDirectory({})) };
 }
 
 function signature(pid) {
@@ -240,7 +240,7 @@ export async function down(sandbox, environment = process.env) {
   rmSync(sandbox, { recursive: true });
   const ports = (await Promise.all(data.ports.map(listening))).filter(Boolean).length;
   const machine = machineMentions(sandbox);
-  return { sandbox, processes, ports, machine, removed: !existsSync(sandbox), ok: ports === 0 && !machine.dryad.length && !machine.overlays.length };
+  return { sandbox, processes, ports, machine, removed: !existsSync(sandbox), ok: ports === 0 && !machine.seat.length && !machine.overlays.length };
 }
 
 function run(command, args, cwd, environment) {
@@ -273,13 +273,13 @@ export async function up(sandbox, { source = path.join(CATALOG, 'playground'), p
   try {
     for (const name of ['app', 'tools']) cpSync(path.join(source, name), path.join(data.project, name), { recursive: true });
     // Profiles travel with the sample; the CLI does not inspect app sources.
-    for (const name of ['runtime-profile.yml', 'dryad-profile.yml']) cpSync(path.join(profiles, name), path.join(data.project, '.agents', name));
+    for (const name of ['runtime-profile.yml', 'seat-profile.yml']) cpSync(path.join(profiles, name), path.join(data.project, '.agents', name));
     const runtimePath = path.join(data.project, '.agents/runtime-profile.yml');
     const runtime = parseProfile(readFileSync(runtimePath, 'utf8'), runtimePath);
     data.names = renderProjectUrls(runtime, resolveAddressing(runtime, { profilePath: runtimePath })).shared;
-    const dryadPath = path.join(data.project, '.agents/dryad-profile.yml');
-    const dryad = parse(readFileSync(dryadPath, 'utf8'));
-    if (!dryad.worktrees?.root || path.resolve(data.project, dryad.worktrees.root) !== data.seats) fail('Dryad worktrees.root must resolve to the sandbox seats directory');
+    const seatPath = path.join(data.project, '.agents/seat-profile.yml');
+    const seat = parse(readFileSync(seatPath, 'utf8'));
+    if (!seat.worktrees?.root || path.resolve(data.project, seat.worktrees.root) !== data.seats) fail('Seat worktrees.root must resolve to the sandbox seats directory');
     save(path.join(data.project, '.agents/playground.json'), { sandbox });
     const git = args => run('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgSign=false', '-c', 'user.name=Playground', '-c', 'user.email=playground@example.invalid', ...args], data.project, env);
     git(['init', '-b', 'main']); // guard: git
@@ -302,17 +302,17 @@ export async function up(sandbox, { source = path.join(CATALOG, 'playground'), p
 }
 
 export function nextCommands(data) {
-  const prefix = `GROVE_STATE_DIR=${quote(data.state)} ${quote(process.execPath)} ${quote(CLI)}`;
+  const prefix = `GROUND_STATE_DIR=${quote(data.state)} ${quote(process.execPath)} ${quote(CLI)}`;
   return [
     `${prefix} validate ${quote(data.project)}`,
     `${prefix} urls ${quote(data.project)}`,
     `${prefix} overlay verify --project ${quote(data.project)}${data.verify_image ? ` --image ${quote(data.verify_image)}` : ''}`,
-    `${prefix} dryad plan worker --project ${quote(data.project)} --task 'Change the sample web page' --by reader --apply`,
+    `${prefix} seat plan worker --project ${quote(data.project)} --task 'Change the sample web page' --by reader --apply`,
   ].join('\n');
 }
 export async function runPlayground(args) {
   const [verb, ...rest] = args;
-  let sandbox = process.env.PLAYGROUND_SANDBOX || (process.env.GROVE_STATE_DIR ? path.dirname(path.resolve(process.env.GROVE_STATE_DIR)) : DEFAULT_SANDBOX);
+  let sandbox = process.env.PLAYGROUND_SANDBOX || (process.env.GROUND_STATE_DIR ? path.dirname(path.resolve(process.env.GROUND_STATE_DIR)) : DEFAULT_SANDBOX);
   let jsonOutput = false;
   let host = '127.0.0.1';
   for (let i = 0; i < rest.length; i++) {
@@ -339,16 +339,16 @@ export async function runPlayground(args) {
       console.log([`sandbox ${data.sandbox}`, ...lines,
         `processes ${data.counts.alive} alive, ${data.counts.finished} finished, ${data.counts.stopped} stopped`,
         `ports ${data.ports.join(', ')}`, `names ${JSON.stringify(data.names)}`,
-        `machine dryad ${data.machine.dryad.length}, overlays ${data.machine.overlays.length}`].join('\n'));
+        `machine seat ${data.machine.seat.length}, overlays ${data.machine.overlays.length}`].join('\n'));
     }
     // The exit code answers one question: did isolation hold. The counts line
     // carries health, so a service that crashed earlier does not make an
     // isolation check read as an isolation failure.
-    return data.machine.dryad.length || data.machine.overlays.length ? 1 : 0;
+    return data.machine.seat.length || data.machine.overlays.length ? 1 : 0;
   }
   if (verb === 'down') {
     const data = await down(sandbox, environmentForSandbox(sandbox));
-    console.log(`sandbox ${sandbox}\nprocesses still alive ${data.processes}\nports still listening ${data.ports}\nmachine dryad mentions ${data.machine.dryad.length}\nmachine overlay mentions ${data.machine.overlays.length}\ndirectories remaining ${data.removed ? 0 : 1}`);
+    console.log(`sandbox ${sandbox}\nprocesses still alive ${data.processes}\nports still listening ${data.ports}\nmachine seat mentions ${data.machine.seat.length}\nmachine overlay mentions ${data.machine.overlays.length}\ndirectories remaining ${data.removed ? 0 : 1}`);
     return data.ok ? 0 : 1;
   }
   fail('usage: playground up [--dir PATH] | status [--dir PATH] [--json] | down [--dir PATH]');

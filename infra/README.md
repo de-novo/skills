@@ -31,7 +31,7 @@ Hostnames are not ports. This checkout's TLD and scheme live in
 their profile omits `addressing.tld`. `de-novo skills urls` prints the names.
 
 The engine catalog is this compose file. Engine id is the compose profile.
-`grove.provision` / `grove.aliases` labels teach the CLI; do not add a second
+`ground.provision` / `ground.aliases` labels teach the CLI; do not add a second
 list. A project starts only `data.engines`. `up` with no names starts nothing.
 
 ## Start
@@ -96,7 +96,7 @@ Create a **separate** engine-link cluster on `dev-infra`, not the machine's
 existing one that already owns `:80`:
 
 ```bash
-k3d cluster create grove-qa \
+k3d cluster create ground-qa \
   --network dev-infra \
   --api-port 127.0.0.1:6550 \
   --port '127.0.0.1:9080:80@loadbalancer' \
@@ -106,9 +106,9 @@ k3d cluster create grove-qa \
 Then link engines (idempotent). Requires `--cluster`; will not pick `local`:
 
 ```bash
-de-novo skills infra k3d connect --cluster grove-qa
-# apps: mysql.grove-infra:3306  pg.grove-infra:5432
-de-novo skills infra k3d status --cluster grove-qa
+de-novo skills infra k3d connect --cluster ground-qa
+# apps: mysql.ground-infra:3306  pg.ground-infra:5432
+de-novo skills infra k3d status --cluster ground-qa
 # resources n/n; stale or missing Service/EndpointSlice makes status non-zero
 ```
 
@@ -133,7 +133,7 @@ to a running engine is a separate human decision made with Docker directly,
 never through a project's setup (measured 2026-09-06: before `--no-recreate`,
 a throwaway project's setup recreated two running shared engines). It then
 provisions each declared SQL database and account, setting existing account
-passwords from `GROVE_PROVISION_PASSWORD` or the local-development default and
+passwords from `GROUND_PROVISION_PASSWORD` or the local-development default and
 reapplying grants. Repeated execution with different credentials can break
 existing app connections. Coordinate credential changes and app configuration
 with the owner; do not use setup as a status check. It has no dry-run mode.
@@ -147,7 +147,7 @@ de-novo skills setup <project-root>   # reconcile declared engines + provision D
 `de-novo skills infra provision (mysql|pg) <name>` is the low-level tool setup
 uses — call it directly only when you need one DB in a hurry without a
 profile. It prints a counted receipt without credentials. To override the
-local-development credential, pass it through `GROVE_PROVISION_PASSWORD`;
+local-development credential, pass it through `GROUND_PROVISION_PASSWORD`;
 positional password arguments are rejected so they do not enter shell history
 or process arguments.
 
@@ -157,7 +157,7 @@ Database and account names come from the consuming project's
 
 ## Overlay lifecycle
 
-Grove does not implement project workloads, but it owns their lifecycle gate
+Ground does not implement project workloads, but it owns their lifecycle gate
 and lease registry. An overlay-enabled project declares
 `runtime.commands.overlay`; operate it only through the CLI:
 
@@ -172,8 +172,8 @@ The project chooses `overlay.stale_after`, or the operator supplies
 `--stale-after`. There is no default retention period and no implicit deletion.
 Failed destroys remain tracked and make the counted cleanup non-zero. Runtime
 environments absent from the registry are reported as drift and require an
-explicit `destroy`; Grove does not invent their age. Full contract:
-[`overlay-contract.md`](../skills/grove/references/overlay-contract.md).
+explicit `destroy`; Ground does not invent their age. Full contract:
+[`overlay-contract.md`](../skills/ground/references/overlay-contract.md).
 
 ## Rules (not weakenable)
 

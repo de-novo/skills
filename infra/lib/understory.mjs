@@ -1,12 +1,12 @@
-// de-novo Understory — the story under the canopy: the graph Forester holds,
+// de-novo Understory — the story under the canopy: the graph Plan holds,
 // drawn and read for people. This module owns the deterministic part: the
-// diagram and the reading lines, both computed from `forester plan --json`
+// diagram and the reading lines, both computed from `plan plan --json`
 // and nothing else, so two people drawing the same plan get the same
 // picture. The prose around them is written by an agent reading the skill.
 import { readFileSync } from 'node:fs';
 
-import { foresterJson, loadForester } from './forester.mjs';
-import { VALUES_RELPATH as MYCELIUM_VALUES, loadMycelium, query as myceliumQuery } from './mycelium.mjs';
+import { planJson, loadPlan } from './plan.mjs';
+import { VALUES_RELPATH as FACTS_VALUES, loadFacts, query as factsQuery } from './facts.mjs';
 
 const STATE_ORDER = ['done', 'active', 'ready', 'waiting', 'blocked', 'failed'];
 // One fill per state. Chosen so done recedes and the three states that need
@@ -43,7 +43,7 @@ function label(item) {
 // solid edge per depends_on, a dotted edge for every claim hold that keeps a
 // ready item waiting, and a note on items the budget alone is holding.
 export function understoryGraph(json) {
-  if (!json || !Array.isArray(json.items)) fail('expected forester plan --json.');
+  if (!json || !Array.isArray(json.items)) fail('expected plan plan --json.');
   const lines = ['flowchart LR'];
   for (const state of STATE_ORDER) lines.push(`  classDef ${state} ${STATE_STYLE[state]}`);
   for (const item of json.items) {
@@ -73,7 +73,7 @@ export function understoryGraph(json) {
 // One line per item, in plan order, saying what a reader should take from
 // it. This is the text a person is measured against: read it and know.
 export function understoryReading(json) {
-  if (!json || !Array.isArray(json.items)) fail('expected forester plan --json.');
+  if (!json || !Array.isArray(json.items)) fail('expected plan plan --json.');
   const rows = [];
   for (const item of json.items) {
     let line;
@@ -169,24 +169,24 @@ function loadJson(options, environment, cwd) {
       fail(`${options.from}: ${error.message}`);
     }
   }
-  return foresterJson(loadForester({ project: options.project, environment, cwd }));
+  return planJson(loadPlan({ project: options.project, environment, cwd }));
 }
 
 // The pointer to what was proven: for each item, the ids of the active
-// Mycelium facts whose subject is that item. Read through the same query
+// Facts whose subject is that item. Read through the same query
 // the CLI exposes, never restated; a project without a values file gets
 // none, and --from (a saved plan) has no project to ask.
 export function factsByItem(rows, { project, environment, cwd }) {
   const out = new Map();
   let loaded;
   try {
-    loaded = loadMycelium({ project, environment, cwd });
+    loaded = loadFacts({ project, environment, cwd });
   } catch (error) {
-    if (new RegExp(`values not found: .*${MYCELIUM_VALUES.replace('.', '\\.')}$`).test(error.message)) return out;
+    if (new RegExp(`values not found: .*${FACTS_VALUES.replace('.', '\\.')}$`).test(error.message)) return out;
     throw error;
   }
   for (const row of rows) {
-    const ids = myceliumQuery(loaded.assertions, { status: 'active', s: row.id }).map((fact) => fact.id);
+    const ids = factsQuery(loaded.assertions, { status: 'active', s: row.id }).map((fact) => fact.id);
     if (ids.length > 0) out.set(row.id, ids);
   }
   return out;
@@ -211,14 +211,14 @@ export function runUnderstory({ options, environment = process.env, cwd = proces
 }
 
 export function understoryHelp(cli = 'de-novo skills') {
-  return `the story under the canopy: Plan's graph (forester), drawn and read for people
+  return `the story under the canopy: Plan's graph, drawn and read for people
 
 usage:
   ${cli} understory graph   [--project ROOT | --from plan.json]   the plan as a Mermaid flowchart
   ${cli} understory reading [--project ROOT | --from plan.json] [--json]
                                                                 one line per item a reader can act on
 
-Both are computed from forester plan --json and nothing else; --from takes
+Both are computed from plan plan --json and nothing else; --from takes
 a saved copy of that output. The document around them is written by an
 agent reading skills/understory/SKILL.md.`;
 }
