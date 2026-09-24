@@ -74,13 +74,13 @@ test('de-novo skills infra status via the de-novo bin name', () => {
     encoding: 'utf8',
   });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /grove — machine infra/);
+  assert.match(result.stdout, /ground \(grove\) — machine infra/);
 });
 
-test('infra status prints Grove-central catalog and tld', () => {
+test('infra status prints Ground (Grove) catalog and tld', () => {
   const result = spawnSync(process.execPath, [CLI, 'infra', 'status'], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /grove — machine infra/);
+  assert.match(result.stdout, /ground \(grove\) — machine infra/);
   assert.match(result.stdout, /tld {6}localhost/);
   assert.match(result.stdout, /catalog {2}mysql pg redis kafka mongo mail minio/);
   assert.match(result.stdout, /ready {4}\d+\/7/);
@@ -89,7 +89,29 @@ test('infra status prints Grove-central catalog and tld', () => {
 test('infra with no subcommand is status', () => {
   const result = spawnSync(process.execPath, [CLI, 'infra'], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /grove — machine infra/);
+  assert.match(result.stdout, /ground \(grove\) — machine infra/);
+});
+
+test('seat, plan, and facts are aliases of the forest commands', () => {
+  for (const [alias, command, marker] of [
+    ['seat', 'dryad', /Seat \(dryad\)/],
+    ['plan', 'forester', /Plan \(forester\)/],
+    ['facts', 'mycelium', /Facts \(mycelium\)/],
+  ]) {
+    const aliased = spawnSync(process.execPath, [CLI, alias, '--help'], { encoding: 'utf8' });
+    const original = spawnSync(process.execPath, [CLI, command, '--help'], { encoding: 'utf8' });
+    assert.equal(aliased.status, 0, aliased.stderr);
+    assert.equal(original.status, 0, original.stderr);
+    assert.match(aliased.stdout, marker);
+    assert.match(original.stdout, marker);
+  }
+  const help = spawnSync(process.execPath, [CLI, 'help'], { encoding: 'utf8' });
+  assert.match(help.stdout, /dryad\|seat/);
+  assert.match(help.stdout, /forester\|plan/);
+  assert.match(help.stdout, /mycelium\|facts/);
+  const unknown = spawnSync(process.execPath, [CLI, 'ground'], { encoding: 'utf8' });
+  assert.notEqual(unknown.status, 0);
+  assert.match(unknown.stderr, /unknown command "ground"/);
 });
 
 test('infra k3d connect requires --cluster', () => {

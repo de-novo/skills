@@ -1,7 +1,7 @@
 ---
 name: mycelium
 description: >-
-  de-novo Mycelium — the facts under the forest. One append-only log of
+  de-novo Facts (Mycelium) — assertions, separate from Plan. One append-only log of
   assertions per project: what is held true, since when, with what
   confidence, in which domain, on whose word. Workers propose; a person or
   the judging worker commits or invalidates; readers query a moment. Use
@@ -15,11 +15,11 @@ description: >-
   promotion is yours.
 ---
 
-# Mycelium
+# Facts (Mycelium)
 
-Forester's graph is the work: items, dependencies, claims. It says nothing
-about what the work found out. Mycelium is the other graph, the one under
-the forest: facts with time, confidence, domain, and provenance attached,
+Plan's graph is the work: items, dependencies, claims. It says nothing
+about what the work found out. Facts is the other graph: assertions with
+time, confidence, domain, and provenance attached,
 so a worker seated tomorrow starts from what was proven today instead of
 from the chat that proved it.
 
@@ -31,8 +31,8 @@ the CLI are in [references/log.md](references/log.md). Forester pattern:
 
 | Graph | Node | Owner | Home |
 | --- | --- | --- | --- |
-| Forester | an item of work and its state | the plan | `.agents/forester-plan.yml` |
-| Mycelium | an assertion and its status | the log | `<state>/mycelium/<slug>.jsonl` |
+| Plan (Forester) | an item of work and its state | the plan | `.agents/forester-plan.yml` |
+| Facts (Mycelium) | an assertion and its status | the log | `<state>/mycelium/<slug>.jsonl` |
 
 The seam is one direction only: a seat's done or blocked report may be
 proposed as a fact (`propose --from-seat`, `--report blocked` for the
@@ -118,8 +118,8 @@ so the brief stays short and the facts stay in one home.
 
 ## Not this skill
 
-- Deciding the work or its order. Forester.
-- Seating, reporting, or finishing a worker. Dryad.
+- Deciding the work or its order. Plan (Forester).
+- Seating, reporting, or finishing a worker. Seat (Dryad).
 - A document a person reads. Understory can point at assertion ids.
 - A second store per machine, a query language, a merge across machines.
   Those are named as later work in the design note and are not here.

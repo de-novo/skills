@@ -1,6 +1,6 @@
-# Mycelium — the values, the log, the envelope, the transitions, the query, the CLI
+# Facts (Mycelium) — the values, the log, the envelope, the transitions, the query, the CLI
 
-The long facts of Mycelium. Pattern: [SKILL.md](../SKILL.md). The human
+The long facts of the assertion log. The command stays `mycelium`; `facts` is an alias. Names: [glossary](../../../docs/glossary.md). Pattern: [SKILL.md](../SKILL.md). The human
 page: [README.md](../README.md). Reasons:
 [`docs/mycelium-design.md`](../../../docs/mycelium-design.md).
 

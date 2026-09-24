@@ -212,7 +212,7 @@ test('second-screen --once and socket first paint agree on worktrees, skills, fi
   assert.equal((first.match(/<article class="card /g) ?? []).length, project.worktrees.length);
   assert.equal((first.match(/class="overlap"/g) ?? []).length, project.overlaps.length);
   assert.match(first, /example — seats 2 · worktrees 3 \(1 unseated\) · envs 2\/2 · overlaps 1/);
-  assert.match(first, /Grove · environments 2 · attachments 2 · pending 1 · w1 attach in-flight · stale 0 · drift 0/);
+  assert.match(first, /Ground \(Grove\) · environments 2 · attachments 2 · pending 1 · w1 attach in-flight · stale 0 · drift 0/);
   assert.ok(first.indexOf('class="grove"') < first.indexOf('problem · w1: attachment pending'));
   assert.ok(first.indexOf('data-seat="w2"') < first.indexOf('data-seat="w1"'));
   assert.ok(first.indexOf('data-seat="w1"') < first.indexOf('class="card unseated"'));

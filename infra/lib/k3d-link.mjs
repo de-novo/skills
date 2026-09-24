@@ -209,7 +209,7 @@ export function formatK3dLinkReport({
   const linked = links.length;
   const known = linked + skipped.length;
   const lines = [
-    `■ grove — k3d ${cluster}`,
+    `■ cluster seat (k3d) — ${cluster}`,
     `  node     ${node}${nodeOnNetwork ? ` on ${network}` : ` not on ${network}`}`,
     `  engines  ${linked}/${known}${dryRun ? '  dry-run' : ''}`,
   ];

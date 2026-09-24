@@ -1,6 +1,6 @@
-# Forester — the plan, the budget, the allocator
+# Plan (Forester) — the plan, the budget, the allocator
 
-The long facts of Forester: the fields, the allocation rule, the CLI, the
+The long facts of Plan. The command stays `forester`; `plan` is an alias. Names: [glossary](../../../docs/glossary.md). The fields, the allocation rule, the CLI, the
 sessions. Pattern: [SKILL.md](../SKILL.md). The human page:
 [README.md](../README.md). Reasons: [`docs/forester-design.md`](../../../docs/forester-design.md).
 

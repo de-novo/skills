@@ -1,8 +1,9 @@
-# Forester
+# Plan (Forester)
 
-The plan, the budget, the allocator. An agent reading the skill interviews
+The plan, the dependencies, the budget, and the allocator. An agent reading the skill interviews
 the person, splits the work into items with dependencies and file claims,
 and writes the plan; the CLI keeps as many seated as this machine allows.
+The command stays `forester`; `plan` is an alias. Naming rule: [glossary](../../docs/glossary.md).
 
 ```
 goal ──(grill, then an agent writes)──▶ .agents/forester-plan.yml
@@ -16,7 +17,7 @@ goal ──(grill, then an agent writes)──▶ .agents/forester-plan.yml
 
 Turns a goal into items a single worker can finish alone, each a vertical
 slice sized to one context window, with `owns` claims and `depends_on`
-edges; then assigns the ready ones into Dryad seats up to the budget. The
+edges; then assigns the ready ones through Seat (Dryad), up to the budget. The
 defining constraint: the CLI never calls a model and never schedules by
 estimate. The same plan, seats, and budget give the same assignment.
 
@@ -35,8 +36,8 @@ seat with a task you already have, use [dryad](../dryad/README.md) directly.
 
 ## Where it fits
 
-The first step after a goal: it feeds Dryad, Understory draws its graph,
-Mycelium keeps the decisions the grilling locked. Root map:
+The first step after a goal: it feeds Seat (Dryad), Understory draws its graph,
+Facts (Mycelium) keeps the decisions the grilling locked. Root map:
 [How the skills fit](../../README.md#how-the-skills-fit).
 
 ## What it does to your machine

@@ -27,7 +27,7 @@ const git = (...args) => {
 
 const seat = JSON.parse(dryad('seat', id, '--json').stdout);
 if (path.resolve(seat.worktree) !== path.resolve(process.cwd())) throw new Error(`worker cwd ${process.cwd()} is not the seat worktree ${seat.worktree}`);
-if (!existsSync(skill) || !readFileSync(skill, 'utf8').includes('# Dryad')) throw new Error(`skill not readable at ${skill}`);
+if (!existsSync(skill) || !readFileSync(skill, 'utf8').includes('# Seat (Dryad)')) throw new Error(`skill not readable at ${skill}`);
 const task = dryad('seat', id, '--task').stdout.trim();
 
 dryad('report', id, '--status', 'working', '--note', `read skill and seat; task: ${task.slice(0, 40)}`);

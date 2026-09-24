@@ -1,18 +1,18 @@
 ---
 name: forester
 description: >-
-  de-novo Forester — break a body of work into a plan of items with
+  de-novo Plan (Forester) — break a body of work into a plan of items with
   dependencies and file claims, set how many may run at once on this
-  machine, and keep that many seated as Dryad seats. Values live in
+  machine, and keep that many seated through Seat (Dryad). Values live in
   .agents/forester-plan.yml (the plan, tracked) and
   .agents/forester.local.yml (this machine's budget, never committed). The
   CLI never calls a model; the analysis is yours.
 disable-model-invocation: true
 ---
 
-# Forester
+# Plan (Forester)
 
-Grove is the ground and Dryad seats one worker on it. Forester decides which
+Ground is the base and Seat places one worker on it. Plan decides which
 work exists, in what order, and how much of it this machine runs at once.
 The allocator is a pure function of its inputs: the plan, the Dryad seats,
 the budget, and the baseline's git facts; the same inputs give the same

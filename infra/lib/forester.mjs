@@ -50,7 +50,7 @@ function isMap(value) {
 }
 
 function fail(message) {
-  throw new Error(`forester: ${message}`);
+  throw new Error(`plan (forester): ${message}`);
 }
 
 function assertOnlyKeys(value, allowed, field, source) {
@@ -915,7 +915,7 @@ function runPlanVerb(loaded, options) {
   }
   const { project, budget, items } = loaded;
   const width = Math.max(...items.map((item) => item.id.length));
-  const lines = [`■ ${project.slug} — forester plan (parallel ${budget.parallel} from ${budget.source})`];
+  const lines = [`■ ${project.slug} — plan (forester) (parallel ${budget.parallel} from ${budget.source})`];
   for (const item of items) {
     lines.push(`  ${pad(item.id, width)}  ${pad(item.state, 7)}  ${item.why}`);
   }
@@ -944,7 +944,7 @@ function runNextVerb(loaded, options) {
   }
   const { project, budget, allocation } = loaded;
   const lines = [
-    `■ ${project.slug} — forester next (parallel ${budget.parallel} · active ${allocation.active} · free ${allocation.free})`,
+    `■ ${project.slug} — plan next (forester) (parallel ${budget.parallel} · active ${allocation.active} · free ${allocation.free})`,
     ...nextLines(loaded),
     `  would assign ${allocation.chosen.length}/${allocation.free}; changes nothing`,
   ];
@@ -961,7 +961,7 @@ function runAssignVerb(loaded, options, environment, cwd) {
     }
     console.log(
       [
-        `■ ${project.slug} — forester assign (parallel ${budget.parallel} · active ${allocation.active} · free ${allocation.free})`,
+        `■ ${project.slug} — plan assign (forester) (parallel ${budget.parallel} · active ${allocation.active} · free ${allocation.free})`,
         ...nextLines(loaded),
         `  apply     nothing created; rerun with --apply`,
       ].join('\n')
@@ -1063,7 +1063,7 @@ function runStatusVerb(loaded, options) {
   } else {
     console.log(
       [
-        `■ ${project.slug} — forester (parallel ${budget.parallel} from ${budget.source})`,
+        `■ ${project.slug} — plan (forester) (parallel ${budget.parallel} from ${budget.source})`,
         `  slots    ${allocation.active}/${budget.parallel}`,
         `  machine  ${loaded.machine.parallel == null ? 'no cap' : `cap ${loaded.machine.parallel} · ${loaded.machine.held_by_others} held by other projects`}${loaded.machine.unmanaged.length > 0 ? ` · ${loaded.machine.unmanaged.length} unmanaged` : ''}`,
         `  waiting  ${c.ready} ready · ${c.waiting} waiting for integration · ${c.blocked} blocked`,
@@ -1118,7 +1118,7 @@ export async function runForester({ options, environment = process.env, cwd = pr
 }
 
 export function foresterHelp(cli = 'de-novo skills') {
-  return `analyse the work into a plan, keep this machine's slots full (allocation through Dryad seats)
+  return `Plan (forester): items, dependencies, budget, and serve. Allocation goes through Seat (dryad). \`plan\` is an alias of \`forester\`.
 
 usage:
   ${cli} forester plan   [--json] [--project ROOT]   every item: done, active, ready, blocked, failed, and why

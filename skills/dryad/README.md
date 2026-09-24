@@ -1,9 +1,9 @@
-# Dryad
+# Seat (Dryad)
 
-One seat per worker on Grove's ground. A seat is a worktree, an overlay env
+One agent seat on Ground (Grove). A seat is a worktree, an overlay env
 when the project has one, a task, and a journal of what the worker
-reported. Dryad launches no agent: the person picks the launcher and who
-sits where.
+reported. Seat launches no agent: the person picks the launcher and who
+sits where. The command stays `dryad`; `seat` is an alias. Naming rule: [glossary](../../docs/glossary.md).
 
 ```
   human decides                    Dryad owns                     Grove owns
@@ -39,7 +39,7 @@ where. For deciding *what* the work is and how many run at once, use
 
 ## Where it fits
 
-Forester assigns into it; Grove stands under it; Mycelium reads its done
+Plan (Forester) assigns into it; Ground (Grove) stands under it; Facts (Mycelium) reads its done
 and blocked reports; Canopy (`de-novo skills canopy`) is the live screen
 over its JSON. Root map: [How the skills fit](../../README.md#how-the-skills-fit).
 

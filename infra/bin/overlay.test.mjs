@@ -363,7 +363,7 @@ test('project passthrough cannot smuggle the central --apply gate', (t) => {
   const fixture = projectFixture(t);
   const result = run(fixture, ['create', 'w1', '--', '--apply=true']);
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /must be a Grove option/);
+  assert.match(result.stderr, /must be a Ground \(Grove\) option/);
   assert.equal(calls(fixture).length, 0);
   assert.equal(existsSync(fixture.stateFile), false);
 });

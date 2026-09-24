@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// de-novo skills — Grove CLI. yaml is source of truth; the CLI paints it.
+// de-novo skills — Ground (Grove) CLI. yaml is source of truth; the CLI paints it.
 // Invoke as `de-novo skills …`. de-novo-skills is an alias without the
 // skills namespace. There is no machine down command: several projects live on
 // machine infra, so a human decides when to stop it.
@@ -51,6 +51,18 @@ import {
 } from './setup.mjs';
 
 export const CLI = 'de-novo skills';
+
+// Newcomer names for the forest commands. The old subcommands stay.
+export const COMMAND_ALIASES = Object.freeze({
+  seat: 'dryad',
+  plan: 'forester',
+  facts: 'mycelium',
+});
+
+export function canonicalCommand(command) {
+  if (command == null) return command;
+  return COMMAND_ALIASES[command] ?? command;
+}
 
 export function invokedName(argv1 = process.argv[1]) {
   if (!argv1) return 'cli';
@@ -142,7 +154,7 @@ export function formatInfraStatus() {
   const tldSource = grove.localTld ? 'grove.local' : grove.tld ? 'grove' : 'default';
   const names = Object.keys(ENGINES);
   const lines = [
-    '■ grove — machine infra',
+    '■ ground (grove) — machine infra',
     `  tld      ${tld}  (${tldSource})`,
     `  catalog  ${names.join(' ')}`,
   ];
@@ -193,7 +205,7 @@ function cmdInfra(args) {
 }
 
 function printInfraHelp() {
-  console.log(`machine infra (Grove-central). Catalog: infra/docker-compose.yml.
+  console.log(`machine infra for Ground (Grove-central). Catalog: infra/docker-compose.yml.
 TLD: infra/addressing.yml. Projects declare isolation units, not engines.
 
 usage:
@@ -202,7 +214,7 @@ usage:
   ${CLI} infra provision (mysql|pg) <name>
                                       one database + dedicated account
   ${CLI} infra k3d connect --cluster NAME
-                                      join cluster to compose network + write Services
+                                      Cluster seat: join a k3d/k3s cluster to the compose network
   ${CLI} infra k3d status --cluster NAME
 
 there is no down command.`);
@@ -429,13 +441,18 @@ function cmdInfraK3d(args) {
 }
 
 function printHelp() {
-  console.log(`${CLI} — Grove CLI (yaml is source of truth; the CLI paints it)
+  console.log(`${CLI} — Ground (Grove) CLI (yaml is source of truth; the CLI paints it)
 
-machine (Grove-central — compose + addressing.yml):
+Names: Ground (grove), Seat (dryad), Plan (forester), Facts (mycelium).
+seat, plan, and facts are aliases of dryad, forester, and mycelium.
+Cluster seat is the k3d/k3s backend (infra k3d). See docs/glossary.md.
+
+machine (Ground — compose + addressing.yml):
   ${CLI} infra status                  catalog, tld, ready n/n
   ${CLI} infra up [engine …]           start those compose engines
   ${CLI} infra provision (mysql|pg) <name>
   ${CLI} infra k3d connect --cluster NAME
+                                       Cluster seat: join a k3d/k3s cluster
 
 first:
   ${CLI} doctor [--project ROOT] [--probe] [--json]   what this machine and project have; read-only, exit 1 on an invalid values file
@@ -450,10 +467,10 @@ project:
   ${CLI} setup [project-root|profile]  owner-authorized engines + DB/account provisioning
   ${CLI} overlay <verb> ...            create/attach/detach/destroy/status/touch/prune
   ${CLI} overlay verify [--image REF]   drive this project's adapter through the contract
-  ${CLI} dryad <verb> ...              plan/seat/report/status/finish/projects — seats for workers, no agent launch
-  ${CLI} forester <verb> ...           plan/next/assign/status — keep this machine's slots full through Dryad seats
-  ${CLI} understory graph|reading      Forester's graph as a Mermaid flowchart, and one readable line per item
-  ${CLI} mycelium <verb> ...           propose/commit/invalidate/query/status — the project's assertion log
+  ${CLI} dryad|seat <verb> ...         Seat: worktree, overlay env, journal. Does not launch an agent
+  ${CLI} forester|plan <verb> ...      Plan: items, dependencies, budget, serve
+  ${CLI} understory graph|reading      Plan's graph as a Mermaid flowchart, and one readable line per item
+  ${CLI} mycelium|facts <verb> ...     Facts: the assertion log, separate from Plan
   ${CLI} herbarium check               links, copies, script, page length over the project's documents
 
 local overview:
@@ -474,7 +491,8 @@ function main(argv) {
     console.error(parsed.error);
     return 1;
   }
-  const [command, ...rest] = parsed.args;
+  const [typed, ...rest] = parsed.args;
+  const command = canonicalCommand(typed);
   guardPlaygroundInvocation(parsed.args);
   switch (command) {
     case 'playground':
@@ -535,7 +553,7 @@ function main(argv) {
       printHelp();
       return 0;
     default:
-      console.error(`${CLI}: unknown command "${command}"\n`);
+      console.error(`${CLI}: unknown command "${typed}"\n`);
       printHelp();
       return 1;
   }

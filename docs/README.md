@@ -1,26 +1,29 @@
 # Documentation
 
+Newcomer names, with the old names kept as aliases: [glossary](glossary.md).
+CLI errors, new docs, and onboarding say Ground, Seat, Plan, and Facts.
+
 Current operating authority:
 
-- [Grove pattern](../skills/grove/SKILL.md)
+- [Ground pattern (grove)](../skills/grove/SKILL.md)
 - [Onboarding and human diagram](../skills/grove/README.md)
 - [Profile schema](../skills/grove/references/runtime-profile.md)
 - [Overlay contract](../skills/grove/references/overlay-contract.md)
-- [Dryad pattern](../skills/dryad/SKILL.md) and [profile, registry, CLI](../skills/dryad/references/seats.md)
+- [Seat pattern (dryad)](../skills/dryad/SKILL.md) and [profile, registry, CLI](../skills/dryad/references/seats.md)
 - [Catalog machine backend](../infra/README.md)
 - [Catalog working rules](../AGENTS.md)
 
 ## Product direction
 
-[Grove value and intended experience](grove-product-direction.md) evaluates
+[Ground value and intended experience (Grove)](grove-product-direction.md) evaluates
 current capabilities, alternatives, differentiation hypotheses, and adoption
 measurements. It is an analysis, not operating authority or approved scope.
 
 ## Design records
 
-[Forester design](forester-design.md) proposes a third skill: analyse work into a
+[Plan design (Forester)](forester-design.md) proposes a third skill: analyse work into a
 plan with dependencies and expected file ownership, set how many items this
-machine may run at once, and keep that many assigned as Dryad seats. A budget
+machine may run at once, and keep that many assigned as Seat (Dryad) seats. A budget
 the project declares is followed; a local, untracked one applies only when the
 project sets none. Landed 2026-09-08 in two rounds: the plan, budget,
 allocator, and verbs; then `serve`, which holds each seat's real interactive
@@ -32,11 +35,11 @@ the skill README owns the document shape, `infra/lib/understory.mjs` owns
 the drawn graph and the reading lines, and the reasons are two sentences in
 the Forester note. Landed 2026-09-08.
 
-[Mycelium design](mycelium-design.md) proposes a fifth skill: an append-only
+[Facts design (Mycelium)](mycelium-design.md) proposes a fifth skill: an append-only
 log of assertions per project, each with valid time, confidence, domain, source,
 and agent, folded into the graph of what the project holds true. Workers
 propose; a person or the named judge commits or invalidates. The only seam to
-Forester is read-only: a seat's done report may be proposed as a fact. Landed
+Plan (Forester) is read-only: a seat's done report may be proposed as a fact. Landed
 2026-09-08. [Mycelium cases](mycelium-cases.md) walks every situation a
 shared fact store meets in a multi-worker sprint, marks each as measured,
 tested, pattern, or gap at `7047aa0`, and names the second round: declared
@@ -68,7 +71,7 @@ page: per-worktree cards with the skill verbs actually run, the files each
 seat changed, unseated worktrees, and file overlaps between seats. The seams
 are defined as `dryad status --json` fields first. Not implemented.
 
-[Dryad design](dryad-design.md) records why the second skill prepares seats
+[Seat design (Dryad)](dryad-design.md) records why the second skill prepares seats
 and launches no agent, and what it deliberately leaves to launchers and
 orchestrators. Current behavior is owned by the skill and `infra/lib/dryad.mjs`;
 the record is not operating authority.

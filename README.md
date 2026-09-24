@@ -2,11 +2,13 @@
 
 Open-source skills and tools for developers and agents sharing development environments.
 
-Grove helps independent worktrees verify their changes against a shared app
+Ground (Grove) helps independent worktrees verify their changes against a shared app
 baseline. Give each task a named overlay, replace only the services it changes,
 and track the work through readiness checks, interruption, retry, and cleanup.
 
-## Why Grove
+New writing says Ground, Seat, Plan, and Facts. Grove, Dryad, Forester, and Mycelium remain the skill directories and the original commands. The mapping, and what was deliberately left unchanged, is the [glossary](docs/glossary.md).
+
+## Why Ground (Grove)
 
 - **Work in parallel.** Different overlays can change concurrently; operations
   on the same overlay remain exclusive.
@@ -23,12 +25,13 @@ and failure injection. [Recorded results](docs/evidence/2026-09-06-kubernetes-li
 include unsuccessful attempts and the limits of what was measured.
 
 Projects supply workloads, routing, and data isolation through their adapters.
-Grove's lifecycle checks do not establish application correctness or measured
+Ground's lifecycle checks do not establish application correctness or measured
 productivity gains.
 
 ## Start here
 
-- [Understand Grove and connect a project](skills/grove/README.md)
+- [Names: Ground, Seat, Plan, Facts](docs/glossary.md)
+- [Understand Ground (Grove) and connect a project](skills/grove/README.md)
 - [Run the disposable lab](docs/evaluation/kubernetes/README.md)
 - [Read the overlay adapter contract](skills/grove/references/overlay-contract.md)
 
@@ -45,21 +48,21 @@ and one file; none restates another's.
                   a goal, and a person
                           │
                           ▼
-   Forester      the plan: items, dependencies, file claims, a budget
-                 .agents/forester-plan.yml (tracked) · forester.local.yml (this machine)
+   Plan          the plan: items, dependencies, file claims, a budget
+   (Forester)    .agents/forester-plan.yml (tracked) · forester.local.yml (this machine)
                           │ assign: one item → one seat
                           ▼
-   Dryad         one seat per worker: a worktree, an overlay env, a task, a journal
-                 .agents/dryad-profile.yml · <state>/dryads/<slug>.yml
+   Seat          one seat per worker: a worktree, an overlay env, a task, a journal
+   (Dryad)       .agents/dryad-profile.yml · <state>/dryads/<slug>.yml
                           │ stands on                         ▲ report done / blocked
                           ▼                                   │
-   Grove         shared ground: machine engines, names not ports, thin overlays
-                 .agents/runtime-profile.yml · infra/ (this catalog's backend)
+   Ground        shared base: machine engines, names not ports, thin overlays
+   (Grove)       .agents/runtime-profile.yml · infra/ (this catalog's backend)
                                                               │
-   Mycelium      the facts: seats propose, a judge commits; time, confidence, source
-                 .agents/mycelium.yml · <state>/mycelium/<slug>.jsonl  (append-only)
+   Facts         assertions: seats propose, a judge commits; time, confidence, source
+   (Mycelium)    .agents/mycelium.yml · <state>/mycelium/<slug>.jsonl  (append-only)
 
-   Canopy        the live screen: seats, sessions, files that overlap   (reads Dryad + Forester JSON)
+   Canopy        the live screen: seats, sessions, files that overlap   (reads Seat + Plan JSON)
    Understory    the written record: the graph drawn, one line per item, facts pointed at
    Clearing      the spoken re-pitch of the two above, for a person who lost the thread
    Herbarium     where each document lives; check counts what drifts
@@ -67,29 +70,29 @@ and one file; none restates another's.
 
 | Skill | Answers | Writes | Reads | Never does |
 | --- | --- | --- | --- | --- |
-| [grove](skills/grove/) | where does this project run on this machine | engines, overlay envs, names | the runtime profile | choose a port, stop shared engines |
-| [dryad](skills/dryad/) | who sits where, on what task, and what did they report | a seat's worktree, env, journal | Grove's report | launch an agent, merge, order the work |
-| [forester](skills/forester/) | what is the work, what may start now, how many at once | the plan (an agent writes it), seats through Dryad, machine slot reservations; `serve` launches each seated item's tool | the plan, the seats, the budget, the baseline's git facts | call a model, merge, hold world facts |
-| [mycelium](skills/mycelium/) | what does the project hold true, since when, on whose word | one log line per propose, commit, invalidate | the log, a seat's report (read-only seam) | judge, write the plan, touch a seat |
-| [understory](skills/understory/) | can a person who was not here read the work | the document (an agent writes the prose) | Forester's graph, Mycelium's ids | draw by hand, restate a fact |
+| [Ground (grove)](skills/grove/) | where does this project run on this machine | engines, overlay envs, names | the runtime profile | choose a port, stop shared engines |
+| [Seat (dryad)](skills/dryad/) | who sits where, on what task, and what did they report | a seat's worktree, env, journal | Ground's report | launch an agent, merge, order the work |
+| [Plan (forester)](skills/forester/) | what is the work, what may start now, how many at once | the plan (an agent writes it), seats through Seat, machine slot reservations; `serve` launches each seated item's tool | the plan, the seats, the budget, the baseline's git facts | call a model, merge, hold world facts |
+| [Facts (mycelium)](skills/mycelium/) | what does the project hold true, since when, on whose word | one log line per propose, commit, invalidate | the log, a seat's report (read-only seam) | judge, write the plan, touch a seat |
+| [understory](skills/understory/) | can a person who was not here read the work | the document (an agent writes the prose) | Plan's graph, Facts ids | draw by hand, restate a fact |
 
-Canopy is a verb of Dryad's CLI (`de-novo skills canopy`), not a skill: a
+Canopy is a verb of Seat's CLI (`de-novo skills canopy`), not a skill: a
 read-only screen over the same JSON the other verbs print.
 
-**The seams are one-way.** Forester assigns into Dryad and reads Dryad's
-reports back; Mycelium reads a seat's done or blocked report and never
-writes a seat; Understory reads Forester's graph and Mycelium's fact ids and
+**The seams are one-way.** Plan assigns into Seat and reads Seat's
+reports back; Facts reads a seat's done or blocked report and never
+writes a seat; Understory reads Plan's graph and Facts ids and
 writes only prose. No skill reaches around another to its file.
 
-**Two graphs, kept apart.** Forester's graph is the work: items and their
-five states. Mycelium's graph is what the work found out: assertions with a
+**Two graphs, kept apart.** Plan's graph is the work: items and their
+five states. Facts' graph is what the work found out: assertions with a
 valid interval, transaction time, confidence, domain, and writer. The plan
 file never holds a world fact; the log never holds an assignment. The only
 seam is `propose --from-seat`. Reasons: [`docs/mycelium-design.md`](docs/mycelium-design.md).
 
-**Launching is one explicit boundary.** Dryad never starts an agent: a
+**Launching is one explicit boundary.** Seat never starts an agent: a
 person picks the launcher (a terminal, a worktree app, tmux, an ACP client).
-The one launcher this catalog offers is `forester serve`, a foreground
+The one launcher this catalog offers is `forester serve` (alias `plan serve`), a foreground
 daemon a person starts per project; it holds the tool's real session, and
 every approval, the trust dialog included, is still the tool's own prompt.
 
@@ -100,7 +103,7 @@ merged it or recorded the integration.
 
 **Without a Skill tool.** A skill that says "Call the Skill tool with
 \"dryad\"" means, in a host that has no such tool: read that skill's
-`SKILL.md` from the installed copy and follow it. A seat finds Dryad's at
+`SKILL.md` from the installed copy and follow it. A seat finds Seat's skill at
 `$DRYAD_SKILL`; the other skills sit beside it.
 
 ## Install
@@ -154,22 +157,22 @@ Model-invoked: a seat or a person reaches for these.
 
 | Name | One line |
 | --- | --- |
-| [grove](skills/grove/) | Shared local ground: n projects, m apps each, one infra set |
-| [dryad](skills/dryad/) | One seat per worker on that ground: worktree, overlay env, task. No agent launch |
-| [understory](skills/understory/) | The story under the canopy: Forester's graph drawn and written up for people, a map that points rather than copies |
-| [mycelium](skills/mycelium/) | The facts under the forest: one append-only log of assertions per project, with time, confidence, domain, and provenance; workers propose, a person or the judge commits |
+| [Ground (grove)](skills/grove/) | Shared local base: n projects, m apps each, one infra set |
+| [Seat (dryad)](skills/dryad/) | One seat per worker on that base: worktree, overlay env, task. No agent launch |
+| [understory](skills/understory/) | The story under the canopy: Plan's graph drawn and written up for people, a map that points rather than copies |
+| [Facts (mycelium)](skills/mycelium/) | Assertions, separate from Plan: one append-only log per project, with time, confidence, domain, and provenance; workers propose, a person or the judge commits |
 | [herbarium](skills/herbarium/) | Every document has one house and the rest point at it; `check` counts broken links, copied prose, wrong script, and pages over the cap |
 
 User-invoked: only a person typing the name reaches these.
 
 | Name | One line |
 | --- | --- |
-| [forester](skills/forester/) | Grill the person, split the work into a plan, set how many run at once here, keep that many seated through Dryad; serve holds each seat's real session |
+| [Plan (forester)](skills/forester/) | Grill the person, split the work into a plan, set how many run at once here, keep that many seated through Seat; serve holds each seat's real session |
 | [clearing](skills/clearing/) | Stop and re-pitch where the work has got to, from the graph and the facts, in plain words |
 
 ## CLI
 
-Grove's machine-engine, profile, and overlay-lifecycle tool. Once per **this
+Ground's machine-engine, profile, and overlay-lifecycle tool (the grove skill). Once per **this
 catalog** checkout, not per consuming project:
 
 ```bash
@@ -178,10 +181,10 @@ npm install && npm link
 
 Then consuming projects call `de-novo skills doctor` first, and `infra
 status` (and `infra up`, `setup`, `init`, `validate`, `urls`, `overlay`,
-`dryad`, `forester`, `understory`, `mycelium`, `herbarium`). Projects choosing this machine
+`dryad`, `forester`, `understory`, `mycelium`, `herbarium`). `seat`, `plan`, and `facts` are aliases of `dryad`, `forester`, and `mycelium`; the old commands keep working. `infra k3d` is the Cluster seat command (k3d/k3s) and is not renamed. Projects choosing this machine
 backend do not copy its `infra/` directory; projects choosing another backend
 keep their own operating procedure. `de-novo-skills` is an alias without the `skills`
-token. Machine engines are Grove-central (`infra` next to this CLI). `setup`
+token. Machine engines are Ground-central (`infra` next to this CLI). `setup`
 provisions a project's isolation units on that set. Without a link,
 `node infra/bin/cli.mjs …` works the same. There is no down command —
 stopping machine infra is a human decision because several projects live on it.
@@ -202,11 +205,11 @@ LICENSE          MIT
                  dryad-profile.yml and mycelium.yml (it seats its own workers)
 skills/          skill sources. add a skill as <name>/SKILL.md; a short README next to it
                  for people, references/ for the long facts, agents/openai.yaml for Codex
-  grove/         shared ground: engines, names, overlays
-  dryad/         seats on Grove's ground (no agent launch); Canopy is one of its verbs
-  forester/      plan, budget, allocator over Dryad seats; serve holds sessions
+  grove/         Ground: engines, names, overlays (directory name stays grove)
+  dryad/         Seat on that base (no agent launch); Canopy is one of its verbs
+  forester/      Plan, budget, allocator over seats; serve holds sessions
   understory/    the work graph drawn and written up for people
-  mycelium/      the assertion log: what the project holds true
+  mycelium/      Facts: what the project holds true, apart from the plan
   clearing/      stop and re-pitch where the work is (reads the two above)
   herbarium/     where each document lives and how it is written; check counts what drifts
 infra/           machine-shared engines and the CLI (infra/bin/cli.mjs)

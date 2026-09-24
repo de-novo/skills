@@ -1,6 +1,6 @@
-# Grove
+# Ground (Grove)
 
-A de-novo skill. Shared local ground for many projects and agents on one machine.
+Shared local base and thin overlays for many projects and agents on one machine. The directory and the commands stay `grove`. Naming rule: [glossary](../../docs/glossary.md).
 
 One soil (engines), n trees (projects), m branches (apps) per project. Grafts
 (overlays) cover only the apps you changed. Developers and agents pick names,
@@ -100,7 +100,7 @@ measured procedure, below. Browser QA and e2e runners are not here.
 
 ## Where it fits
 
-The ground. Dryad seats stand on it; Forester never touches it directly;
+The base. Seat (Dryad) stands on it; Plan (Forester) never touches it directly;
 the machine backend lives in this catalog's `infra/`, not in the project.
 Root map: [How the skills fit](../../README.md#how-the-skills-fit).
 

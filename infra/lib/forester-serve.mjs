@@ -38,7 +38,7 @@ export const SESSION_STATES = Object.freeze(['starting', 'running', 'idle', 'nee
 export const FAILURE_KINDS = Object.freeze(['no-tool', 'tool-missing', 'env-pending', 'worktree-missing', 'spawn-failed']);
 
 function fail(message) {
-  throw new Error(`forester: ${message}`);
+  throw new Error(`plan (forester): ${message}`);
 }
 
 function now() {
@@ -263,7 +263,7 @@ export class ForesterServe {
         if (doc?.seats != null && typeof doc.seats === 'object') {
           this.previous = doc.seats;
           const live = Object.entries(this.previous).filter(([, session]) => ['starting', 'running', 'idle', 'needs-input'].includes(session?.state));
-          if (live.length > 0) this.log(`forester: previous serve pid ${pid || '?'} ended with ${live.length} live session${live.length === 1 ? '' : 's'} (${live.map(([id]) => id).join(', ')}); they cannot be resumed natively and will be launched again as fresh contexts`);
+          if (live.length > 0) this.log(`plan (forester): previous serve pid ${pid || '?'} ended with ${live.length} live session${live.length === 1 ? '' : 's'} (${live.map(([id]) => id).join(', ')}); they cannot be resumed natively and will be launched again as fresh contexts`);
         }
       }
       if (existsSync(this.socketPath)) {
@@ -277,9 +277,9 @@ export class ForesterServe {
       throw error;
     }
     this.writeSnapshot();
-    this.log(`■ ${this.project.slug} — forester serve pid ${process.pid} · socket ${this.socketPath}`);
+    this.log(`■ ${this.project.slug} — plan serve (forester) pid ${process.pid} · socket ${this.socketPath}`);
     await this.tick();
-    this.timer = setInterval(() => { this.tick().catch((error) => this.log(`forester: ${error.message}`)); }, this.pollMs);
+    this.timer = setInterval(() => { this.tick().catch((error) => this.log(error.message)); }, this.pollMs);
   }
 
   listen() {
@@ -343,17 +343,17 @@ export class ForesterServe {
     //    allocation that happens to rewrite the file.
     try {
       const { dropped } = reclaimStaleSlots({ environment: this.environment });
-      for (const key of dropped) this.log(`forester: machine slot ${key} released`);
+      for (const key of dropped) this.log(`plan (forester): machine slot ${key} released`);
     } catch (error) {
-      this.log(`forester: ${error.message}`);
+      this.log(error.message);
     }
     let loaded = loadForester({ project: this.projectOption, environment: this.environment, cwd: this.cwd });
     // 1. Fill the budget exactly as assign --apply would: a machine slot
     //    per chosen item, then the seat.
     const seated = seatChosen(loaded, { environment: this.environment, cwd: this.cwd, log: this.log });
-    for (const id of seated.failures) this.log(`forester: seat ${id} not planned`);
+    for (const id of seated.failures) this.log(`plan (forester): seat ${id} not planned`);
     for (const hold of seated.refused) {
-      if (this.lastHold !== hold.reason) this.log(`forester: ${hold.id}: ${hold.reason}`);
+      if (this.lastHold !== hold.reason) this.log(`plan (forester): ${hold.id}: ${hold.reason}`);
     }
     this.lastHold = seated.refused[0]?.reason ?? null;
     loaded = loadForester({ project: this.projectOption, environment: this.environment, cwd: this.cwd });
@@ -372,7 +372,7 @@ export class ForesterServe {
         if (session.pty != null) {
           this.close(item.id, `seat finished; attempt ${seat.attempt} seated`);
         } else {
-          this.log(`forester: ${item.id}: attempt ${seat.attempt} seated; dropping the session of attempt ${session.attempt}`);
+          this.log(`plan (forester): ${item.id}: attempt ${seat.attempt} seated; dropping the session of attempt ${session.attempt}`);
           this.sessions.delete(item.id);
           session = undefined;
         }
@@ -411,16 +411,16 @@ export class ForesterServe {
     }
     if (code === 0) {
       this.pending.delete(item.id);
-      this.log(`forester: ${item.id}: overlay env ready after ${retry.attempts} retr${retry.attempts === 1 ? 'y' : 'ies'}`);
+      this.log(`plan (forester): ${item.id}: overlay env ready after ${retry.attempts} retr${retry.attempts === 1 ? 'y' : 'ies'}`);
     } else {
-      this.log(`forester: ${item.id}: overlay env still pending (retry ${retry.attempts}/${PENDING_RETRIES}, next in ${Math.round((retry.nextAt - Date.now()) / 1000)}s)`);
+      this.log(`plan (forester): ${item.id}: overlay env still pending (retry ${retry.attempts}/${PENDING_RETRIES}, next in ${Math.round((retry.nextAt - Date.now()) / 1000)}s)`);
     }
   }
 
   failSession(item, toolName, kind, note) {
     const record = { id: item.id, tool: toolName ?? '-', state: 'failed', since: now(), pid: null, exit: null, pty: null, viewers: new Set(), events: null, note, failure: { kind, note, at: now() }, scrollback: '' };
     this.sessions.set(item.id, record);
-    this.log(`forester: ${item.id}: ${kind}: ${note}`);
+    this.log(`plan (forester): ${item.id}: ${kind}: ${note}`);
     return record;
   }
 
@@ -432,7 +432,7 @@ export class ForesterServe {
     if (session.pty != null) return { error: `session ${id} is live (${session.state}); it is not restarted underneath a worker` };
     this.sessions.delete(id);
     this.pending.delete(id);
-    this.log(`forester: ${id}: restart requested; the next poll launches it again as a fresh context`);
+    this.log(`plan (forester): ${id}: restart requested; the next poll launches it again as a fresh context`);
     this.writeSnapshot();
     return { ok: true, restarted: id, was: session.state };
   }
@@ -465,9 +465,9 @@ export class ForesterServe {
       writeFileSync(settingsFile, JSON.stringify(claudeSettings(record.events), null, 2));
       if (tool.pretrustWorktrees) {
         const trust = seedClaudeTrust(seat.worktree, this.environment);
-        this.log(`forester: ${item.id}: trust ${trust.result === 'seeded' ? 'seeded' : trust.result} (${trust.file}; tools.${toolName}.pretrust_worktrees)`);
+        this.log(`plan (forester): ${item.id}: trust ${trust.result === 'seeded' ? 'seeded' : trust.result} (${trust.file}; tools.${toolName}.pretrust_worktrees)`);
       } else {
-        this.log(`forester: ${item.id}: trust not seeded; a trust dialog shows as needs-input, answer it with forester attach ${item.id}`);
+        this.log(`plan (forester): ${item.id}: trust not seeded; a trust dialog shows as needs-input, answer it with forester attach ${item.id}`);
       }
     }
     // The seat's task is the handoff Forester wrote at seating, so the tool
@@ -484,7 +484,7 @@ export class ForesterServe {
       record.state = 'failed';
       record.note = `spawn failed: ${error.message}`;
       record.failure = { kind: 'spawn-failed', note: record.note, at: now() };
-      this.log(`forester: ${item.id}: ${record.note}`);
+      this.log(`plan (forester): ${item.id}: ${record.note}`);
       return;
     }
     record.pid = record.pty.pid;
@@ -499,7 +499,7 @@ export class ForesterServe {
       record.pty = null;
       this.writeSnapshot();
     });
-    this.log(`forester: ${item.id}: ${toolName} pid ${record.pid} in ${seat.worktree}`);
+    this.log(`plan (forester): ${item.id}: ${toolName} pid ${record.pid} in ${seat.worktree}`);
   }
 
   refresh(session) {
@@ -533,7 +533,7 @@ export class ForesterServe {
     session.state = 'closed';
     session.note = reason;
     const pty = session.pty;
-    this.log(`forester: ${id}: closing (${reason})`);
+    this.log(`plan (forester): ${id}: closing (${reason})`);
     try { pty.kill('SIGHUP'); } catch {}
     setTimeout(() => { try { if (session.pty != null) pty.kill('SIGKILL'); } catch {} }, CLOSE_GRACE_MS).unref();
   }
@@ -557,13 +557,13 @@ export class ForesterServe {
     for (const id of this.sessions.keys()) this.close(id, 'serve stopped');
     await new Promise((resolve) => setTimeout(resolve, CLOSE_GRACE_MS + 200));
     const lingering = [...this.sessions.values()].filter((session) => session.pty != null);
-    if (lingering.length > 0) this.log(`forester: ${lingering.length} session${lingering.length === 1 ? '' : 's'} still running after the close grace: ${lingering.map((session) => `${session.id} pid ${session.pid}`).join(', ')}`);
+    if (lingering.length > 0) this.log(`plan (forester): ${lingering.length} session${lingering.length === 1 ? '' : 's'} still running after the close grace: ${lingering.map((session) => `${session.id} pid ${session.pid}`).join(', ')}`);
     if (this.server != null) await new Promise((resolve) => this.server.close(() => resolve()));
     for (const file of [this.socketPath, this.snapshotFile]) {
       try {
         rmSync(file, { force: true });
       } catch (error) {
-        this.log(`forester: could not remove ${file}: ${error.message}`);
+        this.log(`plan (forester): could not remove ${file}: ${error.message}`);
       }
     }
     if (this.releaseLock != null) this.releaseLock();
@@ -584,11 +584,11 @@ export function runRestart({ options, environment = process.env, cwd = process.c
     socket.on('close', () => {
       let reply;
       try { reply = JSON.parse(head.trim()); } catch { reply = { error: `no reply from ${sessions.socket}` }; }
-      if (reply.error) { console.error(`forester: ${reply.error}`); resolve(1); return; }
-      console.log(`■ ${loaded.project.slug} — forester restart ${options.id}\n  session   1/1 dropped (was ${reply.was}); the next poll launches it again`);
+      if (reply.error) { console.error(`plan (forester): ${reply.error}`); resolve(1); return; }
+      console.log(`■ ${loaded.project.slug} — plan restart (forester) ${options.id}\n  session   1/1 dropped (was ${reply.was}); the next poll launches it again`);
       resolve(0);
     });
-    socket.on('error', (error) => { console.error(`forester: ${error.message}`); resolve(1); });
+    socket.on('error', (error) => { console.error(`plan (forester): ${error.message}`); resolve(1); });
   });
 }
 
@@ -636,9 +636,9 @@ export function runAttach({ options, environment = process.env, cwd = process.cw
       const newline = head.indexOf('\n');
       if (newline === -1) return;
       const reply = JSON.parse(head.slice(0, newline));
-      if (reply.error) { console.error(`forester: ${reply.error}`); socket.destroy(); resolve(1); return; }
+      if (reply.error) { console.error(`plan (forester): ${reply.error}`); socket.destroy(); resolve(1); return; }
       attached = true;
-      process.stderr.write(`forester: attached to ${id} (${reply.state}); Ctrl-] detaches\n`);
+      process.stderr.write(`plan (forester): attached to ${id} (${reply.state}); Ctrl-] detaches\n`);
       process.stdout.write(head.slice(newline + 1));
       if (stdin.isTTY) stdin.setRawMode(true);
       stdin.resume();
@@ -647,7 +647,7 @@ export function runAttach({ options, environment = process.env, cwd = process.cw
         socket.write(data);
       });
     });
-    socket.on('close', () => { restore(); process.stderr.write('\nforester: detached\n'); resolve(0); });
-    socket.on('error', (error) => { restore(); console.error(`forester: ${error.message}`); resolve(1); });
+    socket.on('close', () => { restore(); process.stderr.write('\nplan (forester): detached\n'); resolve(0); });
+    socket.on('error', (error) => { restore(); console.error(`plan (forester): ${error.message}`); resolve(1); });
   });
 }

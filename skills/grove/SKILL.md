@@ -1,7 +1,7 @@
 ---
 name: grove
 description: >-
-  de-novo Grove — shared local ground on one machine. n projects, m apps each,
+  de-novo Ground (Grove) — shared local base on one machine. n projects, m apps each,
   one infra set. Names instead of ports; thin overlays instead of cloned stacks.
   Use when starting, checking, or switching a local environment; when matching
   ports; when several agents work and verify on the same machine at once; when
@@ -11,9 +11,9 @@ description: >-
   out of scope.
 ---
 
-# Grove
+# Ground (Grove)
 
-Shared local ground for many projects and agents on one machine. Keep one
+Readers call this Ground. The skill name stays grove. Keep one
 standing app baseline per project and share engines through the backend the
 project chose. Add thin overlays only when parallel work needs them.
 

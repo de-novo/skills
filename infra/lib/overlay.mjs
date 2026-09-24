@@ -224,7 +224,7 @@ export function parseOverlayCliArgs(args) {
     fail(`${verb} requires ${minimum === 1 ? 'an environment' : 'an environment and service'}.`);
   }
   if (passthrough.some((arg) => arg === '--apply' || arg.startsWith('--apply='))) {
-    fail('--apply must be a Grove option before --, not a project passthrough flag.');
+    fail('--apply must be a Ground (Grove) option before --, not a project passthrough flag.');
   }
   if (verb === 'attach' && image == null) fail('attach requires --image.');
   if (!['attach', 'verify'].includes(verb) && image != null) {
@@ -1775,7 +1775,7 @@ export function runOverlayLifecycle({
 }
 
 export function overlayHelp(cli = 'de-novo skills') {
-  return `project overlay lifecycle (project workload command + Grove lease registry)
+  return `project overlay lifecycle (project workload command + Ground (Grove) lease registry)
 
 usage:
   ${cli} overlay status [ENV] [--project ROOT] [--stale-after 12h] [--json]

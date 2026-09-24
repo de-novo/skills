@@ -1,6 +1,6 @@
-# Dryad — profile, registry, CLI, Canopy, the seat brief
+# Seat (Dryad) — profile, registry, CLI, Canopy, the seat brief
 
-The long facts of Dryad. Pattern: [SKILL.md](../SKILL.md). The human page:
+The long facts of Seat. The command stays `dryad`; `seat` is an alias. Names: [glossary](../../../docs/glossary.md). Pattern: [SKILL.md](../SKILL.md). The human page:
 [README.md](../README.md).
 
 ```

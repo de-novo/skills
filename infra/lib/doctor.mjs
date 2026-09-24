@@ -175,7 +175,7 @@ function projectSection(root, environment) {
   if (dryad.state === 'ready') {
     let registry = row('unknown');
     const slug = dryad.values.project?.slug ?? grove.values?.project?.slug ?? null;
-    if (slug == null) registry = row('invalid', `no slug: ${RUNTIME_PROFILE} is absent and the Dryad profile declares none`);
+    if (slug == null) registry = row('invalid', `no slug: ${RUNTIME_PROFILE} is absent and the Seat (Dryad) profile declares none`);
     else {
       try {
         const { state, file } = readDryadState(slug, environment);
@@ -199,7 +199,7 @@ function projectSection(root, environment) {
         const resolved = resolveBudget({ plan: plan.values, local: local.state === 'ready' ? local.values : null, planFile: plan.file, localFile: local.file });
         budget = row('ready', `parallel ${resolved.parallel} from ${resolved.source}`, resolved);
       } catch (error) {
-        budget = row('missing', error.message.replace(/^forester: /, ''));
+        budget = row('missing', error.message.replace(/^(?:plan \(forester\)|forester): /, ''));
       }
     }
     const tools = local.state === 'ready' ? Object.keys(local.values.tools) : [];
@@ -242,12 +242,12 @@ function nextSteps(project, catalog, root) {
   if (catalog.node.state === 'unsupported') out.push(`use Node ${NODE_SUPPORTED} or newer (${process.version} found)`);
   if (catalog.dependencies.state === 'missing') out.push(`npm install in ${CATALOG_ROOT}`);
   if (root == null) {
-    out.push('run inside a project, or pass --project ROOT; de-novo skills init plants a Grove profile');
+    out.push('run inside a project, or pass --project ROOT; de-novo skills init plants a Ground (Grove) profile');
     return out;
   }
   if (project.grove.profile.state === 'missing') out.push(`no ${RUNTIME_PROFILE}: de-novo skills init ${root} plants one`);
   if (project.grove.profile.state === 'invalid') out.push(`fix ${RUNTIME_PROFILE}: ${project.grove.profile.detail}`);
-  if (project.dryad.profile.state === 'missing') out.push(`no ${DRYAD_PROFILE_RELPATH}: add one to seat workers (see the Dryad reference)`);
+  if (project.dryad.profile.state === 'missing') out.push(`no ${DRYAD_PROFILE_RELPATH}: add one to seat workers (see the Seat reference)`);
   if (project.dryad.profile.state === 'invalid') out.push(`fix ${DRYAD_PROFILE_RELPATH}: ${project.dryad.profile.detail}`);
   if (project.forester.plan.state === 'invalid') out.push(`fix ${FORESTER_PLAN}: ${project.forester.plan.detail}`);
   if (project.forester.budget?.state === 'missing') out.push(`set parallel in ${FORESTER_PLAN} or ${FORESTER_LOCAL}`);
@@ -324,7 +324,7 @@ export function capabilitiesReport({ environment = process.env } = {}) {
   return {
     schemaVersion: DOCTOR_SCHEMA,
     catalog: { root: CATALOG_ROOT, package: pkg.name, version: pkg.version, node: catalog.node.version, node_supported: catalog.node.supported },
-    verbs: ['doctor', 'capabilities', 'init', 'validate', 'urls', 'setup', 'infra', 'overlay', 'dryad', 'forester', 'understory', 'mycelium', 'herbarium', 'canopy', 'playground'],
+    verbs: ['doctor', 'capabilities', 'init', 'validate', 'urls', 'setup', 'infra', 'overlay', 'dryad', 'seat', 'forester', 'plan', 'understory', 'mycelium', 'facts', 'herbarium', 'canopy', 'playground'],
     skills: publishedSkills().map(({ name, invocation }) => ({ name, invocation })),
     optional: { pty: catalog.pty.state === 'ready' },
     executables: Object.fromEntries(Object.entries(catalog.executables).map(([name, value]) => [name, value.state === 'ready'])),
@@ -417,7 +417,7 @@ export function doctorHelp(cli = 'de-novo skills') {
 
 usage:
   ${cli} doctor [--project ROOT] [--probe] [--json]   catalog version, Node, optional deps, executables, the project's values files
-                                            (grove, dryad, forester, mycelium, herbarium), skill copies, the gates a
+                                            (Ground/grove, Seat/dryad, Plan/forester, Facts/mycelium, herbarium), skill copies, the gates a
                                             person owns, and the next step for each thing missing or invalid
   ${cli} capabilities [--json]               the verbs, the skills with their invocation, optional deps, executables
 

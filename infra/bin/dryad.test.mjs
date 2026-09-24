@@ -141,7 +141,7 @@ test('dryad profile parser accepts the documented shape and rejects unknown keys
   ];
   let count = 0;
   for (const text of rejected) {
-    assert.throws(() => parseDryadProfile(text), /dryad:/);
+    assert.throws(() => parseDryadProfile(text), /seat \(dryad\):/);
     count += 1;
   }
   assert.equal(count, rejected.length);

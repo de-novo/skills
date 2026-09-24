@@ -114,10 +114,10 @@ export async function collectState(options = {}) {
             ? { ...live.overlay_report, observed_by: 'dryad status' }
             : await cliJson(['overlay', 'status', '--json', '--project', project.root], options);
         const problems = [...(live.problems ?? [])];
-        for (const [label, report] of [['Dryad', live], ['Finished', archive], ['Grove', grove]]) {
+        for (const [label, report] of [['Seat (Dryad)', live], ['Finished', archive], ['Ground (Grove)', grove]]) {
           if (report.error) problems.push(`${label}: ${report.error}`);
         }
-        if (grove.project_status?.error) problems.push(`Grove: ${grove.project_status.error}`);
+        if (grove.project_status?.error) problems.push(`Ground (Grove): ${grove.project_status.error}`);
         projects[index] = {
           ...live, ...project, counts: live.counts ?? null, seats: live.seats ?? [],
           finished: archive.finished ?? [], finished_total: archive.finished_total ?? (archive.finished ?? []).length, finished_partial: archive.partial === true, grove, problems,
@@ -224,7 +224,7 @@ export function renderState(state) {
     const grove = project.grove;
     const gc = grove?.counts;
     const groveLine = grove?.inactive ? 'overlay inactive' : grove?.error ? esc(grove.error) : `environments ${shown(gc?.environments)} · attachments ${shown(gc?.attachments)} · pending ${shown(gc?.pending)}${(grove?.pending ?? []).map(item => ` · ${esc(item.env)} ${esc(item.verb)} ${esc(item.liveness ?? 'unknown')}`).join('')} · stale ${shown(gc?.stale)} · drift ${shown(gc?.drift)}`;
-    return `<section><h2>${esc(project.slug)} — ${esc(counts)}</h2><p class="grove">Grove · ${groveLine}</p>${(project.problems ?? []).map(problem => `<p class="problem">problem · ${esc(problem)}</p>`).join('')}<p class="root">${esc(project.root)}</p><div class="cards">${view.seats.map(seat => card(seat, grove, false, project.slug)).join('')}${view.unseated.map(tree => `<article class="card unseated"><h3>${esc(tree.branch ?? 'detached HEAD')}</h3><p>Not a seat</p><p>${esc(tree.path)}</p><p>HEAD ${esc(tree.head)}</p></article>`).join('')}</div>${view.overlaps.map(item => `<p class="overlap">⚠ overlap · ${esc(item.path)} · ${item.seats.map(esc).join(' · ')}</p>`).join('')}<details data-project="${esc(project.root)}"><summary>finished ${view.finished.length}${project.finished_partial ? ` of ${esc(project.finished_total)} (newest)` : ''}</summary><div class="cards">${view.finished.map(seat => card(seat, grove, true)).join('')}</div></details></section>`;
+    return `<section><h2>${esc(project.slug)} — ${esc(counts)}</h2><p class="grove">Ground (Grove) · ${groveLine}</p>${(project.problems ?? []).map(problem => `<p class="problem">problem · ${esc(problem)}</p>`).join('')}<p class="root">${esc(project.root)}</p><div class="cards">${view.seats.map(seat => card(seat, grove, false, project.slug)).join('')}${view.unseated.map(tree => `<article class="card unseated"><h3>${esc(tree.branch ?? 'detached HEAD')}</h3><p>Not a seat</p><p>${esc(tree.path)}</p><p>HEAD ${esc(tree.head)}</p></article>`).join('')}</div>${view.overlaps.map(item => `<p class="overlap">⚠ overlap · ${esc(item.path)} · ${item.seats.map(esc).join(' · ')}</p>`).join('')}<details data-project="${esc(project.root)}"><summary>finished ${view.finished.length}${project.finished_partial ? ` of ${esc(project.finished_total)} (newest)` : ''}</summary><div class="cards">${view.finished.map(seat => card(seat, grove, true)).join('')}</div></details></section>`;
   }).join('')}`;
 }
 

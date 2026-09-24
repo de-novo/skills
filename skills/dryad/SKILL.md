@@ -1,8 +1,8 @@
 ---
 name: dryad
 description: >-
-  de-novo Dryad — one seat per worker on Grove's ground. A seat is a Git
-  worktree, an overlay env when the project has overlays, and a task. Dryad
+  de-novo Seat (Dryad) — one agent seat on Ground (Grove). A seat is a Git
+  worktree, an overlay env when the project has overlays, and a task. Seat
   launches no agent: the human picks the launcher (a terminal, a worktree
   app, tmux, an ACP client) and which worker sits where. Use when you wake up
   with DRYAD_ID set; when planning parallel work across worktrees; when
@@ -11,12 +11,13 @@ description: >-
   DAGs, and merging are out of scope.
 ---
 
-# Dryad
+# Seat (Dryad)
 
-Grove is the ground. Dryad puts one seat on one tree: a worktree, an overlay
+Ground (Grove) is the base. Seat puts one worker on it: a worktree, an overlay
 env when the project has one, and a task. It counts who sits where and what
-they reported, and clears the seat when the work is done. Dryad never starts
+they reported, and clears the seat when the work is done. Seat never starts
 an agent process; the launcher and the assignment stay with the human.
+The command remains `dryad`; `seat` is an alias. See [docs/glossary.md](../../docs/glossary.md).
 
 This file owns the pattern. Values live in `.agents/dryad-profile.yml` next to
 Grove's `runtime-profile.yml`; with Grove present, Dryad reads the project
@@ -24,7 +25,7 @@ slug and overlay mode from Grove's profile and keeps none of its own. A
 project without Grove declares only its slug and gets seats without envs. Schema and CLI reference:
 [references/seats.md](references/seats.md). Grove pattern: [grove](../grove/SKILL.md).
 
-## You are a dryad when
+## You are seated when
 
 `DRYAD_ID` is set in your environment. Then:
 

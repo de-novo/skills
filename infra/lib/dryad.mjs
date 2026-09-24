@@ -45,7 +45,7 @@ function isMap(value) {
 }
 
 function fail(message) {
-  throw new Error(`dryad: ${message}`);
+  throw new Error(`seat (dryad): ${message}`);
 }
 
 function assertOnlyKeys(value, allowed, field, source) {
@@ -620,7 +620,7 @@ function lastLine(text) {
 function relayFailure(label, result) {
   if (result.stdout.trim()) console.error(result.stdout.trimEnd());
   if (result.stderr.trim()) console.error(result.stderr.trimEnd());
-  console.error(`dryad: ${label} exited ${result.status}.`);
+  console.error(`seat (dryad): ${label} exited ${result.status}.`);
 }
 
 // Reads Grove's machine-readable report. Dryad does not open Grove's
@@ -1016,7 +1016,7 @@ function runPlan({ options, project, environment, cwd }) {
 
   const movedFrom = recordProjectRoot(project.slug, project.root, repository, environment);
   if (movedFrom != null) {
-    console.error(`dryad: project index: ${project.slug} root moved from ${movedFrom} to ${project.root}; index keeps the latest.`);
+    console.error(`seat (dryad): project index: ${project.slug} root moved from ${movedFrom} to ${project.root}; index keeps the latest.`);
   }
 
   console.log(
@@ -1033,7 +1033,7 @@ function runPlan({ options, project, environment, cwd }) {
   );
   if (envFailure != null) {
     relayFailure('overlay create', envFailure);
-    console.error(`dryad: seat ${options.id} kept with env pending; rerun the same plan --apply to retry.`);
+    console.error(`seat (dryad): seat ${options.id} kept with env pending; rerun the same plan --apply to retry.`);
     return 1;
   }
   return 0;
@@ -1139,7 +1139,7 @@ function runSeat({ options, project, environment }) {
         ].join('\n')
       );
   }
-  if (!present) console.error(`dryad: worktree missing: ${seat.worktree}`);
+  if (!present) console.error(`seat (dryad): worktree missing: ${seat.worktree}`);
   return present ? 0 : 1;
 }
 
@@ -1241,9 +1241,9 @@ function runReport({ options, project, environment, cwd }) {
     });
     console.error(
       [
-        `dryad: seat ${options.id} changed ${result.outside_scope.length} path${result.outside_scope.length === 1 ? '' : 's'} outside its scope (${current.scope.length === 0 ? 'read-only' : current.scope.join(' ')}):`,
+        `seat (dryad): seat ${options.id} changed ${result.outside_scope.length} path${result.outside_scope.length === 1 ? '' : 's'} outside its scope (${current.scope.length === 0 ? 'read-only' : current.scope.join(' ')}):`,
         ...result.outside_scope.map((file) => `  ${file}`),
-        `dryad: narrow the change and report again, or a person accepts it with --accept-outside-scope.`,
+        `seat (dryad): narrow the change and report again, or a person accepts it with --accept-outside-scope.`,
       ].join('\n')
     );
     return 1;
@@ -1270,13 +1270,13 @@ function runReport({ options, project, environment, cwd }) {
     ].join('\n')
   );
   if (result != null && !result.clean) {
-    console.error(`dryad: seat ${options.id} reported done with uncommitted changes; only what is committed at ${result.head.slice(0, 12)} can reach another seat.`);
+    console.error(`seat (dryad): seat ${options.id} reported done with uncommitted changes; only what is committed at ${result.head.slice(0, 12)} can reach another seat.`);
   }
   if (result != null && result.evidence == null) {
-    console.error(`dryad: seat ${options.id} reported done with no evidence file at ${seatEvidencePath(project.slug, options.id, environment)} and no --evidence; the result stays unverified until a person checks it.`);
+    console.error(`seat (dryad): seat ${options.id} reported done with no evidence file at ${seatEvidencePath(project.slug, options.id, environment)} and no --evidence; the result stays unverified until a person checks it.`);
   }
   if (options.status === 'done' && seat.session == null) {
-    console.error(`dryad: seat ${options.id} has no session reference; if your tool exposes a session id or transcript path, run report --session <ref>.`);
+    console.error(`seat (dryad): seat ${options.id} has no session reference; if your tool exposes a session id or transcript path, run report --session <ref>.`);
   }
   return 0;
 }
@@ -1595,7 +1595,7 @@ function runFinish({ options, project, environment }) {
         journal(seatOf(current, options.id), 'dryad', 'finish.destroy', `failed exit ${result.status}: ${lastLine(result.stderr) || lastLine(result.stdout)}`);
       });
       relayFailure('overlay destroy', result);
-      console.error(`dryad: seat ${options.id} kept; fix the overlay and rerun finish --apply.`);
+      console.error(`seat (dryad): seat ${options.id} kept; fix the overlay and rerun finish --apply.`);
       return 1;
     }
     envResult = '1/1 destroyed';
@@ -1613,7 +1613,7 @@ function runFinish({ options, project, environment }) {
       if (hasEnv) record.env = null;
       journal(record, 'dryad', 'finish.worktree', `kept: uncommitted changes in ${seat.worktree}`);
     });
-    console.error(`dryad: ${seat.worktree} has uncommitted changes; commit or clean it, then rerun finish --apply.`);
+    console.error(`seat (dryad): ${seat.worktree} has uncommitted changes; commit or clean it, then rerun finish --apply.`);
     console.log([`■ ${project.slug} — seat ${options.id}`, `  env       ${envResult}`, `  worktree  0/1 kept (dirty)`].join('\n'));
     return 1;
   } else {
@@ -1648,7 +1648,7 @@ function projectOverlayActive(slug, root) {
   try {
     return parseProfile(readFileSync(runtimePath, 'utf8'), runtimePath).overlay?.mode === 'on';
   } catch (error) {
-    console.error(`dryad: ${slug}: ${error.message}`);
+    console.error(`seat (dryad): ${slug}: ${error.message}`);
     return false;
   }
 }
@@ -1711,7 +1711,7 @@ export function runDryad({ options, environment = process.env, cwd = process.cwd
 }
 
 export function dryadHelp(cli = 'de-novo skills') {
-  return `seats for workers on Grove's ground (worktree + overlay env + task; no agent launch)
+  return `Seat (dryad): worktree, overlay env, and journal for one worker. Launches no agent. \`seat\` is an alias of \`dryad\`.
 
 usage:
   ${cli} dryad plan   ID (--task TEXT | --task-file PATH) [--worktree PATH | --resume] [--owns CLAIM ...| --read-only]

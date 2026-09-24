@@ -33,7 +33,7 @@ const WRITER = /^[a-z0-9][a-z0-9._:@-]{0,78}$/;
 const DEFAULT_CONFIDENCE = 0.5;
 
 function fail(message) {
-  throw new Error(`mycelium: ${message}`);
+  throw new Error(`facts (mycelium): ${message}`);
 }
 
 function now() {
@@ -690,7 +690,7 @@ export function runMycelium({ options, environment = process.env, cwd = process.
       if (options.json) console.log(JSON.stringify({ project: project.slug, file, values, counts: c }, null, 2));
       else {
         console.log([
-          `■ ${project.slug} — mycelium`,
+          `■ ${project.slug} — facts (mycelium)`,
           `  log       ${file}`,
           `  domains   ${values.domains.join(', ')}`,
           `  types     ${values.types.join(', ')}`,
@@ -710,7 +710,7 @@ export function runMycelium({ options, environment = process.env, cwd = process.
 }
 
 export function myceliumHelp(cli = 'de-novo skills') {
-  return `the facts under the forest: one append-only log of assertions per project
+  return `Facts (mycelium): the assertion log, separate from Plan. \`facts\` is an alias of \`mycelium\`.
 
 usage:
   ${cli} mycelium propose --s S --p P --o O --s-type T [--o-type T] --domain D --source SRC [--ref-commit SHA]
@@ -726,7 +726,7 @@ usage:
   ${cli} mycelium trace <id> [--json]             the chain: what it amends or supersedes, and what did that to it
   ${cli} mycelium status [--json]                 counts, the log path, the project's vocabulary
 
-Every verb takes --project ROOT; without it the Dryad profile above the
+Every verb takes --project ROOT; without it the Seat (Dryad) profile above the
 current directory names the project. The writer is --by, else the seat
 DRYAD_ID names, else the seat whose worktree holds the current directory.
 Domains, entity types, predicates (one|many), and the judges who may

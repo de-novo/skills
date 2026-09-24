@@ -211,7 +211,7 @@ export function runUnderstory({ options, environment = process.env, cwd = proces
 }
 
 export function understoryHelp(cli = 'de-novo skills') {
-  return `the story under the canopy: Forester's graph, drawn and read for people
+  return `the story under the canopy: Plan's graph (forester), drawn and read for people
 
 usage:
   ${cli} understory graph   [--project ROOT | --from plan.json]   the plan as a Mermaid flowchart

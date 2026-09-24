@@ -16,6 +16,7 @@ Remote: `git@github.com:de-novo/skills.git`. CLI: `de-novo skills` (alias `de-no
 
 | Fact | Home |
 | --- | --- |
+| Product names (Ground, Seat, Plan, Facts, Cluster seat, Egress) | `docs/glossary.md` |
 | Published skill (pattern) | `skills/<name>/SKILL.md` |
 | Human diagram / apply | `skills/<name>/README.md` |
 | Grove profile schema | `skills/grove/references/runtime-profile.md` |
@@ -58,7 +59,7 @@ skills/          published skill sources
   understory/    the graph drawn and written up for people
   mycelium/      the facts under the forest: an assertion log per project
 infra/           machine-shared engines Grove's CLI drives
-docs/            design notes (not the user-facing spec)
+docs/            glossary.md (product names), then design notes (not the user-facing spec)
 ```
 
 ## Before you edit

@@ -1,10 +1,10 @@
-# Grove — planting on a project
+# Ground (Grove) — planting on a project
 
 The measured onboarding procedure. Pattern: [SKILL.md](../SKILL.md). The human page: [README.md](../README.md).
 
 ## Apply to a project
 
-CLI install: `npm install && npm link` **in the Grove catalog checkout**,
+CLI install: `npm install && npm link` **in the Ground (Grove) catalog checkout**,
 once per machine — not in the consuming app. The app gets a profile, not an
 `infra/` directory. Catalog layout: [root README](../../../README.md).
 

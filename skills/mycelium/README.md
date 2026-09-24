@@ -1,8 +1,9 @@
-# Mycelium
+# Facts (Mycelium)
 
-The facts under the forest: one append-only log of assertions per project,
+Assertions kept apart from Plan: one append-only log per project,
 each with a valid interval, transaction time, confidence, domain, source,
 and writer. Workers propose; a judge commits; nothing is edited in place.
+The command stays `mycelium`; `facts` is an alias. Naming rule: [glossary](../../docs/glossary.md).
 
 ```
 worker (any seat) ──▶ propose ──▶ staging ──▶ commit (judge) ──▶ active
@@ -38,7 +39,7 @@ signal to a person, not something to invent.
 
 ## Where it fits
 
-Beside Forester, not inside it: two graphs, one read-only seam
+Beside Plan (Forester), not inside it: two graphs, one read-only seam
 (`propose --from-seat`). Understory points at its ids. Root map:
 [How the skills fit](../../README.md#how-the-skills-fit).
 

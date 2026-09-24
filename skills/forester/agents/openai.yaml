@@ -1,5 +1,5 @@
 interface:
-  display_name: "Forester"
+  display_name: "Plan (Forester)"
   short_description: "Plan the work, set the budget, keep seats filled"
 policy:
   allow_implicit_invocation: false

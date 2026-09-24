@@ -15,7 +15,7 @@ export const HOOK_MARKER = 'de-novo forester hook';
 export const TRUST_MARKER = 'de-novo forester hook trust';
 
 function fail(message) {
-  throw new Error(`forester: ${message}`);
+  throw new Error(`plan (forester): ${message}`);
 }
 
 function homeOf(environment) {
