@@ -36,7 +36,7 @@ jobs:
         run: |
           passed=0
           total=0
-          for profile in skills/grove/examples/*.runtime-profile.yml; do
+          for profile in skills/ground/examples/*.runtime-profile.yml; do
             total=$((total + 1))
             node infra/bin/cli.mjs validate "$profile"
             passed=$((passed + 1))
