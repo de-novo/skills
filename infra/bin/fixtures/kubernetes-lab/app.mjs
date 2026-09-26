@@ -12,7 +12,7 @@ if (role === 'router') {
   const poll = () => {
     const request = httpsRequest({ hostname: process.env.KUBERNETES_SERVICE_HOST,
       port: process.env.KUBERNETES_SERVICE_PORT_HTTPS,
-      path: '/api/v1/namespaces/grove-lab-base/configmaps/routes',
+      path: '/api/v1/namespaces/ground-lab-base/configmaps/routes',
       ca: readFileSync(`${directory}/ca.crt`),
       headers: { Authorization: `Bearer ${readFileSync(`${directory}/token`, 'utf8').trim()}` },
     }, response => {
@@ -36,7 +36,7 @@ const server = createServer((req, res) => {
     if (env && !Object.hasOwn(routes ?? {}, env)) { res.writeHead(404); res.end('Environment absent'); return; }
     const service = req.url.startsWith('/api/') ? 'api' : 'web';
     const overrides = env ? JSON.parse(routes[env]) : {};
-    const namespace = overrides[service] ?? 'grove-lab-base';
+    const namespace = overrides[service] ?? 'ground-lab-base';
     const upstream = httpRequest({ hostname: `${service}.${namespace}.svc.cluster.local`, port: 8080,
       method: req.method, path: req.url, headers: { ...req.headers, 'x-lab-env': env ?? 'base' },
     }, response => { res.writeHead(response.statusCode, response.headers); response.pipe(res); });

@@ -11,7 +11,7 @@ const cli = path.join(catalog, 'infra/bin/cli.mjs');
 const local = path.join(catalog, '.playground');
 mkdirSync(local, { recursive: true });
 const environment = { ...process.env };
-for (const key of Object.keys(environment)) if (key.startsWith('DRYAD_') || key.startsWith('GIT_') || key.startsWith('PLAYGROUND_') || key === 'GROVE_STATE_DIR' || key === 'NODE_OPTIONS') delete environment[key];
+for (const key of Object.keys(environment)) if (key.startsWith('SEAT_') || key.startsWith('GIT_') || key.startsWith('PLAYGROUND_') || key === 'GROUND_STATE_DIR' || key === 'NODE_OPTIONS') delete environment[key];
 
 function fixture(t) {
   const root = mkdtempSync(path.join(local, 'test-'));
@@ -22,9 +22,9 @@ function fixture(t) {
   writeFileSync(path.join(source, 'app/server.mjs'), `import http from 'node:http';\nconst server = http.createServer((req, res) => res.end(process.env.PLAYGROUND_SANDBOX));\nserver.listen({port: 0, host: '127.0.0.1'});\n`);
   writeFileSync(path.join(source, 'tools/start.mjs'), `import { spawn } from 'node:child_process';\nimport { readFileSync, readdirSync, writeFileSync } from 'node:fs';\nimport path from 'node:path';\nconst root = process.env.PLAYGROUND_SANDBOX;\nconst child = spawn(process.execPath, ['app/server.mjs'], { detached: true, stdio: 'ignore' });\nchild.unref();\nfor (let i = 0; i < 200; i++) {\n const files = readdirSync(path.join(root, 'run/processes'));\n const records = files.map(file => JSON.parse(readFileSync(path.join(root, 'run/processes', file))));\n if (records.some(record => record.pid === child.pid && record.ports.length)) {\n const file = path.join(root, 'run/sandbox.json'); const data = JSON.parse(readFileSync(file));\n data.names = ['web.playground.localhost']; writeFileSync(file, JSON.stringify(data)); process.exit(0);\n }\n await new Promise(resolve => setTimeout(resolve, 10));\n}\nprocess.kill(child.pid); throw Error('listener did not register');\n`);
   writeFileSync(path.join(source, '.agents/runtime-profile.yml'), `version: 1\nproject: {slug: playground}\naddressing: {tld: localhost}\nruntime:\n  commands:\n    up: node tools/start.mjs\nservices: {web: {}}\noverlay: none\ndata: {infra: project}\n`);
-  writeFileSync(path.join(source, '.agents/dryad-profile.yml'), 'version: 1\nworktrees: {root: ../seats, branch: "playground/{id}"}\n');
+  writeFileSync(path.join(source, '.agents/seat-profile.yml'), 'version: 1\nworktrees: {root: ../seats, branch: "playground/{id}"}\n');
   const sandboxes = [];
-  const env = sandbox => ({ ...environment, GROVE_STATE_DIR: path.join(sandbox, 'state') });
+  const env = sandbox => ({ ...environment, GROUND_STATE_DIR: path.join(sandbox, 'state') });
   const start = async (name = 'sandbox') => {
     const sandbox = path.join(root, name);
     sandboxes.push(sandbox);
@@ -53,7 +53,7 @@ test('isolation 1: one directory contains the layout and refuses symlink escapes
   try { assert.throws(() => status(data.sandbox, f.env(data.sandbox)), /symlinks/); }
   finally { rmSync(link); }
   assert.equal(existsSync(path.join(data.project, 'app/server.mjs')), true);
-  assert.equal(existsSync(path.join(data.project, '.agents/dryad-profile.yml')), true);
+  assert.equal(existsSync(path.join(data.project, '.agents/seat-profile.yml')), true);
   const out = await down(data.sandbox, f.env(data.sandbox));
   assert.equal(out.removed, true);
 });
@@ -61,24 +61,24 @@ test('isolation 1: one directory contains the layout and refuses symlink escapes
 test('isolation 2: every sandbox CLI call requires its own state directory', async t => {
   const f = fixture(t);
   const data = await f.start();
-  const before = f.run(['dryad', 'projects', '--json'], data.sandbox, { GROVE_STATE_DIR: undefined });
+  const before = f.run(['seat', 'projects', '--json'], data.sandbox, { GROUND_STATE_DIR: undefined });
   for (const state of [undefined, '', path.join(f.root, 'elsewhere')]) {
-    const result = f.run(['validate', data.project], data.sandbox, { GROVE_STATE_DIR: state });
+    const result = f.run(['validate', data.project], data.sandbox, { GROUND_STATE_DIR: state });
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /GROVE_STATE_DIR must be/);
+    assert.match(result.stderr, /GROUND_STATE_DIR must be/);
   }
   assert.equal(f.run(['validate', data.project], data.sandbox).status, 0);
-  const inherited = f.run(['dryad', 'plan', 'reader', '--task', 'Refuse machine state'], data.sandbox, { GROVE_STATE_DIR: undefined, DRYAD_PROJECT: data.project });
+  const inherited = f.run(['seat', 'plan', 'reader', '--task', 'Refuse machine state'], data.sandbox, { GROUND_STATE_DIR: undefined, SEAT_PROJECT: data.project });
   assert.notEqual(inherited.status, 0);
-  assert.match(inherited.stderr, /GROVE_STATE_DIR must be/);
-  const planned = f.run(['dryad', 'plan', 'reader', '--project', data.project, '--task', 'Test isolation', '--by', 'test', '--apply'], data.sandbox);
+  assert.match(inherited.stderr, /GROUND_STATE_DIR must be/);
+  const planned = f.run(['seat', 'plan', 'reader', '--project', data.project, '--task', 'Test isolation', '--by', 'test', '--apply'], data.sandbox);
   assert.equal(planned.status, 0, planned.stderr);
-  const listing = JSON.parse(f.run(['dryad', 'projects', '--json'], data.sandbox).stdout);
+  const listing = JSON.parse(f.run(['seat', 'projects', '--json'], data.sandbox).stdout);
   assert.deepEqual(listing.projects.map(p => p.root), [data.project]);
-  const after = f.run(['dryad', 'projects', '--json'], data.sandbox, { GROVE_STATE_DIR: undefined });
+  const after = f.run(['seat', 'projects', '--json'], data.sandbox, { GROUND_STATE_DIR: undefined });
   assert.equal(after.stdout, before.stdout);
-  assert.deepEqual(status(data.sandbox, f.env(data.sandbox)).machine, { dryad: [], overlays: [] });
-  for (const line of nextCommands(data).split('\n')) assert.match(line, /^GROVE_STATE_DIR=/);
+  assert.deepEqual(status(data.sandbox, f.env(data.sandbox)).machine, { seat: [], overlays: [] });
+  for (const line of nextCommands(data).split('\n')) assert.match(line, /^GROUND_STATE_DIR=/);
 });
 
 function probe(data, source, before = null) {
@@ -87,7 +87,7 @@ function probe(data, source, before = null) {
   const preload = path.join(data.run, 'before.cjs');
   if (before) writeFileSync(preload, before);
   return spawnSync(process.execPath, [...(before ? ['--require', preload] : []), '--require', path.join(data.run, 'guard.cjs'), file], {
-    env: { ...environment, PATH: `${path.join(data.run, 'bin')}:${environment.PATH}`, PLAYGROUND_SANDBOX: data.sandbox, GROVE_STATE_DIR: data.state }, encoding: 'utf8', timeout: 1000,
+    env: { ...environment, PATH: `${path.join(data.run, 'bin')}:${environment.PATH}`, PLAYGROUND_SANDBOX: data.sandbox, GROUND_STATE_DIR: data.state }, encoding: 'utf8', timeout: 1000,
   });
 }
 
@@ -143,7 +143,7 @@ test('isolation 6: every Node process is recorded and down leaves zero processes
   const current = status(data.sandbox, f.env(data.sandbox));
   assert.equal(current.processes.length, 3);
   const result = await down(data.sandbox, f.env(data.sandbox));
-  assert.deepEqual(result, { sandbox: data.sandbox, processes: 0, ports: 0, machine: { dryad: [], overlays: [] }, removed: true, ok: true });
+  assert.deepEqual(result, { sandbox: data.sandbox, processes: 0, ports: 0, machine: { seat: [], overlays: [] }, removed: true, ok: true });
   assert.equal(current.processes.filter(alive).length, 0);
 });
 
@@ -161,20 +161,20 @@ test('a sandbox verb derives its own state directory and refuses a conflicting o
   const f = fixture(t);
   const data = await f.start();
   const bare = { ...environment };
-  delete bare.GROVE_STATE_DIR;
+  delete bare.GROUND_STATE_DIR;
   const play = (args, extra = {}) => spawnSync(process.execPath, [cli, 'playground', ...args, '--dir', data.sandbox], { env: { ...bare, ...extra }, cwd: catalog, encoding: 'utf8' });
   // The sandbox is the argument, so the caller does not restate it.
   const derived = play(['status', '--json']);
   assert.equal(derived.status, 0, derived.stderr);
   assert.equal(JSON.parse(derived.stdout).state, data.state);
   // A state directory belonging to another sandbox is still refused.
-  const conflict = play(['status'], { GROVE_STATE_DIR: path.join(f.root, 'elsewhere/state') });
+  const conflict = play(['status'], { GROUND_STATE_DIR: path.join(f.root, 'elsewhere/state') });
   assert.notEqual(conflict.status, 0);
   assert.match(conflict.stderr, /does not belong to/);
   // An ordinary catalog verb keeps requiring the variable.
   const ordinary = spawnSync(process.execPath, [cli, 'validate', data.project], { env: bare, cwd: catalog, encoding: 'utf8' });
   assert.notEqual(ordinary.status, 0);
-  assert.match(ordinary.stderr, /GROVE_STATE_DIR must be/);
+  assert.match(ordinary.stderr, /GROUND_STATE_DIR must be/);
   const removed = play(['down']);
   assert.equal(removed.status, 0, removed.stderr);
   assert.equal(existsSync(data.sandbox), false);
@@ -218,7 +218,7 @@ test('the process directory only ever contains complete records', async t => {
   const f = fixture(t);
   const data = await f.start();
   const directory = path.join(data.run, 'processes');
-  const env = { ...environment, PLAYGROUND_SANDBOX: data.sandbox, GROVE_STATE_DIR: data.state };
+  const env = { ...environment, PLAYGROUND_SANDBOX: data.sandbox, GROUND_STATE_DIR: data.state };
   // Each guarded process writes twice, at start and at exit. They run at the
   // same time as the reader, which is when a half-written name would be listed.
   const writers = Array.from({ length: 60 }, (unused, i) => new Promise(resolve => {
@@ -272,11 +272,11 @@ test('the machine registry check reads paths, not prose', async t => {
   broken.write('key: [unterminated\n  - "also broken\n');
   assert.equal(recordHoldsSandbox(broken.file, data.sandbox), true);
   // The live sandbox is still absent from the real machine registry.
-  assert.deepEqual(status(data.sandbox, f.env(data.sandbox)).machine, { dryad: [], overlays: [] });
+  assert.deepEqual(status(data.sandbox, f.env(data.sandbox)).machine, { seat: [], overlays: [] });
 });
 
-// A Dryad seat is a worktree at <sandbox>/seats/<id>; the sample's tools run
-// from there with the same GROVE_STATE_DIR. Two seats in the notes pilot
+// A Seat seat is a worktree at <sandbox>/seats/<id>; the sample's tools run
+// from there with the same GROUND_STATE_DIR. Two seats in the notes pilot
 // (2026-09-09) were refused by tools/build.mjs because the sandbox root was
 // taken from the file's parent directory, which for a seat is `seats`. The
 // root now comes from the marker the seat's worktree carries.
@@ -285,8 +285,8 @@ test('the sample tools resolve the sandbox root from a seat worktree, so a seat 
   const sandbox = path.join(f.root, 'seat-build');
   const data = await up(sandbox, { environment });
   t.after(async () => { if (existsSync(path.join(sandbox, 'run/sandbox.json'))) await down(sandbox, f.env(sandbox)); });
-  const env = { ...f.env(sandbox), DRYAD_PROJECT: data.project };
-  const plan = spawnSync(process.execPath, [cli, 'dryad', 'plan', 'w1', '--project', data.project, '--task', 'build from a seat', '--by', 'test', '--apply'], { env, cwd: catalog, encoding: 'utf8' });
+  const env = { ...f.env(sandbox), SEAT_PROJECT: data.project };
+  const plan = spawnSync(process.execPath, [cli, 'seat', 'plan', 'w1', '--project', data.project, '--task', 'build from a seat', '--by', 'test', '--apply'], { env, cwd: catalog, encoding: 'utf8' });
   assert.equal(plan.status, 0, plan.stderr);
   const seat = path.join(data.seats, 'w1');
   assert.equal(existsSync(path.join(seat, '.agents/playground.json')), true, 'the seat worktree carries the marker');

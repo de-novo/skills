@@ -90,7 +90,7 @@
         "-c",
         "commit.gpgSign=false",
         "-c",
-        "user.name=Grove Lab",
+        "user.name=Ground Lab",
         "-c",
         "user.email=lab@example.invalid",
         "commit",
@@ -161,7 +161,7 @@
       "args": [
         "cluster",
         "create",
-        "grove-test-z25r6s-75230",
+        "ground-test-z25r6s-75230",
         "--image",
         "rancher/k3s:v1.35.5-k3s1",
         "--servers",
@@ -178,7 +178,7 @@
         "--k3s-arg",
         "--disable=traefik,servicelb,metrics-server@server:0",
         "--runtime-label",
-        "grove.test/run=grove-test-z25r6s-75230@all",
+        "ground.test/run=ground-test-z25r6s-75230@all",
         "--timeout",
         "120s"
       ],
@@ -195,9 +195,9 @@
         "--pull=false",
         "--provenance=false",
         "--label",
-        "grove.test/run=grove-test-z25r6s-75230",
+        "ground.test/run=ground-test-z25r6s-75230",
         "-t",
-        "grove-lab/grove-test-z25r6s-75230:base-base",
+        "ground-lab/ground-test-z25r6s-75230:base-base",
         "."
       ],
       "started": 1788636835332,
@@ -210,7 +210,7 @@
       "args": [
         "image",
         "inspect",
-        "grove-lab/grove-test-z25r6s-75230:base-base",
+        "ground-lab/ground-test-z25r6s-75230:base-base",
         "--format",
         "{{.Id}}"
       ],
@@ -224,9 +224,9 @@
       "args": [
         "image",
         "import",
-        "grove-lab/grove-test-z25r6s-75230:base-base",
+        "ground-lab/ground-test-z25r6s-75230:base-base",
         "--cluster",
-        "grove-test-z25r6s-75230"
+        "ground-test-z25r6s-75230"
       ],
       "started": 1788636836700,
       "finished": 1788636874637,
@@ -237,7 +237,7 @@
       "command": "docker",
       "args": [
         "exec",
-        "k3d-grove-test-z25r6s-75230-server-0",
+        "k3d-ground-test-z25r6s-75230-server-0",
         "ctr",
         "-n",
         "k8s.io",
@@ -253,14 +253,14 @@
       "command": "docker",
       "args": [
         "exec",
-        "k3d-grove-test-z25r6s-75230-server-0",
+        "k3d-ground-test-z25r6s-75230-server-0",
         "ctr",
         "-n",
         "k8s.io",
         "images",
         "tag",
-        "docker.io/grove-lab/grove-test-z25r6s-75230:base-base",
-        "docker.io/grove-lab/grove-test-z25r6s-75230@sha256:a9b567132446a99506883cf900e81608671921a1bc71b8c6b9e93e5c56e70d64"
+        "docker.io/ground-lab/ground-test-z25r6s-75230:base-base",
+        "docker.io/ground-lab/ground-test-z25r6s-75230@sha256:a9b567132446a99506883cf900e81608671921a1bc71b8c6b9e93e5c56e70d64"
       ],
       "started": 1788636875041,
       "finished": 1788636875204,
@@ -273,7 +273,7 @@
         "--kubeconfig",
         "<lab>/kubeconfig",
         "--context",
-        "k3d-grove-test-z25r6s-75230",
+        "k3d-ground-test-z25r6s-75230",
         "--request-timeout=10s",
         "apply",
         "-f",
@@ -290,7 +290,7 @@
         "--kubeconfig",
         "<lab>/kubeconfig",
         "--context",
-        "k3d-grove-test-z25r6s-75230",
+        "k3d-ground-test-z25r6s-75230",
         "--request-timeout=10s",
         "apply",
         "-f",
@@ -307,10 +307,10 @@
         "--kubeconfig",
         "<lab>/kubeconfig",
         "--context",
-        "k3d-grove-test-z25r6s-75230",
+        "k3d-ground-test-z25r6s-75230",
         "--request-timeout=10s",
         "-n",
-        "grove-lab-base",
+        "ground-lab-base",
         "rollout",
         "status",
         "deployment/api",
@@ -327,10 +327,10 @@
         "--kubeconfig",
         "<lab>/kubeconfig",
         "--context",
-        "k3d-grove-test-z25r6s-75230",
+        "k3d-ground-test-z25r6s-75230",
         "--request-timeout=10s",
         "-n",
-        "grove-lab-base",
+        "ground-lab-base",
         "rollout",
         "status",
         "deployment/web",
@@ -347,10 +347,10 @@
         "--kubeconfig",
         "<lab>/kubeconfig",
         "--context",
-        "k3d-grove-test-z25r6s-75230",
+        "k3d-ground-test-z25r6s-75230",
         "--request-timeout=10s",
         "-n",
-        "grove-lab-base",
+        "ground-lab-base",
         "rollout",
         "status",
         "deployment/router",
@@ -382,7 +382,7 @@
         "--kubeconfig",
         "<lab>/kubeconfig",
         "--context",
-        "k3d-grove-test-z25r6s-75230",
+        "k3d-ground-test-z25r6s-75230",
         "--request-timeout=10s",
         "get",
         "namespaces",
@@ -402,9 +402,9 @@
         "--pull=false",
         "--provenance=false",
         "--label",
-        "grove.test/run=grove-test-z25r6s-75230",
+        "ground.test/run=ground-test-z25r6s-75230",
         "-t",
-        "grove-lab/grove-test-z25r6s-75230:w1-first",
+        "ground-lab/ground-test-z25r6s-75230:w1-first",
         "."
       ],
       "started": 1788636878498,
@@ -420,9 +420,9 @@
         "--pull=false",
         "--provenance=false",
         "--label",
-        "grove.test/run=grove-test-z25r6s-75230",
+        "ground.test/run=ground-test-z25r6s-75230",
         "-t",
-        "grove-lab/grove-test-z25r6s-75230:w2-second",
+        "ground-lab/ground-test-z25r6s-75230:w2-second",
         "."
       ],
       "started": 1788636878506,
@@ -435,7 +435,7 @@
       "args": [
         "image",
         "inspect",
-        "grove-lab/grove-test-z25r6s-75230:w2-second",
+        "ground-lab/ground-test-z25r6s-75230:w2-second",
         "--format",
         "{{.Id}}"
       ],
@@ -449,7 +449,7 @@
       "args": [
         "image",
         "inspect",
-        "grove-lab/grove-test-z25r6s-75230:w1-first",
+        "ground-lab/ground-test-z25r6s-75230:w1-first",
         "--format",
         "{{.Id}}"
       ],
@@ -463,9 +463,9 @@
       "args": [
         "image",
         "import",
-        "grove-lab/grove-test-z25r6s-75230:w2-second",
+        "ground-lab/ground-test-z25r6s-75230:w2-second",
         "--cluster",
-        "grove-test-z25r6s-75230"
+        "ground-test-z25r6s-75230"
       ],
       "started": 1788636880373,
       "finished": 1788636897988,
@@ -476,7 +476,7 @@
       "command": "docker",
       "args": [
         "exec",
-        "k3d-grove-test-z25r6s-75230-server-0",
+        "k3d-ground-test-z25r6s-75230-server-0",
         "ctr",
         "-n",
         "k8s.io",
@@ -492,14 +492,14 @@
       "command": "docker",
       "args": [
         "exec",
-        "k3d-grove-test-z25r6s-75230-server-0",
+        "k3d-ground-test-z25r6s-75230-server-0",
         "ctr",
         "-n",
         "k8s.io",
         "images",
         "tag",
-        "docker.io/grove-lab/grove-test-z25r6s-75230:w2-second",
-        "docker.io/grove-lab/grove-test-z25r6s-75230@sha256:5be2cfc24c59a8c2421c47482232b57a5b16d2731ce1f5612292fa69cb8100f8"
+        "docker.io/ground-lab/ground-test-z25r6s-75230:w2-second",
+        "docker.io/ground-lab/ground-test-z25r6s-75230@sha256:5be2cfc24c59a8c2421c47482232b57a5b16d2731ce1f5612292fa69cb8100f8"
       ],
       "started": 1788636898836,
       "finished": 1788636899018,
@@ -511,9 +511,9 @@
       "args": [
         "image",
         "import",
-        "grove-lab/grove-test-z25r6s-75230:w1-first",
+        "ground-lab/ground-test-z25r6s-75230:w1-first",
         "--cluster",
-        "grove-test-z25r6s-75230"
+        "ground-test-z25r6s-75230"
       ],
       "started": 1788636899018,
       "finished": 1788636919300,
@@ -524,7 +524,7 @@
       "command": "docker",
       "args": [
         "exec",
-        "k3d-grove-test-z25r6s-75230-server-0",
+        "k3d-ground-test-z25r6s-75230-server-0",
         "ctr",
         "-n",
         "k8s.io",
@@ -540,14 +540,14 @@
       "command": "docker",
       "args": [
         "exec",
-        "k3d-grove-test-z25r6s-75230-server-0",
+        "k3d-ground-test-z25r6s-75230-server-0",
         "ctr",
         "-n",
         "k8s.io",
         "images",
         "tag",
-        "docker.io/grove-lab/grove-test-z25r6s-75230:w1-first",
-        "docker.io/grove-lab/grove-test-z25r6s-75230@sha256:9425a244cdcec55b5c5b8ac76e3d2ba267b7653cfdbb7a41773478482b5410bd"
+        "docker.io/ground-lab/ground-test-z25r6s-75230:w1-first",
+        "docker.io/ground-lab/ground-test-z25r6s-75230@sha256:9425a244cdcec55b5c5b8ac76e3d2ba267b7653cfdbb7a41773478482b5410bd"
       ],
       "started": 1788636919658,
       "finished": 1788636919869,
@@ -595,7 +595,7 @@
         "w2",
         "api",
         "--image",
-        "docker.io/grove-lab/grove-test-z25r6s-75230@sha256:5be2cfc24c59a8c2421c47482232b57a5b16d2731ce1f5612292fa69cb8100f8",
+        "docker.io/ground-lab/ground-test-z25r6s-75230@sha256:5be2cfc24c59a8c2421c47482232b57a5b16d2731ce1f5612292fa69cb8100f8",
         "--apply",
         "--project",
         "<lab>/w2"
@@ -614,7 +614,7 @@
         "w1",
         "web",
         "--image",
-        "docker.io/grove-lab/grove-test-z25r6s-75230@sha256:9425a244cdcec55b5c5b8ac76e3d2ba267b7653cfdbb7a41773478482b5410bd",
+        "docker.io/ground-lab/ground-test-z25r6s-75230@sha256:9425a244cdcec55b5c5b8ac76e3d2ba267b7653cfdbb7a41773478482b5410bd",
         "--apply",
         "--project",
         "<lab>/w1"
@@ -633,7 +633,7 @@
         "w2",
         "web",
         "--image",
-        "docker.io/grove-lab/grove-test-z25r6s-75230@sha256:5be2cfc24c59a8c2421c47482232b57a5b16d2731ce1f5612292fa69cb8100f8",
+        "docker.io/ground-lab/ground-test-z25r6s-75230@sha256:5be2cfc24c59a8c2421c47482232b57a5b16d2731ce1f5612292fa69cb8100f8",
         "--apply",
         "--project",
         "<lab>/w2"
@@ -649,10 +649,10 @@
         "--kubeconfig",
         "<lab>/kubeconfig",
         "--context",
-        "k3d-grove-test-z25r6s-75230",
+        "k3d-ground-test-z25r6s-75230",
         "--request-timeout=10s",
         "-n",
-        "grove-lab-base",
+        "ground-lab-base",
         "port-forward",
         "service/router",
         ":8080",
@@ -668,9 +668,9 @@
       "command": "docker",
       "args": [
         "inspect",
-        "k3d-grove-test-z25r6s-75230-server-0",
+        "k3d-ground-test-z25r6s-75230-server-0",
         "--format",
-        "{{index .Config.Labels \"grove.test/run\"}}"
+        "{{index .Config.Labels \"ground.test/run\"}}"
       ],
       "started": 1788636927028,
       "finished": 1788636927075,
@@ -682,7 +682,7 @@
       "args": [
         "cluster",
         "delete",
-        "grove-test-z25r6s-75230"
+        "ground-test-z25r6s-75230"
       ],
       "started": 1788636927075,
       "finished": 1788636930167,
@@ -694,7 +694,7 @@
       "args": [
         "image",
         "rm",
-        "grove-lab/grove-test-z25r6s-75230:base-base"
+        "ground-lab/ground-test-z25r6s-75230:base-base"
       ],
       "started": 1788636930168,
       "finished": 1788636930696,
@@ -706,7 +706,7 @@
       "args": [
         "image",
         "rm",
-        "grove-lab/grove-test-z25r6s-75230:w1-first"
+        "ground-lab/ground-test-z25r6s-75230:w1-first"
       ],
       "started": 1788636930696,
       "finished": 1788636930933,
@@ -718,7 +718,7 @@
       "args": [
         "image",
         "rm",
-        "grove-lab/grove-test-z25r6s-75230:w2-second"
+        "ground-lab/ground-test-z25r6s-75230:w2-second"
       ],
       "started": 1788636930933,
       "finished": 1788636931203,
@@ -759,12 +759,12 @@
     "tree": "base",
     "version": "base",
     "multiplier": 1,
-    "tag": "grove-lab/grove-test-z25r6s-75230:base-base",
+    "tag": "ground-lab/ground-test-z25r6s-75230:base-base",
     "imageId": "sha256:a9b567132446a99506883cf900e81608671921a1bc71b8c6b9e93e5c56e70d64",
     "sourceHash": "d0040469fd22d80162aac11e0ef820cb9db15f67b76478fbfb1241625c104fd7",
     "started": 1788636835331,
     "finished": 1788636836699,
-    "image": "docker.io/grove-lab/grove-test-z25r6s-75230@sha256:a9b567132446a99506883cf900e81608671921a1bc71b8c6b9e93e5c56e70d64"
+    "image": "docker.io/ground-lab/ground-test-z25r6s-75230@sha256:a9b567132446a99506883cf900e81608671921a1bc71b8c6b9e93e5c56e70d64"
   },
   "finishedAt": "2026-09-05T19:35:31.735Z",
   "sourceDrift": [],

@@ -34,7 +34,7 @@
       "name": "real-parallel-worktree-build-and-web-api-fallback",
       "pass": false,
       "durationMs": 4509,
-      "error": "k3d image import grove-lab/grove-test-m5foiz-71847:w1-first --cluster grove-test-m5foiz-71847: \u001b[31mERRO\u001b[0m[0002] Failed to run tools container for cluster 'grove-test-m5foiz-71847' \n\u001b[31mERRO\u001b[0m[0002] Failed to import image(s) into cluster 'grove-test-m5foiz-71847': failed to ensure that tools node is running: failed to run k3d-tools node for cluster 'grove-test-m5foiz-71847': failed to create node 'k3d-grove-test-m5foiz-71847-tools': runtime failed to create node 'k3d-grove-test-m5foiz-71847-tools': failed to create container for node 'k3d-grove-test-m5foiz-71847-tools': docker failed to create container 'k3d-grove-test-m5foiz-71847-tools': Error response from daemon: Conflict. The container name \"/k3d-grove-test-m5foiz-71847-tools\" is already in use by container \"753490d7162534acd5ca819899281536d01e89e007aa56054f70e2478edeb104\". You have to remove (or rename) that container to be able to reuse that name. \n\u001b[33mWARN\u001b[0m[0002] At least one error occured while trying to import the image(s) into the selected cluster(s) \n\n\n1 !== 0\n"
+      "error": "k3d image import ground-lab/ground-test-m5foiz-71847:w1-first --cluster ground-test-m5foiz-71847: \u001b[31mERRO\u001b[0m[0002] Failed to run tools container for cluster 'ground-test-m5foiz-71847' \n\u001b[31mERRO\u001b[0m[0002] Failed to import image(s) into cluster 'ground-test-m5foiz-71847': failed to ensure that tools node is running: failed to run k3d-tools node for cluster 'ground-test-m5foiz-71847': failed to create node 'k3d-ground-test-m5foiz-71847-tools': runtime failed to create node 'k3d-ground-test-m5foiz-71847-tools': failed to create container for node 'k3d-ground-test-m5foiz-71847-tools': docker failed to create container 'k3d-ground-test-m5foiz-71847-tools': Error response from daemon: Conflict. The container name \"/k3d-ground-test-m5foiz-71847-tools\" is already in use by container \"753490d7162534acd5ca819899281536d01e89e007aa56054f70e2478edeb104\". You have to remove (or rename) that container to be able to reuse that name. \n\u001b[33mWARN\u001b[0m[0002] At least one error occured while trying to import the image(s) into the selected cluster(s) \n\n\n1 !== 0\n"
     }
   ],
   "commands": [
@@ -89,7 +89,7 @@
         "-c",
         "commit.gpgSign=false",
         "-c",
-        "user.name=Grove Lab",
+        "user.name=Ground Lab",
         "-c",
         "user.email=lab@example.invalid",
         "commit",
@@ -160,7 +160,7 @@
       "args": [
         "cluster",
         "create",
-        "grove-test-m5foiz-71847",
+        "ground-test-m5foiz-71847",
         "--image",
         "rancher/k3s:v1.35.5-k3s1",
         "--servers",
@@ -177,7 +177,7 @@
         "--k3s-arg",
         "--disable=traefik,servicelb,metrics-server@server:0",
         "--runtime-label",
-        "grove.test/run=grove-test-m5foiz-71847@all",
+        "ground.test/run=ground-test-m5foiz-71847@all",
         "--timeout",
         "120s"
       ],
@@ -194,9 +194,9 @@
         "--pull=false",
         "--provenance=false",
         "--label",
-        "grove.test/run=grove-test-m5foiz-71847",
+        "ground.test/run=ground-test-m5foiz-71847",
         "-t",
-        "grove-lab/grove-test-m5foiz-71847:base-base",
+        "ground-lab/ground-test-m5foiz-71847:base-base",
         "."
       ],
       "started": 1788636716982,
@@ -209,7 +209,7 @@
       "args": [
         "image",
         "inspect",
-        "grove-lab/grove-test-m5foiz-71847:base-base",
+        "ground-lab/ground-test-m5foiz-71847:base-base",
         "--format",
         "{{.Id}}"
       ],
@@ -223,9 +223,9 @@
       "args": [
         "image",
         "import",
-        "grove-lab/grove-test-m5foiz-71847:base-base",
+        "ground-lab/ground-test-m5foiz-71847:base-base",
         "--cluster",
-        "grove-test-m5foiz-71847"
+        "ground-test-m5foiz-71847"
       ],
       "started": 1788636718530,
       "finished": 1788636758092,
@@ -236,7 +236,7 @@
       "command": "docker",
       "args": [
         "exec",
-        "k3d-grove-test-m5foiz-71847-server-0",
+        "k3d-ground-test-m5foiz-71847-server-0",
         "ctr",
         "-n",
         "k8s.io",
@@ -252,14 +252,14 @@
       "command": "docker",
       "args": [
         "exec",
-        "k3d-grove-test-m5foiz-71847-server-0",
+        "k3d-ground-test-m5foiz-71847-server-0",
         "ctr",
         "-n",
         "k8s.io",
         "images",
         "tag",
-        "docker.io/grove-lab/grove-test-m5foiz-71847:base-base",
-        "docker.io/grove-lab/grove-test-m5foiz-71847@sha256:b435f4c49d8256bd23fe6302323fda94435678e6f258de4353590c59055b83e5"
+        "docker.io/ground-lab/ground-test-m5foiz-71847:base-base",
+        "docker.io/ground-lab/ground-test-m5foiz-71847@sha256:b435f4c49d8256bd23fe6302323fda94435678e6f258de4353590c59055b83e5"
       ],
       "started": 1788636759194,
       "finished": 1788636759508,
@@ -272,7 +272,7 @@
         "--kubeconfig",
         "<lab>/kubeconfig",
         "--context",
-        "k3d-grove-test-m5foiz-71847",
+        "k3d-ground-test-m5foiz-71847",
         "--request-timeout=10s",
         "apply",
         "-f",
@@ -289,7 +289,7 @@
         "--kubeconfig",
         "<lab>/kubeconfig",
         "--context",
-        "k3d-grove-test-m5foiz-71847",
+        "k3d-ground-test-m5foiz-71847",
         "--request-timeout=10s",
         "apply",
         "-f",
@@ -306,10 +306,10 @@
         "--kubeconfig",
         "<lab>/kubeconfig",
         "--context",
-        "k3d-grove-test-m5foiz-71847",
+        "k3d-ground-test-m5foiz-71847",
         "--request-timeout=10s",
         "-n",
-        "grove-lab-base",
+        "ground-lab-base",
         "rollout",
         "status",
         "deployment/web",
@@ -326,10 +326,10 @@
         "--kubeconfig",
         "<lab>/kubeconfig",
         "--context",
-        "k3d-grove-test-m5foiz-71847",
+        "k3d-ground-test-m5foiz-71847",
         "--request-timeout=10s",
         "-n",
-        "grove-lab-base",
+        "ground-lab-base",
         "rollout",
         "status",
         "deployment/router",
@@ -346,10 +346,10 @@
         "--kubeconfig",
         "<lab>/kubeconfig",
         "--context",
-        "k3d-grove-test-m5foiz-71847",
+        "k3d-ground-test-m5foiz-71847",
         "--request-timeout=10s",
         "-n",
-        "grove-lab-base",
+        "ground-lab-base",
         "rollout",
         "status",
         "deployment/api",
@@ -381,7 +381,7 @@
         "--kubeconfig",
         "<lab>/kubeconfig",
         "--context",
-        "k3d-grove-test-m5foiz-71847",
+        "k3d-ground-test-m5foiz-71847",
         "--request-timeout=10s",
         "get",
         "namespaces",
@@ -401,9 +401,9 @@
         "--pull=false",
         "--provenance=false",
         "--label",
-        "grove.test/run=grove-test-m5foiz-71847",
+        "ground.test/run=ground-test-m5foiz-71847",
         "-t",
-        "grove-lab/grove-test-m5foiz-71847:w1-first",
+        "ground-lab/ground-test-m5foiz-71847:w1-first",
         "."
       ],
       "started": 1788636762956,
@@ -419,9 +419,9 @@
         "--pull=false",
         "--provenance=false",
         "--label",
-        "grove.test/run=grove-test-m5foiz-71847",
+        "ground.test/run=ground-test-m5foiz-71847",
         "-t",
-        "grove-lab/grove-test-m5foiz-71847:w2-second",
+        "ground-lab/ground-test-m5foiz-71847:w2-second",
         "."
       ],
       "started": 1788636762959,
@@ -434,7 +434,7 @@
       "args": [
         "image",
         "inspect",
-        "grove-lab/grove-test-m5foiz-71847:w2-second",
+        "ground-lab/ground-test-m5foiz-71847:w2-second",
         "--format",
         "{{.Id}}"
       ],
@@ -448,7 +448,7 @@
       "args": [
         "image",
         "inspect",
-        "grove-lab/grove-test-m5foiz-71847:w1-first",
+        "ground-lab/ground-test-m5foiz-71847:w1-first",
         "--format",
         "{{.Id}}"
       ],
@@ -462,9 +462,9 @@
       "args": [
         "image",
         "import",
-        "grove-lab/grove-test-m5foiz-71847:w1-first",
+        "ground-lab/ground-test-m5foiz-71847:w1-first",
         "--cluster",
-        "grove-test-m5foiz-71847"
+        "ground-test-m5foiz-71847"
       ],
       "started": 1788636765379,
       "finished": 1788636767461,
@@ -476,9 +476,9 @@
       "args": [
         "image",
         "import",
-        "grove-lab/grove-test-m5foiz-71847:w2-second",
+        "ground-lab/ground-test-m5foiz-71847:w2-second",
         "--cluster",
-        "grove-test-m5foiz-71847"
+        "ground-test-m5foiz-71847"
       ],
       "started": 1788636765370,
       "finished": 1788636767465,
@@ -491,10 +491,10 @@
         "--kubeconfig",
         "<lab>/kubeconfig",
         "--context",
-        "k3d-grove-test-m5foiz-71847",
+        "k3d-ground-test-m5foiz-71847",
         "--request-timeout=10s",
         "-n",
-        "grove-lab-base",
+        "ground-lab-base",
         "port-forward",
         "service/router",
         ":8080",
@@ -510,9 +510,9 @@
       "command": "docker",
       "args": [
         "inspect",
-        "k3d-grove-test-m5foiz-71847-server-0",
+        "k3d-ground-test-m5foiz-71847-server-0",
         "--format",
-        "{{index .Config.Labels \"grove.test/run\"}}"
+        "{{index .Config.Labels \"ground.test/run\"}}"
       ],
       "started": 1788636767466,
       "finished": 1788636767506,
@@ -524,7 +524,7 @@
       "args": [
         "cluster",
         "delete",
-        "grove-test-m5foiz-71847"
+        "ground-test-m5foiz-71847"
       ],
       "started": 1788636767506,
       "finished": 1788636771350,
@@ -536,7 +536,7 @@
       "args": [
         "image",
         "rm",
-        "grove-lab/grove-test-m5foiz-71847:base-base"
+        "ground-lab/ground-test-m5foiz-71847:base-base"
       ],
       "started": 1788636771350,
       "finished": 1788636771885,
@@ -548,7 +548,7 @@
       "args": [
         "image",
         "rm",
-        "grove-lab/grove-test-m5foiz-71847:w1-first"
+        "ground-lab/ground-test-m5foiz-71847:w1-first"
       ],
       "started": 1788636771885,
       "finished": 1788636772156,
@@ -560,7 +560,7 @@
       "args": [
         "image",
         "rm",
-        "grove-lab/grove-test-m5foiz-71847:w2-second"
+        "ground-lab/ground-test-m5foiz-71847:w2-second"
       ],
       "started": 1788636772156,
       "finished": 1788636772455,
@@ -582,7 +582,7 @@
   ],
   "observations": [],
   "failures": [
-    "k3d image import grove-lab/grove-test-m5foiz-71847:w1-first --cluster grove-test-m5foiz-71847: \u001b[31mERRO\u001b[0m[0002] Failed to run tools container for cluster 'grove-test-m5foiz-71847' \n\u001b[31mERRO\u001b[0m[0002] Failed to import image(s) into cluster 'grove-test-m5foiz-71847': failed to ensure that tools node is running: failed to run k3d-tools node for cluster 'grove-test-m5foiz-71847': failed to create node 'k3d-grove-test-m5foiz-71847-tools': runtime failed to create node 'k3d-grove-test-m5foiz-71847-tools': failed to create container for node 'k3d-grove-test-m5foiz-71847-tools': docker failed to create container 'k3d-grove-test-m5foiz-71847-tools': Error response from daemon: Conflict. The container name \"/k3d-grove-test-m5foiz-71847-tools\" is already in use by container \"753490d7162534acd5ca819899281536d01e89e007aa56054f70e2478edeb104\". You have to remove (or rename) that container to be able to reuse that name. \n\u001b[33mWARN\u001b[0m[0002] At least one error occured while trying to import the image(s) into the selected cluster(s) \n\n\n1 !== 0\n"
+    "k3d image import ground-lab/ground-test-m5foiz-71847:w1-first --cluster ground-test-m5foiz-71847: \u001b[31mERRO\u001b[0m[0002] Failed to run tools container for cluster 'ground-test-m5foiz-71847' \n\u001b[31mERRO\u001b[0m[0002] Failed to import image(s) into cluster 'ground-test-m5foiz-71847': failed to ensure that tools node is running: failed to run k3d-tools node for cluster 'ground-test-m5foiz-71847': failed to create node 'k3d-ground-test-m5foiz-71847-tools': runtime failed to create node 'k3d-ground-test-m5foiz-71847-tools': failed to create container for node 'k3d-ground-test-m5foiz-71847-tools': docker failed to create container 'k3d-ground-test-m5foiz-71847-tools': Error response from daemon: Conflict. The container name \"/k3d-ground-test-m5foiz-71847-tools\" is already in use by container \"753490d7162534acd5ca819899281536d01e89e007aa56054f70e2478edeb104\". You have to remove (or rename) that container to be able to reuse that name. \n\u001b[33mWARN\u001b[0m[0002] At least one error occured while trying to import the image(s) into the selected cluster(s) \n\n\n1 !== 0\n"
   ],
   "cleanup": {
     "clusterRemoved": true,
@@ -601,12 +601,12 @@
     "tree": "base",
     "version": "base",
     "multiplier": 1,
-    "tag": "grove-lab/grove-test-m5foiz-71847:base-base",
+    "tag": "ground-lab/ground-test-m5foiz-71847:base-base",
     "imageId": "sha256:b435f4c49d8256bd23fe6302323fda94435678e6f258de4353590c59055b83e5",
     "sourceHash": "d0040469fd22d80162aac11e0ef820cb9db15f67b76478fbfb1241625c104fd7",
     "started": 1788636716982,
     "finished": 1788636718530,
-    "image": "docker.io/grove-lab/grove-test-m5foiz-71847@sha256:b435f4c49d8256bd23fe6302323fda94435678e6f258de4353590c59055b83e5"
+    "image": "docker.io/ground-lab/ground-test-m5foiz-71847@sha256:b435f4c49d8256bd23fe6302323fda94435678e6f258de4353590c59055b83e5"
   },
   "finishedAt": "2026-09-05T19:32:52.946Z",
   "backendTrace": [

@@ -14,7 +14,7 @@ applied before and removed after; the driver answered only what asked.
 | | Claude seat | Codex seat |
 | --- | --- | --- |
 | Trust dialogs answered by a person | 1 (the folder) | 1 (the directory) |
-| Permission or escalation prompts | **0** (pilot 2: 2 and 7) | 3 (`dryad seat`, `report working` ×2; Codex's sandbox refuses the playground guard's `ps`, so each is an escalation) |
+| Permission or escalation prompts | **0** (pilot 2: 2 and 7) | 3 (`seat seat`, `report working` ×2; Codex's sandbox refuses the playground guard's `ps`, so each is an escalation) |
 | Working reports before done | 3 | 3 |
 | Evidence | 1 check, 1 not measured, handed in on stdin, no file written | 12 checks, 2 not measured, on stdin |
 | Paths outside scope | 0 | 0 |
@@ -29,12 +29,12 @@ piped its evidence into `report --status done --evidence -`; no
 
 The TUI does run trusted hooks: a temporary unconditional handler with
 its trust record wrote a line from a TUI session. What it did not run
-were Forester's entries, and a TUI launched right after `hooks --apply`
+were Plan's entries, and a TUI launched right after `hooks --apply`
 showed why: "Hooks need review: 3 hooks are new or changed". Three of the
 five, not five, so the recorded hashes were right for `UserPromptSubmit`
 and `Stop` (the two `codex exec` had exercised) and wrong for
 `PreToolUse`, `PostToolUse`, and `PermissionRequest`: for the tool events
-Codex hashes the group's matcher into the identity, and Forester's groups
+Codex hashes the group's matcher into the identity, and Plan's groups
 carried `matcher: ""` while the recipe, taken from groups Codex itself had
 trusted, had none. Codex entries are now written without a matcher key,
 which is what the trusted groups on this machine look like. After that
@@ -49,7 +49,7 @@ change, on this machine's Codex 0.154.0:
 entries, the config's trust tables gone.
 
 Also seen: after the pilot's Codex session the store no longer held
-Forester's entries at all. The review screen offers "Continue without
+Plan's entries at all. The review screen offers "Continue without
 trusting"; the driver's Enter, sent for the directory prompt, may have
 landed there. Not determined.
 

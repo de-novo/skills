@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 
 import {
   assertTld,
-  loadGroveAddressing,
+  loadGroundAddressing,
   parseUrlsArgs,
   renderHost,
   renderProjectUrls,
@@ -18,7 +18,7 @@ import { parseProfile } from '../lib/profile.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const CLI = path.join(REPO_ROOT, 'infra/bin/cli.mjs');
-const MINIMAL = path.join(REPO_ROOT, 'skills/grove/examples/minimal.runtime-profile.yml');
+const MINIMAL = path.join(REPO_ROOT, 'skills/ground/examples/minimal.runtime-profile.yml');
 
 const TWO_LABEL = `
 project: { slug: acme }
@@ -35,8 +35,8 @@ overlay:
 data: { infra: machine }
 `;
 
-function groveDir(files) {
-  const dir = mkdtempSync(path.join(tmpdir(), 'grove-addr-'));
+function groundDir(files) {
+  const dir = mkdtempSync(path.join(tmpdir(), 'ground-addr-'));
   for (const [name, body] of Object.entries(files)) {
     writeFileSync(path.join(dir, name), body);
   }
@@ -52,7 +52,7 @@ test('assertTld accepts localhost and local.example.com, rejects wildcards', () 
 
 test('*.*.local.{domain} is {service}.{project}.local.example.com', () => {
   const profile = parseProfile(TWO_LABEL, 'two.yml');
-  const addressing = resolveAddressing(profile, { infraDir: groveDir({}) });
+  const addressing = resolveAddressing(profile, { infraDir: groundDir({}) });
   const urls = renderProjectUrls(profile, addressing);
   const hosts = urls.shared.map((row) => row.host).sort();
   assert.deepEqual(hosts, ['api.acme.local.example.com', 'web.acme.local.example.com']);
@@ -67,8 +67,8 @@ test('*.*.local.{domain} is {service}.{project}.local.example.com', () => {
   );
 });
 
-test('omitted profile tld inherits grove addressing.yml', () => {
-  const infraDir = groveDir({
+test('omitted profile tld inherits ground addressing.yml', () => {
+  const infraDir = groundDir({
     'addressing.yml': 'tld: local.you.dev\nscheme:\n  shared: "{service}.{project}.{tld}"\n',
   });
   const profile = parseProfile(
@@ -85,41 +85,41 @@ data: { infra: machine }
   );
   const addressing = resolveAddressing(profile, { infraDir });
   assert.equal(addressing.tld, 'local.you.dev');
-  assert.equal(addressing.tldSource, 'grove');
+  assert.equal(addressing.tldSource, 'ground');
   assert.equal(
     renderProjectUrls(profile, addressing).shared[0].host,
     'web.side.local.you.dev'
   );
 });
 
-test('grove addressing.local.yml overrides addressing.yml', () => {
-  const infraDir = groveDir({
+test('ground addressing.local.yml overrides addressing.yml', () => {
+  const infraDir = groundDir({
     'addressing.yml': 'tld: localhost\n',
     'addressing.local.yml': 'tld: local.you.dev\n',
   });
-  const grove = loadGroveAddressing(infraDir);
-  assert.equal(grove.tld, 'localhost');
-  assert.equal(grove.localTld, 'local.you.dev');
+  const ground = loadGroundAddressing(infraDir);
+  assert.equal(ground.tld, 'localhost');
+  assert.equal(ground.localTld, 'local.you.dev');
   const profile = parseProfile('project: { slug: acme }\ndata: { infra: machine }\n', 'p.yml');
   const addressing = resolveAddressing(profile, { infraDir });
   assert.equal(addressing.tld, 'local.you.dev');
-  assert.equal(addressing.tldSource, 'grove.local');
+  assert.equal(addressing.tldSource, 'ground.local');
 });
 
-test('grove addressing scheme must be a map', () => {
-  const infraDir = groveDir({ 'addressing.yml': 'tld: localhost\nscheme: invalid\n' });
-  assert.throws(() => loadGroveAddressing(infraDir), /scheme.*map/);
+test('ground addressing scheme must be a map', () => {
+  const infraDir = groundDir({ 'addressing.yml': 'tld: localhost\nscheme: invalid\n' });
+  assert.throws(() => loadGroundAddressing(infraDir), /scheme.*map/);
 });
 
-test('grove addressing scheme rejects unknown keys', () => {
-  const infraDir = groveDir({
+test('ground addressing scheme rejects unknown keys', () => {
+  const infraDir = groundDir({
     'addressing.yml': 'tld: localhost\nscheme:\n  shared: "{service}.{tld}"\n  typo: nope\n',
   });
-  assert.throws(() => loadGroveAddressing(infraDir), /scheme.*typo/);
+  assert.throws(() => loadGroundAddressing(infraDir), /scheme.*typo/);
 });
 
-test('project runtime-profile.local.yml wins over grove and committed tld', () => {
-  const infraDir = groveDir({ 'addressing.yml': 'tld: localhost\n' });
+test('project runtime-profile.local.yml wins over ground and committed tld', () => {
+  const infraDir = groundDir({ 'addressing.yml': 'tld: localhost\n' });
   const projectDir = mkdtempSync(path.join(tmpdir(), 'proj-addr-'));
   const profilePath = path.join(projectDir, 'runtime-profile.yml');
   writeFileSync(
@@ -147,8 +147,8 @@ data: { infra: machine }
   );
 });
 
-test('committed profile tld wins over grove', () => {
-  const infraDir = groveDir({ 'addressing.yml': 'tld: localhost\n' });
+test('committed profile tld wins over ground', () => {
+  const infraDir = groundDir({ 'addressing.yml': 'tld: localhost\n' });
   const profile = parseProfile(TWO_LABEL, 'two.yml');
   const addressing = resolveAddressing(profile, { infraDir });
   assert.equal(addressing.tld, 'local.example.com');
@@ -184,7 +184,7 @@ test('parseUrlsArgs reads --env and --json', () => {
 });
 
 test('de-novo skills urls --json prints tld, shared and overlay hosts as the seam for other tools', () => {
-  const dir = groveDir({ 'runtime-profile.yml': TWO_LABEL });
+  const dir = groundDir({ 'runtime-profile.yml': TWO_LABEL });
   const profilePath = path.join(dir, 'runtime-profile.yml');
   const withEnv = spawnSync(process.execPath, [CLI, 'urls', profilePath, '--env', 'w1', '--json'], { encoding: 'utf8' });
   assert.equal(withEnv.status, 0, withEnv.stderr);

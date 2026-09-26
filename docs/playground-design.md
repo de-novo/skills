@@ -1,4 +1,4 @@
-# Playground — a sample project to plant Grove on, inside a sandbox
+# Playground — a sample project to plant Ground on, inside a sandbox
 
 Written 2026-09-08. Status: design. Once it ships, `playground/` owns the
 behaviour and `playground/README.md` owns how to use it; this note keeps only
@@ -22,9 +22,9 @@ into a sandbox that lives outside the repository tree.
 1. **Everything lives under one sandbox directory.** State, git repository,
    worktrees, build artifacts, logs, PIDs. `down` removes that directory and
    counts what is left.
-2. **The machine registry is never touched.** `GROVE_STATE_DIR` points inside
+2. **The machine registry is never touched.** `GROUND_STATE_DIR` points inside
    the sandbox. If the playground ever appears in the machine's
-   `dryad projects` or overlay registry, isolation has failed. Every ordinary
+   `seat projects` or overlay registry, isolation has failed. Every ordinary
    catalog verb aimed at the sandbox carries that variable, and a call without
    it is refused. The `playground` verbs are given the sandbox path itself, so
    they derive the state directory and refuse one naming a different sandbox.
@@ -55,7 +55,7 @@ into a sandbox that lives outside the repository tree.
 ## What it contains
 
 The sample app is two dependency-free Node services. The point is to teach the
-shape of Grove, not a framework, so the app itself stays minimal.
+shape of Ground, not a framework, so the app itself stays minimal.
 
 - `api` — an HTTP service returning JSON. `/health` **reaches nothing outside
   the service**, so the example satisfies the property the planting procedure
@@ -102,8 +102,8 @@ The two meet only at the sandbox layout. p2 copies `playground/app` and
 ```text
 <sandbox>/
   project/            its own git repository: the sample app plus
-                      .agents/runtime-profile.yml and .agents/dryad-profile.yml
-  state/              GROVE_STATE_DIR; overlays/ and dryads/ appear here
+                      .agents/runtime-profile.yml and .agents/seat-profile.yml
+  state/              GROUND_STATE_DIR; overlays/ and seats/ appear here
   seats/              the seats' worktrees
   run/                sandbox.json (ports, PIDs, names), processes/ receipts,
                       staging/ for the writes that become them, logs, artifacts

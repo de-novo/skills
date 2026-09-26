@@ -1,4 +1,4 @@
-// The Grove profile is this project's only house for its names. The sample
+// The Ground profile is this project's only house for its names. The sample
 // has no dependencies, so this reads the small YAML subset the profile next
 // door actually uses: two-space indented maps, `key: value` scalars, and
 // inline flow values kept as raw text. Anything else raises rather than

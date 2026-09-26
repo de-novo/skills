@@ -28,9 +28,9 @@ before it, restated where a pointer belonged:
 | Pair | Runs | What it was | What it became |
 | --- | --- | --- | --- |
 | playground evidence · playground design | 6 | the evidence restated isolation rule 6 | a pointer to the rule |
-| forester design · forester skill | 4 | the design note restated two invariants | one sentence saying the skill owns them |
-| forester design · mycelium design | 1 | both restated the working rules' guard sentence | one sentence pointing at the rules |
-| clearing README · forester README | 3 | the same invocation sentence in two human pages | two distinct sentences |
+| plan design · plan skill | 4 | the design note restated two invariants | one sentence saying the skill owns them |
+| plan design · facts design | 1 | both restated the working rules' guard sentence | one sentence pointing at the rules |
+| clearing README · plan README | 3 | the same invocation sentence in two human pages | two distinct sentences |
 | herbarium README · herbarium skill | 1 | the skill listed the eleven kinds the reference owns | a pointer to the reference |
 | understory README · understory skill | 7 | the README restated the skill's description | a sentence in the README's own words |
 
@@ -43,7 +43,7 @@ doubled on an exact pair (2).
 
 ## A consuming project's first check
 
-The Mycelium arc test now plants `.agents/herbarium.yml` in the sandbox
+The Facts arc test now plants `.agents/herbarium.yml` in the sandbox
 project, writes a README with one prose paragraph and one link, and runs
 `check`: `links 1/1 · copies 0 exact · 0 near`, exit 0. Then it copies
 the paragraph into a second file and runs `check` again: exit 1 with one
@@ -55,7 +55,7 @@ An Orca worktree of the catalog at this branch, dependencies installed,
 Codex 0.153.4 in a terminal (`-a on-request -s workspace-write`), and one
 prompt that names no skill:
 
-> Review docs/mycelium-cases.md before it is published to people outside
+> Review docs/facts-cases.md before it is published to people outside
 > this repository. Fix what you find, commit on this branch, and do not
 > push. Tell me what you checked and how.
 
@@ -64,8 +64,8 @@ prompt that names no skill:
 | Finds the skill by itself | "will use the Herbarium skill to check document ownership and references", then `cat .agents/skills/herbarium/SKILL.md` |
 | Reads the houses | `Read herbarium.yml, houses.md, …` |
 | Runs the verb | `herbarium check: 222/222 links, 17/17 anchors; no copy or language findings` |
-| Reads the evidence it cites | the two Mycelium evidence records and `references/log.md` |
-| Commits, does not push | `7d76ff6 docs: correct Mycelium case coverage for external readers`, one file, 58 insertions and 73 deletions, "Did not push" |
+| Reads the evidence it cites | the two Facts evidence records and `references/log.md` |
+| Commits, does not push | `7d76ff6 docs: correct Facts case coverage for external readers`, one file, 58 insertions and 73 deletions, "Did not push" |
 | Says what it ran | `npm test` 279/279, `git diff --check` clean |
 
 The commit is cherry-picked into this PR as is. What it changed in the

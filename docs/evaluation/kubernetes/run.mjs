@@ -13,8 +13,8 @@ import { request as httpRequest } from 'node:http';
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const fixture = path.join(repo, 'infra/bin/fixtures/kubernetes-lab');
 const cli = path.join(repo, 'infra/bin/cli.mjs');
-const root = mkdtempSync(path.join(tmpdir(), 'grove-kube-'));
-const cluster = `grove-test-${path.basename(root).slice(-6).toLowerCase()}-${process.pid}`;
+const root = mkdtempSync(path.join(tmpdir(), 'ground-kube-'));
+const cluster = `ground-test-${path.basename(root).slice(-6).toLowerCase()}-${process.pid}`;
 const kubeconfig = path.join(root, 'kubeconfig');
 const context = `k3d-${cluster}`;
 const output = path.resolve(process.argv[2] ?? path.join(root, 'result.json'));
@@ -23,8 +23,8 @@ const main = path.join(root, 'main');
 const trees = Object.fromEntries(['w1', 'w2', 'w3'].map(id => [id, path.join(root, id)]));
 const hash = value => createHash('sha256').update(value).digest('hex');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-const env = { ...process.env, GROVE_KUBERNETES_LAB: root, GROVE_STATE_DIR: stateDir };
-for (const key of ['GROVE_OVERLAY_TIMEOUT_MS', 'DEVINFRA_OVERLAY_TIMEOUT_MS', 'GROVE_OVERLAY_VERIFY_TIMEOUT_MS']) delete env[key];
+const env = { ...process.env, GROUND_KUBERNETES_LAB: root, GROUND_STATE_DIR: stateDir };
+for (const key of ['GROUND_OVERLAY_TIMEOUT_MS', 'DEVINFRA_OVERLAY_TIMEOUT_MS', 'GROUND_OVERLAY_VERIFY_TIMEOUT_MS']) delete env[key];
 const children = new Set(); const builtTags = [];
 const report = { startedAt: new Date().toISOString(), kind: 'isolated-real-kubernetes-synthetic-application',
   candidate: spawnSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' }).stdout.trim(),
@@ -62,14 +62,14 @@ async function apply(items) {
   writeFileSync(file, JSON.stringify({ apiVersion: 'v1', kind: 'List', items }), { mode: 0o600 });
   return kubectl(['apply', '-f', file]);
 }
-function grove(args, tree = 'w1', extra = {}) {
+function ground(args, tree = 'w1', extra = {}) {
   return launch(process.execPath, [cli, 'overlay', ...args, '--project', trees[tree]], { cwd: trees[tree], env: { ...env, ...extra } });
 }
 async function good(args, tree, extra) {
-  const result = await grove(args, tree, extra).result; assert.equal(result.status, 0, result.stderr); return result;
+  const result = await ground(args, tree, extra).result; assert.equal(result.status, 0, result.stderr); return result;
 }
 async function bad(args, tree, extra) {
-  const result = await grove(args, tree, extra).result; assert.notEqual(result.status, 0); return result;
+  const result = await ground(args, tree, extra).result; assert.notEqual(result.status, 0); return result;
 }
 const state = () => existsSync(path.join(stateDir, 'kubernetes-lab.yml')) ? parse(readFileSync(path.join(stateDir, 'kubernetes-lab.yml'), 'utf8')) : { envs: {}, pending_by_env: {} };
 async function until(operation, message, timeout = 30000) {
@@ -88,9 +88,9 @@ async function build(tree, version, multiplier, importNow = true) {
   const source = readFileSync(path.join(fixture, 'app.mjs'), 'utf8').replace('value * 1;', `value * ${multiplier};`);
   writeFileSync(path.join(cwd, 'app.mjs'), source);
   writeFileSync(path.join(cwd, 'feature.json'), JSON.stringify({ web: `${version}-web`, api: `${version}-api` }));
-  const tag = `grove-lab/${cluster}:${tree}-${version}`; builtTags.push(tag);
+  const tag = `ground-lab/${cluster}:${tree}-${version}`; builtTags.push(tag);
   const started = Date.now();
-  await run('docker', ['build', '--network=none', '--pull=false', '--provenance=false', '--label', `grove.test/run=${cluster}`, '-t', tag, '.'], { cwd });
+  await run('docker', ['build', '--network=none', '--pull=false', '--provenance=false', '--label', `ground.test/run=${cluster}`, '-t', tag, '.'], { cwd });
   const imageId = await run('docker', ['image', 'inspect', tag, '--format', '{{.Id}}']);
   const artifact = { tree, version, multiplier, tag, imageId, sourceHash: hash(source), started, finished: Date.now() };
   if (importNow) await importImage(artifact);
@@ -108,7 +108,7 @@ async function importImageSerial(artifact) {
   const line = listing.split('\n').find(line => line.startsWith(`docker.io/${artifact.tag} `));
   assert.ok(line, 'imported immutable artifact exists in the private node');
   const digest = /sha256:[a-f0-9]{64}/.exec(line)[0];
-  artifact.image = `docker.io/grove-lab/${cluster}@${digest}`;
+  artifact.image = `docker.io/ground-lab/${cluster}@${digest}`;
   if (!listing.split('\n').some(line => line.startsWith(artifact.image + ' '))) {
     await run('docker', ['exec', `k3d-${cluster}-server-0`, 'ctr', '-n', 'k8s.io', 'images', 'tag', `docker.io/${artifact.tag}`, artifact.image]);
   }
@@ -116,12 +116,12 @@ async function importImageSerial(artifact) {
 }
 function workload(service, image) {
   return [
-    { apiVersion: 'apps/v1', kind: 'Deployment', metadata: { name: service, namespace: 'grove-lab-base' }, spec: { replicas: 1, selector: { matchLabels: { app: service } }, template: { metadata: { labels: { app: service } }, spec: {
+    { apiVersion: 'apps/v1', kind: 'Deployment', metadata: { name: service, namespace: 'ground-lab-base' }, spec: { replicas: 1, selector: { matchLabels: { app: service } }, template: { metadata: { labels: { app: service } }, spec: {
       ...(service === 'router' ? { serviceAccountName: 'router' } : { automountServiceAccountToken: false }),
       terminationGracePeriodSeconds: 1, containers: [{ name: 'app', image, imagePullPolicy: 'Never', env: [{ name: 'ROLE', value: service }, { name: 'ENVIRONMENT', value: 'base' }],
         readinessProbe: { httpGet: { path: '/ready', port: 8080 }, periodSeconds: 1, failureThreshold: 1 }, resources: { requests: { cpu: '10m', memory: '24Mi' }, limits: { memory: '128Mi' } } }],
     } } } },
-    { apiVersion: 'v1', kind: 'Service', metadata: { name: service, namespace: 'grove-lab-base' }, spec: { selector: { app: service }, ports: [{ port: 8080, targetPort: 8080 }] } },
+    { apiVersion: 'v1', kind: 'Service', metadata: { name: service, namespace: 'ground-lab-base' }, spec: { selector: { app: service }, ports: [{ port: 8080, targetPort: 8080 }] } },
   ];
 }
 let gateway; let forward; let created = false; let watching = false; let watcher;
@@ -155,23 +155,23 @@ try {
   writeFileSync(path.join(main, 'feature.json'), JSON.stringify({ web: 'base-web', api: 'base-api' }));
   writeFileSync(path.join(main, '.agents/runtime-profile.yml'), stringify({ project: { slug: 'kubernetes-lab' }, addressing: { tld: 'lab.localhost', proxy: 'project', scheme: { shared: '{service}.{tld}', overlay: '{service}--{env}.{tld}' } },
     runtime: { commands: { overlay: `${JSON.stringify(process.execPath)} ${JSON.stringify(path.join(fixture, 'backend.mjs'))}` } }, services: { web: {}, api: {} }, overlay: { attachable: ['web', 'api'] }, data: { infra: 'project' } }));
-  await git(main, ['init', '-b', 'main']); await git(main, ['add', '.']); await git(main, ['-c', 'user.name=Grove Lab', '-c', 'user.email=lab@example.invalid', 'commit', '-m', 'Disposable lab baseline']);
+  await git(main, ['init', '-b', 'main']); await git(main, ['add', '.']); await git(main, ['-c', 'user.name=Ground Lab', '-c', 'user.email=lab@example.invalid', 'commit', '-m', 'Disposable lab baseline']);
   for (const id of Object.keys(trees)) await git(main, ['worktree', 'add', '-b', id, trees[id]]);
   await check('private-cluster-and-baseline', async () => {
     const apiPort = await new Promise((resolve, reject) => { const socket = createServer(); socket.once('error', reject); socket.listen(0, '127.0.0.1', () => { const port = socket.address().port; socket.close(() => resolve(port)); }); });
-    await run('k3d', ['cluster', 'create', cluster, '--image', 'rancher/k3s:v1.35.5-k3s1', '--servers', '1', '--agents', '0', '--servers-memory', '2g', '--no-lb', '--api-port', `127.0.0.1:${apiPort}`, '--kubeconfig-update-default=false', '--kubeconfig-switch-context=false', '--k3s-arg', '--disable=traefik,servicelb,metrics-server@server:0', '--runtime-label', `grove.test/run=${cluster}@all`, '--timeout', '120s']); created = true;
+    await run('k3d', ['cluster', 'create', cluster, '--image', 'rancher/k3s:v1.35.5-k3s1', '--servers', '1', '--agents', '0', '--servers-memory', '2g', '--no-lb', '--api-port', `127.0.0.1:${apiPort}`, '--kubeconfig-update-default=false', '--kubeconfig-switch-context=false', '--k3s-arg', '--disable=traefik,servicelb,metrics-server@server:0', '--runtime-label', `ground.test/run=${cluster}@all`, '--timeout', '120s']); created = true;
     const credential = await run('k3d', ['kubeconfig', 'get', cluster], { private: true }); writeFileSync(kubeconfig, credential, { mode: 0o600 });
     const baseline = await build('base', 'base', 1); report.baselineArtifact = baseline;
-    await apply([{ apiVersion: 'v1', kind: 'Namespace', metadata: { name: 'grove-lab-base', labels: { 'grove.test/run': cluster } } }]);
+    await apply([{ apiVersion: 'v1', kind: 'Namespace', metadata: { name: 'ground-lab-base', labels: { 'ground.test/run': cluster } } }]);
     await apply([
-      { apiVersion: 'v1', kind: 'ConfigMap', metadata: { name: 'routes', namespace: 'grove-lab-base' }, data: {} },
-      { apiVersion: 'v1', kind: 'ServiceAccount', metadata: { name: 'router', namespace: 'grove-lab-base' } },
-      { apiVersion: 'rbac.authorization.k8s.io/v1', kind: 'Role', metadata: { name: 'router', namespace: 'grove-lab-base' }, rules: [{ apiGroups: [''], resources: ['configmaps'], resourceNames: ['routes'], verbs: ['get'] }] },
-      { apiVersion: 'rbac.authorization.k8s.io/v1', kind: 'RoleBinding', metadata: { name: 'router', namespace: 'grove-lab-base' }, subjects: [{ kind: 'ServiceAccount', name: 'router', namespace: 'grove-lab-base' }], roleRef: { apiGroup: 'rbac.authorization.k8s.io', kind: 'Role', name: 'router' } },
+      { apiVersion: 'v1', kind: 'ConfigMap', metadata: { name: 'routes', namespace: 'ground-lab-base' }, data: {} },
+      { apiVersion: 'v1', kind: 'ServiceAccount', metadata: { name: 'router', namespace: 'ground-lab-base' } },
+      { apiVersion: 'rbac.authorization.k8s.io/v1', kind: 'Role', metadata: { name: 'router', namespace: 'ground-lab-base' }, rules: [{ apiGroups: [''], resources: ['configmaps'], resourceNames: ['routes'], verbs: ['get'] }] },
+      { apiVersion: 'rbac.authorization.k8s.io/v1', kind: 'RoleBinding', metadata: { name: 'router', namespace: 'ground-lab-base' }, subjects: [{ kind: 'ServiceAccount', name: 'router', namespace: 'ground-lab-base' }], roleRef: { apiGroup: 'rbac.authorization.k8s.io', kind: 'Role', name: 'router' } },
       ...['web', 'api', 'router'].flatMap(service => workload(service, baseline.image)),
     ]);
-    await Promise.all(['web', 'api', 'router'].map(service => kubectl(['-n', 'grove-lab-base', 'rollout', 'status', `deployment/${service}`, '--timeout=90s'])));
-    forward = launch('kubectl', kargs(['-n', 'grove-lab-base', 'port-forward', 'service/router', ':8080', '--address', '127.0.0.1']), { timeout: 1800000 });
+    await Promise.all(['web', 'api', 'router'].map(service => kubectl(['-n', 'ground-lab-base', 'rollout', 'status', `deployment/${service}`, '--timeout=90s'])));
+    forward = launch('kubectl', kargs(['-n', 'ground-lab-base', 'port-forward', 'service/router', ':8080', '--address', '127.0.0.1']), { timeout: 1800000 });
     const port = await until(() => /127\.0\.0\.1:(\d+)/.exec(forward.stdout())?.[1], 'router port-forward'); gateway = `http://127.0.0.1:${port}`;
     await expect(null, 'base-web', 'base-api', 'base', 7); assert.equal(kubeHash(), beforeKube);
     writeFileSync(path.join(root, 'gateway.json'), JSON.stringify({ gateway }));
@@ -179,7 +179,7 @@ try {
   });
   await check('plans-have-no-runtime-side-effects', async () => {
     const result = await good(['create', 'w1']); assert.match(result.stdout, /plan/);
-    const namespaces = await get(['get', 'namespaces']); assert.ok(!namespaces.items.some(ns => ns.metadata.name === 'grove-lab-w1')); assert.deepEqual(state().envs, {});
+    const namespaces = await get(['get', 'namespaces']); assert.ok(!namespaces.items.some(ns => ns.metadata.name === 'ground-lab-w1')); assert.deepEqual(state().envs, {});
     return { unexpectedNamespaces: 0, trackedEnvironments: 0 };
   });
   let a, b, revised;
@@ -220,18 +220,18 @@ try {
     return { rejectedActualBuild: true, runningImageUnchanged: true };
   });
   await check('unready-real-pod-cannot-finalize-an-attach', async () => {
-    await kubectl(['-n', 'grove-lab-w1', 'exec', 'deployment/api', '--', 'touch', '/tmp/not-ready']);
-    await until(async () => (await get(['-n', 'grove-lab-w1', 'get', 'pods', '-l', 'app=api'])).items.every(pod => pod.status.conditions.some(c => c.type === 'Ready' && c.status === 'False')), 'real readiness failure');
-    await bad(['attach', 'w1', 'api', '--image', revised.image, '--apply'], 'w1', { GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '2500' });
+    await kubectl(['-n', 'ground-lab-w1', 'exec', 'deployment/api', '--', 'touch', '/tmp/not-ready']);
+    await until(async () => (await get(['-n', 'ground-lab-w1', 'get', 'pods', '-l', 'app=api'])).items.every(pod => pod.status.conditions.some(c => c.type === 'Ready' && c.status === 'False')), 'real readiness failure');
+    await bad(['attach', 'w1', 'api', '--image', revised.image, '--apply'], 'w1', { GROUND_OVERLAY_VERIFY_TIMEOUT_MS: '2500' });
     assert.equal(state().pending_by_env.w1.verb, 'attach');
-    await kubectl(['-n', 'grove-lab-w1', 'exec', 'deployment/api', '--', 'rm', '/tmp/not-ready']);
+    await kubectl(['-n', 'ground-lab-w1', 'exec', 'deployment/api', '--', 'rm', '/tmp/not-ready']);
     await good(['attach', 'w1', 'api', '--image', revised.image, '--apply']);
     await expect('w1', 'revised-web', 'revised-api', 'w1', 28);
     return { rejectedUnreadyPod: true, recovered: true, faultVerificationTimeoutMs: 2500 };
   });
   await check('old-image-cannot-finalize-a-new-attach', async () => {
     const marker = path.join(root, 'skip-replace-w1'); writeFileSync(marker, 'fault');
-    await bad(['attach', 'w1', 'api', '--image', a.image, '--apply'], 'w1', { GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '2500' });
+    await bad(['attach', 'w1', 'api', '--image', a.image, '--apply'], 'w1', { GROUND_OVERLAY_VERIFY_TIMEOUT_MS: '2500' });
     assert.equal(state().envs.w1.services.api.image, revised.image); assert.equal(state().pending_by_env.w1.image, a.image);
     assert.equal((await probe('w1', true)).body.result, 28);
     rmSync(marker); await good(['attach', 'w1', 'api', '--image', a.image, '--apply']);
@@ -240,7 +240,7 @@ try {
   });
   await check('same-environment-exclusion-and-killed-process-recovery', async () => {
     const hold = path.join(root, 'hold-attach-w1'); writeFileSync(hold, 'hold');
-    const request = ['attach', 'w1', 'api', '--image', revised.image, '--apply']; const job = grove(request);
+    const request = ['attach', 'w1', 'api', '--image', revised.image, '--apply']; const job = ground(request);
     await until(() => existsSync(hold + '.entered'), 'attach reached its real mutation');
     const blocked = await bad(request); assert.match(blocked.stderr, /locked/);
     await good(['touch', 'w2'], 'w2'); await good(['status', 'w2'], 'w2');
@@ -284,7 +284,7 @@ try {
     return { requests: report.observations.length, passed: report.observations.length - failed.length };
   });
   await good(['destroy', 'w2', '--apply'], 'w2'); await good(['status']);
-  assert.deepEqual(state().envs, {}); assert.deepEqual((await get(['-n', 'grove-lab-base', 'get', 'configmap', 'routes'])).data ?? {}, {});
+  assert.deepEqual(state().envs, {}); assert.deepEqual((await get(['-n', 'ground-lab-base', 'get', 'configmap', 'routes'])).data ?? {}, {});
 } catch (error) {
   report.failures.push(error.message.replaceAll(root, '<lab>')); process.exitCode = 1;
 } finally {
@@ -293,7 +293,7 @@ try {
   if (forward) await forward.result;
   if (created) {
     try {
-      const owner = await run('docker', ['inspect', `k3d-${cluster}-server-0`, '--format', '{{index .Config.Labels "grove.test/run"}}']);
+      const owner = await run('docker', ['inspect', `k3d-${cluster}-server-0`, '--format', '{{index .Config.Labels "ground.test/run"}}']);
       assert.equal(owner, cluster); await run('k3d', ['cluster', 'delete', cluster]);
       report.cleanup.clusterRemoved = true;
     } catch (error) { report.failures.push('Private cluster cleanup: ' + error.message); process.exitCode = 1; }

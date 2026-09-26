@@ -8,7 +8,7 @@ import { formatValidateReport, parseProfile, projectHostOf } from '../lib/profil
 import { readProfile } from './setup.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const EXAMPLES = path.join(REPO_ROOT, 'skills/grove/examples');
+const EXAMPLES = path.join(REPO_ROOT, 'skills/ground/examples');
 
 function parse(text, source = 't.yml') {
   return parseProfile(text, source);
@@ -483,7 +483,7 @@ for (const [name, fragment, error] of [
 }
 
 test('schema reference complete YAML block passes the actual profile parser', () => {
-  const file = path.join(REPO_ROOT, 'skills/grove/references/runtime-profile.md');
+  const file = path.join(REPO_ROOT, 'skills/ground/references/runtime-profile.md');
   const blocks = [...readFileSync(file, 'utf8').matchAll(/```yaml\n([\s\S]*?)```/g)];
   assert.equal(blocks.length, 1, 'one complete canonical profile block');
   for (const [, yaml] of blocks) parseProfile(yaml, file);

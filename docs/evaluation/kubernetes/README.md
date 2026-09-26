@@ -1,6 +1,6 @@
 # Parallel overlay Kubernetes lab
 
-Explore how independent changes share a baseline, how Grove detects an incorrect
+Explore how independent changes share a baseline, how Ground detects an incorrect
 runtime, and how interrupted operations recover. The application, adapter, and
 runner are included here; no private project is needed.
 
@@ -14,11 +14,11 @@ node docs/evaluation/kubernetes/run.mjs /absolute/path/to/result.json
 
 This opt-in experiment creates a private k3d cluster, disposable Git worktrees,
 real Docker images, a shared synthetic web/API baseline, and independently
-routed overlays. The public Grove CLI manages every overlay.
+routed overlays. The public Ground CLI manages every overlay.
 
 Prerequisites are the locally available `docker`, `k3d`, and `kubectl` commands
 and the image tags used by the runner. The runner owns its generated cluster,
-image tags, loopback listeners, kubeconfig, and Grove registry. It checks the
+image tags, loopback listeners, kubeconfig, and Ground registry. It checks the
 cluster ownership label before deletion and compares pre-existing container
 IDs and the default kubeconfig before and after execution. Never substitute an
 existing cluster name or kubeconfig. Docker build cache is retained; the runner
@@ -27,9 +27,9 @@ does not prune the machine's shared cache or engine set.
 Docker builds overlap. Image imports are sequenced per private cluster because
 concurrent `k3d image import` calls contend for the same tools container. This
 runner coordinates its imports; independent consumer processes still need their
-own shared importer coordination. Grove does not supply that backend lock.
+own shared importer coordination. Ground does not supply that backend lock.
 
-The normal lifecycle runs with Grove's default timeouts. Only the intentionally
+The normal lifecycle runs with Ground's default timeouts. Only the intentionally
 stale-image and unready-Pod probes shorten the verification deadline. A separate
 case waits for the real default command timeout and retries the exact operation.
 

@@ -1,7 +1,7 @@
 {
   "name": "de-novo-skills",
   "version": "0.1.0",
-  "description": "Shared local ground for many agents on one machine: Grove (engines, names, overlays), Dryad (seats), Forester (plan and budget), Understory (the written record), Mycelium (the assertion log).",
+  "description": "Shared local ground for many agents on one machine: Ground (engines, names, overlays), Seat (seats), Plan (plan and budget), Understory (the written record), Facts (the assertion log).",
   "author": {
     "name": "de-novo",
     "url": "https://github.com/de-novo"
@@ -18,11 +18,11 @@
   ],
   "skills": [
     "./skills/clearing",
-    "./skills/dryad",
-    "./skills/forester",
-    "./skills/grove",
+    "./skills/seat",
+    "./skills/plan",
+    "./skills/ground",
     "./skills/herbarium",
-    "./skills/mycelium",
+    "./skills/facts",
     "./skills/understory"
   ]
 }

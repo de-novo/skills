@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 export const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 export const read = file => JSON.parse(readFileSync(file, 'utf8'));
-const root = process.env.GROVE_SYNTHETIC_ROOT;
+const root = process.env.GROUND_SYNTHETIC_ROOT;
 if (!root || !existsSync(join(root, 'synthetic-marker'))) throw new Error('private synthetic root required');
 const slot = env => {
   if (!/^(w1|w2|baseline|catalog)$/.test(env)) throw new Error('unknown synthetic slot');

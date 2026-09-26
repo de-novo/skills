@@ -1,0 +1,47 @@
+// A stand-in for an interactive coding tool, for Plan's serve tests. It
+// behaves like one at the seams Plan reads: it takes the task as its
+// argument, runs inside a pseudo-terminal, appends hook-shaped events to
+// PLAN_EVENTS, waits for a person to type `y` and Enter before acting,
+// then reports done through Seat the way a seated worker does, and exits.
+import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const CLI = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../cli.mjs');
+const task = process.argv[2] ?? '';
+const events = process.env.PLAN_EVENTS;
+const event = (name, extra = {}) => { if (events) appendFileSync(events, JSON.stringify({ hook_event_name: name, ...extra }) + '\n'); };
+
+process.stdout.write(`fixture tool · seat ${process.env.SEAT_ID} · task: ${task}\r\n`);
+event('UserPromptSubmit');
+event('Notification', { notification_type: 'permission_prompt' });
+process.stdout.write('allow? (y/N) ');
+process.stdin.setRawMode?.(true);
+process.stdin.resume();
+let typed = '';
+process.stdin.on('data', (chunk) => {
+  typed += chunk.toString('utf8');
+  if (!typed.includes('\r') && !typed.includes('\n')) return;
+  process.stdin.pause();
+  if (!/y/i.test(typed)) {
+    process.stdout.write('\r\nrefused\r\n');
+    event('Stop');
+    process.exit(2);
+  }
+  // A real tool's hooks carry the tool and its target; serve turns that
+  // into the session's "doing" line. The work lands inside the seat's
+  // scope and is committed, as a seated worker's rules say, before done.
+  event('PreToolUse', { tool_name: 'Write', tool_input: { file_path: 'docs/reference/done.txt' } });
+  event('PostToolUse', { tool_name: 'Write', tool_input: { file_path: 'docs/reference/done.txt' } });
+  mkdirSync(path.join(process.cwd(), 'docs/reference'), { recursive: true });
+  writeFileSync(path.join(process.cwd(), 'docs/reference/done.txt'), `${task}\n`);
+  const gitConfig = ['-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgSign=false', '-c', 'user.name=Fixture Tool', '-c', 'user.email=fixture@example.invalid'];
+  spawnSync('git', [...gitConfig, 'add', '.'], { encoding: 'utf8' });
+  spawnSync('git', [...gitConfig, 'commit', '-q', '-m', 'fixture: done'], { encoding: 'utf8' });
+  const report = spawnSync(process.execPath, [CLI, 'seat', 'report', process.env.SEAT_ID, '--status', 'done', '--note', 'fixture finished'], { encoding: 'utf8', env: process.env });
+  process.stdout.write(`\r\nreport exit ${report.status}\r\n`);
+  event('Stop');
+  // Stay alive like a TUI would after its turn; serve closes us.
+  setInterval(() => {}, 1000);
+});

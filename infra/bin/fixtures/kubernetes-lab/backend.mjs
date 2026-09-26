@@ -1,12 +1,12 @@
-// Deliberately isolated Kubernetes adapter for exercising the public Grove CLI.
+// Deliberately isolated Kubernetes adapter for exercising the public Ground CLI.
 import { spawnSync } from 'node:child_process';
 import { readFileSync, existsSync, appendFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-const root = process.env.GROVE_KUBERNETES_LAB;
+const root = process.env.GROUND_KUBERNETES_LAB;
 if (!root || !existsSync(join(root, 'lab.json'))) throw new Error('Private Kubernetes lab configuration required');
 const config = JSON.parse(readFileSync(join(root, 'lab.json'), 'utf8'));
-if (!/^grove-test-[a-z0-9-]+$/.test(config.cluster) || config.context !== `k3d-${config.cluster}` || resolve(config.kubeconfig) !== join(resolve(root), 'kubeconfig')) throw new Error('Refusing a non-lab Kubernetes target');
+if (!/^ground-test-[a-z0-9-]+$/.test(config.cluster) || config.context !== `k3d-${config.cluster}` || resolve(config.kubeconfig) !== join(resolve(root), 'kubeconfig')) throw new Error('Refusing a non-lab Kubernetes target');
 export function kubectl(args, input) {
   const result = spawnSync('kubectl', ['--kubeconfig', config.kubeconfig, '--context', config.context, '--request-timeout=10s', ...args], {
     encoding: 'utf8', input: input == null ? undefined : JSON.stringify(input), timeout: 30000,
@@ -19,27 +19,27 @@ const exists = (kind, name, ns) => {
   const result = kubectl([...(ns ? ['-n', ns] : []), 'get', kind, name, '--ignore-not-found', '-o', 'json']);
   return result.trim() ? JSON.parse(result) : null;
 };
-const marker = json(['get', 'namespace', 'grove-lab-base']);
-if (marker.metadata.labels?.['grove.test/run'] !== config.cluster) throw new Error('Lab ownership marker mismatch');
+const marker = json(['get', 'namespace', 'ground-lab-base']);
+if (marker.metadata.labels?.['ground.test/run'] !== config.cluster) throw new Error('Lab ownership marker mismatch');
 const [verb, env, candidateService] = process.argv.slice(2);
 const service = ['attach', 'detach'].includes(verb) ? candidateService : undefined;
 if (!['status', 'create', 'attach', 'detach', 'destroy'].includes(verb)) throw new Error('Unknown lab verb');
 if (env && !/^(w1|w2|w3|failure|timeout)$/.test(env)) throw new Error('Unknown lab environment');
 const args = process.argv.slice(2); const apply = args.includes('--apply');
 const image = args.includes('--image') ? args[args.indexOf('--image') + 1] : undefined;
-const namespace = env ? `grove-lab-${env}` : null;
-const labels = { 'grove.test/run': config.cluster, 'grove.test/environment': env };
+const namespace = env ? `ground-lab-${env}` : null;
+const labels = { 'ground.test/run': config.cluster, 'ground.test/environment': env };
 const trace = stage => appendFileSync(join(root, 'trace.jsonl'), JSON.stringify({ stage, verb, env, service, pid: process.pid, ppid: process.ppid, at: Date.now() }) + '\n');
-const routes = () => json(['-n', 'grove-lab-base', 'get', 'configmap', 'routes']).data ?? {};
-const updateRoute = value => kubectl(['-n', 'grove-lab-base', 'patch', 'configmap', 'routes', '--type=merge', '-p', JSON.stringify({ data: { [env]: value === null ? null : JSON.stringify(value) } })]);
+const routes = () => json(['-n', 'ground-lab-base', 'get', 'configmap', 'routes']).data ?? {};
+const updateRoute = value => kubectl(['-n', 'ground-lab-base', 'patch', 'configmap', 'routes', '--type=merge', '-p', JSON.stringify({ data: { [env]: value === null ? null : JSON.stringify(value) } })]);
 const applyResources = items => kubectl(['apply', '-f', '-'], { apiVersion: 'v1', kind: 'List', items });
 trace('start');
 if (verb === 'status') {
-  const namespaces = json(['get', 'namespaces', '-l', `grove.test/run=${config.cluster}`]).items;
+  const namespaces = json(['get', 'namespaces', '-l', `ground.test/run=${config.cluster}`]).items;
   const routing = routes();
   const inventory = [];
-  for (const name of env ? [env] : [...new Set([...namespaces.map(ns => ns.metadata.labels['grove.test/environment']).filter(Boolean), ...Object.keys(routing)])]) {
-    const ns = `grove-lab-${name}`; const resource = namespaces.find(item => item.metadata.name === ns);
+  for (const name of env ? [env] : [...new Set([...namespaces.map(ns => ns.metadata.labels['ground.test/environment']).filter(Boolean), ...Object.keys(routing)])]) {
+    const ns = `ground-lab-${name}`; const resource = namespaces.find(item => item.metadata.name === ns);
     if (!resource && !Object.hasOwn(routing, name)) continue;
     const services = resource ? json(['-n', ns, 'get', 'deployments']).items.map(deploy => {
       const pods = json(['-n', ns, 'get', 'pods', '-l', `app=${deploy.metadata.name}`]).items.filter(pod => !pod.metadata.deletionTimestamp);
@@ -64,7 +64,7 @@ if (verb === 'status') {
       if (!Object.hasOwn(routes(), env)) updateRoute({});
     } else if (verb === 'attach') {
       if (!exists('namespace', namespace)) throw new Error('Create the lab environment first');
-      if (!/^docker\.io\/grove-lab\/[a-z0-9-]+@sha256:[a-f0-9]{64}$/.test(image)) throw new Error('Lab digest image required');
+      if (!/^docker\.io\/ground-lab\/[a-z0-9-]+@sha256:[a-f0-9]{64}$/.test(image)) throw new Error('Lab digest image required');
       if (!existsSync(join(root, `skip-replace-${env}`))) {
         const appLabels = { ...labels, app: service };
         applyResources([

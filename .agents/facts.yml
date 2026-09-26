@@ -1,0 +1,10 @@
+# The catalog's own vocabulary. It seats its own workers with Seat, so the
+# facts those seats find are logged here. Domains and types stay small.
+version: 1
+domains: [catalog]
+types: [skill, decision, check, seat]
+predicates:
+  landed-as: one        # a skill's one-line place in the catalog
+  decided: many         # a decision recorded against a skill
+  passed: many          # a check that passed, one line each
+  failed: many

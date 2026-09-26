@@ -5,7 +5,7 @@
 # engine (database, account, prefix) — see infra/README.md.
 # Bind 127.0.0.1 only — local-dev credentials, do not expose.
 #
-# Catalog of engines. Engine id = the compose profile. grove.* labels are
+# Catalog of engines. Engine id = the compose profile. ground.* labels are
 # how the CLI learns provision and aliases — do not keep a second name list.
 # Bare `docker compose up` starts none. `setup` / `up <name>` start what you ask.
 name: dev-infra
@@ -16,8 +16,8 @@ services:
     container_name: dev-mysql8
     profiles: [mysql]
     labels:
-      grove.provision: mysql
-      grove.port: "3306"
+      ground.provision: mysql
+      ground.port: "3306"
     ports:
       - "127.0.0.1:3306:3306"
     environment:
@@ -36,9 +36,9 @@ services:
     container_name: dev-pg16
     profiles: [pg]
     labels:
-      grove.provision: pg
-      grove.aliases: postgres,postgresql
-      grove.port: "5432"
+      ground.provision: pg
+      ground.aliases: postgres,postgresql
+      ground.port: "5432"
     ports:
       - "127.0.0.1:5432:5432"
     environment:
@@ -57,7 +57,7 @@ services:
     container_name: dev-redis7
     profiles: [redis]
     labels:
-      grove.port: "6379"
+      ground.port: "6379"
     command: redis-server --appendonly yes
     ports:
       - "127.0.0.1:6379:6379"
@@ -75,7 +75,7 @@ services:
     container_name: dev-kafka
     profiles: [kafka]
     labels:
-      grove.port: "19092"
+      ground.port: "19092"
     ports:
       - "127.0.0.1:9092:9092"
     environment:
@@ -106,7 +106,7 @@ services:
     container_name: dev-mongo7
     profiles: [mongo]
     labels:
-      grove.port: "27017"
+      ground.port: "27017"
     ports:
       - "127.0.0.1:27017:27017"
     volumes:
@@ -124,8 +124,8 @@ services:
     container_name: dev-mailpit
     profiles: [mail]
     labels:
-      grove.aliases: mailpit
-      grove.port: "1025"
+      ground.aliases: mailpit
+      ground.port: "1025"
     ports:
       - "127.0.0.1:1025:1025" # SMTP
       - "127.0.0.1:8025:8025" # Web UI
@@ -141,8 +141,8 @@ services:
     container_name: dev-minio
     profiles: [minio]
     labels:
-      grove.aliases: s3
-      grove.port: "9000"
+      ground.aliases: s3
+      ground.port: "9000"
     command: server /data --console-address ":9001"
     ports:
       - "127.0.0.1:9000:9000"

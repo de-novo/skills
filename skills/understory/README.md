@@ -4,14 +4,14 @@ The story under the canopy: the document a person who was not here reads to
 know what the work is, where it stands, and what has been proven.
 
 ```
-forester plan --json ──▶ understory graph     ──▶ ┐
+plan plan --json ──▶ understory graph     ──▶ ┐
                      ──▶ understory reading   ──▶ ├─▶ the document (an agent writes the prose)
 plan · design note · evidence ──(links only)──▶ ┘
 ```
 
 ## What it does
 
-Draws Forester's graph and one reading line per item through the CLI, then
+Draws Plan's graph and one reading line per item through the CLI, then
 an agent writes eight short sections around them. The defining constraint:
 a map points, it does not copy. Every fact stays in its home and the
 document links to it; what the document owns is the reading.
@@ -31,17 +31,17 @@ person types `/understory`. For the live screen instead, use Canopy
 
 ## Where it fits
 
-Reads Forester's graph and Mycelium's fact ids; writes only prose. Root
+Reads Plan's graph and Facts's fact ids; writes only prose. Root
 map: [How the skills fit](../../README.md#how-the-skills-fit).
 
 ## What it does to your machine
 
-Reads Forester's JSON and Mycelium's log. Writes nothing itself; the
+Reads Plan's JSON and Facts's log. Writes nothing itself; the
 document is written by the agent, where the project says.
 
 ## Apply to a project
 
-1. The project has a Forester plan.
+1. The project has a Plan.
 2. An agent reading [SKILL.md](SKILL.md) runs the two verbs and writes the
    eight sections around them.
 3. The project decides where the document lives and in which language.

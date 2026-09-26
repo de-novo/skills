@@ -1,7 +1,7 @@
 # The handoff pilot: two real seats through serve, the gate, and the merge — 2026-09-10
 
 A cold run of the handoff branch on the playground sample, with real
-Claude Code sessions held by `forester serve`, to see whether an agent
+Claude Code sessions held by `plan serve`, to see whether an agent
 reading the new skills does what they say. Catalog at branch
 `feat/handoff-integrity` (`340bc3b` plus the fix this run found). The
 unit suite proves the CLI; this run proves the seams a session meets.
@@ -12,10 +12,10 @@ unit suite proves the CLI; this run proves the seams a session meets.
 | --- | --- |
 | Project | the playground sample (api, web, router) in a sandbox under the session scratchpad, its own git repository |
 | Plan | two items: `api-count` (add `GET /notes/count`, owns `app/api/**`, a brief file, two verify lines) and `docs-count` (document the api, owns `docs/**`, `depends_on: [api-count]`, a brief file) |
-| Vocabulary | `.agents/mycelium.yml` with `judges: [human:driver]` and `mode: restricted`; no seat was asked to propose a fact |
-| Budget | `parallel: 2` in the local file; `forester machine --parallel 2 --apply` |
+| Vocabulary | `.agents/facts.yml` with `judges: [human:driver]` and `mode: restricted`; no seat was asked to propose a fact |
+| Budget | `parallel: 2` in the local file; `plan machine --parallel 2 --apply` |
 | Skills in the project | copied into `.agents/skills` and `.claude/skills` (the sandbox refuses symlinks) |
-| Sessions | Claude Code 2.1.267, launched by `forester serve` from the local file's `claude` template (`--permission-mode acceptEdits` and an allow list); the driver attached with `forester attach` in Orca terminals and answered what needed a person |
+| Sessions | Claude Code 2.1.267, launched by `plan serve` from the local file's `claude` template (`--permission-mode acceptEdits` and an allow list); the driver attached with `plan attach` in Orca terminals and answered what needed a person |
 | Person | the driver: answered the trust dialog, chose auto mode at each seat's first prompt, merged, finished |
 
 `doctor --project <sandbox>` before anything ran: ok; 7/7 skills carried
@@ -26,14 +26,14 @@ as copies; two gates named (shared engines, trust dialogs); next: nothing.
 1. **serve seated `api-count`** (worktree, overlay env `api-count`,
    scope `app/api/**`, revision `1eab52702495a893`, attempt 1) and logged
    `trust not seeded; a trust dialog shows as needs-input, answer it with
-   forester attach api-count`. `status` showed the session `needs-input`
+   plan attach api-count`. `status` showed the session `needs-input`
    before any hook had fired (the screen fallback).
 2. **The driver attached.** The screen was Claude Code's trust dialog with
    the cursor on "No, exit". Down, Enter: the session went `running` at
    its first prompt, the generated handoff (title, revision, base, scope,
    the two verify lines, the report line, the brief under its path and
    digest).
-3. **The seat read the skill first** (`Skill(dryad)` from the copied
+3. **The seat read the skill first** (`Skill(seat)` from the copied
    skills), then ran one compound shell command, which the allow list did
    not cover: `needs-input` again, read through attach, answered with
    "Yes, and switch to auto mode". No further prompt reached a person.
@@ -47,12 +47,12 @@ as copies; two gates named (shared engines, trust dialogs); next: nothing.
    prove the answer came from its overlay. It wrote an evidence file with
    8 checks (command, cwd, exit, observed) and 2 `not_measured` entries
    (the 503 branch, read not run, with the reason; everything outside its
-   scope), and reported done with its session reference. Dryad recorded
+   scope), and reported done with its session reference. Seat recorded
    the result: head `bcf8cef`, clean, 1 path, scope kept, checks 8. serve
    closed the session.
-5. **The gate held.** `forester plan`: `api-count done`, `docs-count
+5. **The gate held.** `plan plan`: `api-count done`, `docs-count
    waiting · api-count done at bcf8cefd2144 is not in baseline HEAD
-   0f9b11c532b3; merge it, or record dryad integrate api-count --commit
+   0f9b11c532b3; merge it, or record seat integrate api-count --commit
    <sha>`. Nothing was seated.
 6. **The driver merged** (`git merge --ff-only seat/api-count`). Within
    one poll `docs-count` was `ready · api-count done and in the baseline`
@@ -70,9 +70,9 @@ as copies; two gates named (shared engines, trust dialogs); next: nothing.
    4 checks and one `not_measured` (no live request; examples derived
    from source). Scope kept.
 9. **Merge, finish, down.** The driver merged the docs branch, ran
-   `dryad finish --apply` twice (envs destroyed 2/2, worktrees removed
+   `seat finish --apply` twice (envs destroyed 2/2, worktrees removed
    2/2, branches kept), stopped serve (snapshot, socket, and lock gone),
-   and `playground down`: processes 0, ports 0, machine dryad mentions 0,
+   and `playground down`: processes 0, ports 0, machine seat mentions 0,
    machine overlay mentions 0, directories 0.
 
 ## Counts
@@ -92,7 +92,7 @@ as copies; two gates named (shared engines, trust dialogs); next: nothing.
 ## Found on the way
 
 - **Defect, fixed in this run.** After both seats were finished,
-  `forester machine` still showed `held 1/2` for `docs-count`: its
+  `plan machine` still showed `held 1/2` for `docs-count`: its
   reservation had no seat in the registry and the process that took it,
   the serve daemon, was still alive, so the liveness rule read it as in
   flight. An in-flight reservation is now bounded: younger than two
@@ -103,7 +103,7 @@ as copies; two gates named (shared engines, trust dialogs); next: nothing.
   <file>` and nothing about where. The first seat put it under its own
   session scratch directory; the second under the sandbox's state
   directory, a write outside its worktree, though not to any source.
-  Dryad copies the file's content into the record, so the file is
+  Seat copies the file's content into the record, so the file is
   disposable, but the handoff should name a place (a later change).
 - **Trust is keyed by repository, not by worktree**, in Claude Code
   2.1.267: one answer covered both seats. `pretrust_worktrees`, when a
@@ -116,18 +116,18 @@ as copies; two gates named (shared engines, trust dialogs); next: nothing.
 
 ## Fixed after this run
 
-- **Evidence file location.** Every seat now has `DRYAD_EVIDENCE`, its
-  `<id>.evidence.yml` beside its events file under the directory Dryad
+- **Evidence file location.** Every seat now has `SEAT_EVIDENCE`, its
+  `<id>.evidence.yml` beside its events file under the directory Seat
   owns; `seat --json` names it as `evidence_file`; the handoff says to
   write it there; `report --status done` reads it when `--evidence` is not
   passed; `finish` removes it with the seat. A seat can no longer guess a
   location or write one into its worktree, where it would fall outside
   the scope.
-- **One command per line.** The Dryad skill's wake-up procedure and the
+- **One command per line.** The Seat skill's wake-up procedure and the
   handoff now say to run each command on its own line, because a
   launcher's allow list matches one command and a chained line stops the
   seat on a prompt a person answers. The tool template row in the
-  Forester reference says the approval policy lives there.
+  Plan reference says the approval policy lives there.
 - **Slots released each poll.** serve now drops stale reservations at the
   start of every poll (`reclaimStaleSlots`), so a slot a finished seat
   held is free within one poll instead of at the next allocation that
@@ -141,7 +141,7 @@ npm test   321/321
 
 Codex as a seat under serve (both seats were Claude Code); a seat that
 reports done outside its scope in a real session (the refusal is
-exercised by the suite only); the squash-integration path (`dryad
+exercised by the suite only); the squash-integration path (`seat
 integrate`) in a real session; facts proposed by seats (the briefs did
 not ask for any); the machine cap refusing a third project's seat while
 these two ran.

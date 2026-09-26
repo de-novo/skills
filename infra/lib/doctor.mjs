@@ -13,12 +13,12 @@ import { fileURLToPath } from 'node:url';
 import { lookup } from 'node:dns/promises';
 import { parse } from 'yaml';
 
-import { GROVE_ADDRESSING_FILE, GROVE_ADDRESSING_LOCAL_FILE, loadGroveAddressing, renderProjectUrls, resolveAddressing } from './addressing.mjs';
-import { DRYAD_PROFILE_RELPATH, parseDryadProfile, readDryadState } from './dryad.mjs';
-import { LOCAL_RELPATH as FORESTER_LOCAL, PLAN_RELPATH as FORESTER_PLAN, parseForesterLocal, parseForesterPlan, readMachine, resolveBudget } from './forester.mjs';
-import { resolveExecutable } from './forester-serve.mjs';
+import { GROUND_ADDRESSING_FILE, GROUND_ADDRESSING_LOCAL_FILE, loadGroundAddressing, renderProjectUrls, resolveAddressing } from './addressing.mjs';
+import { SEAT_PROFILE_RELPATH, parseSeatProfile, readSeatState } from './seat.mjs';
+import { LOCAL_RELPATH as PLAN_LOCAL, PLAN_RELPATH, parsePlanLocal, parsePlan, readMachine, resolveBudget } from './plan.mjs';
+import { resolveExecutable } from './plan-serve.mjs';
 import { VALUES_RELPATH as HERBARIUM_VALUES, parseHerbariumValues } from './herbarium.mjs';
-import { VALUES_RELPATH as MYCELIUM_VALUES, describeMode, parseMyceliumValues } from './mycelium.mjs';
+import { VALUES_RELPATH as FACTS_VALUES, describeMode, parseFactsValues } from './facts.mjs';
 import { parseProfile } from './profile.mjs';
 import { wildcardExplanation } from './wildcards.mjs';
 
@@ -84,8 +84,8 @@ function catalogSection(environment) {
     version: pkg.version,
     node: row(major >= NODE_SUPPORTED ? 'ready' : 'unsupported', `${process.version}; the suite runs on ${NODE_SUPPORTED} and above`, { version: process.version, supported: `>=${NODE_SUPPORTED}` }),
     dependencies: row(existsSync(path.join(CATALOG_ROOT, 'node_modules', 'yaml')) ? 'ready' : 'missing', existsSync(path.join(CATALOG_ROOT, 'node_modules', 'yaml')) ? null : 'run npm install in the catalog checkout'),
-    pty: row(pty ? 'ready' : 'missing', pty ? 'forester serve can hold sessions' : 'optional: forester serve needs @lydell/node-pty; every other verb works without it'),
-    addressing: row(existsSync(GROVE_ADDRESSING_FILE) ? 'ready' : 'missing', null, { file: GROVE_ADDRESSING_FILE, local: existsSync(GROVE_ADDRESSING_LOCAL_FILE) ? GROVE_ADDRESSING_LOCAL_FILE : null }),
+    pty: row(pty ? 'ready' : 'missing', pty ? 'plan serve can hold sessions' : 'optional: plan serve needs @lydell/node-pty; every other verb works without it'),
+    addressing: row(existsSync(GROUND_ADDRESSING_FILE) ? 'ready' : 'missing', null, { file: GROUND_ADDRESSING_FILE, local: existsSync(GROUND_ADDRESSING_LOCAL_FILE) ? GROUND_ADDRESSING_LOCAL_FILE : null }),
     executables: Object.fromEntries(EXECUTABLES.map((name) => {
       const found = resolveExecutable(name, environment);
       return [name, row(found ? 'ready' : 'missing', found)];
@@ -115,8 +115,8 @@ function findUpward(start, relatives) {
 
 export function resolveDoctorProject({ project = null, environment = process.env, cwd = process.cwd() }) {
   if (project != null) return path.resolve(cwd, project);
-  if (environment.DRYAD_PROJECT) return path.resolve(cwd, environment.DRYAD_PROJECT);
-  return findUpward(cwd, [RUNTIME_PROFILE, DRYAD_PROFILE_RELPATH]);
+  if (environment.SEAT_PROJECT) return path.resolve(cwd, environment.SEAT_PROJECT);
+  return findUpward(cwd, [RUNTIME_PROFILE, SEAT_PROFILE_RELPATH]);
 }
 
 // Which of the catalog's skills a project carries as copies, and whether
@@ -144,21 +144,21 @@ function skillCopies(root, catalogSkills) {
 }
 
 function projectSection(root, environment) {
-  const grove = valuesFile(path.join(root, RUNTIME_PROFILE), parseProfile);
-  const dryad = valuesFile(path.join(root, DRYAD_PROFILE_RELPATH), parseDryadProfile);
-  const plan = valuesFile(path.join(root, FORESTER_PLAN), parseForesterPlan);
-  const local = valuesFile(path.join(root, FORESTER_LOCAL), parseForesterLocal);
-  const mycelium = valuesFile(path.join(root, MYCELIUM_VALUES), parseMyceliumValues);
+  const ground = valuesFile(path.join(root, RUNTIME_PROFILE), parseProfile);
+  const seat = valuesFile(path.join(root, SEAT_PROFILE_RELPATH), parseSeatProfile);
+  const plan = valuesFile(path.join(root, PLAN_RELPATH), parsePlan);
+  const local = valuesFile(path.join(root, PLAN_LOCAL), parsePlanLocal);
+  const facts = valuesFile(path.join(root, FACTS_VALUES), parseFactsValues);
   const herbarium = valuesFile(path.join(root, HERBARIUM_VALUES), parseHerbariumValues);
-  const section = { root, grove: null, dryad: null, forester: null, mycelium: null, herbarium: null, skills: skillCopies(root, publishedSkills()) };
+  const section = { root, ground: null, seat: null, plan: null, facts: null, herbarium: null, skills: skillCopies(root, publishedSkills()) };
 
-  // Grove: the profile, the overlay mode, the backend it names, the hostnames it renders.
-  if (grove.state === 'ready') {
-    const profile = grove.values;
+  // Ground: the profile, the overlay mode, the backend it names, the hostnames it renders.
+  if (ground.state === 'ready') {
+    const profile = ground.values;
     const overlayMode = profile.overlay?.mode === 'on' ? 'on' : 'off';
     let hostnames = row('unknown');
     try {
-      const addressing = resolveAddressing(profile, { profilePath: grove.file });
+      const addressing = resolveAddressing(profile, { profilePath: ground.file });
       const urls = renderProjectUrls(profile, addressing, {});
       hostnames = row('ready', `${urls.shared.length} rendered; rendering is not resolving`, { tld: addressing.tld, shared: urls.shared.map((entry) => entry.host) });
     } catch (error) {
@@ -166,31 +166,31 @@ function projectSection(root, environment) {
     }
     const command = profile.overlay?.command ?? profile.runtime?.commands?.overlay ?? null;
     const backend = command != null ? row('ready', 'the project names its own overlay command') : row('missing', overlayMode === 'on' ? 'overlay is on but runtime.commands.overlay names no command' : 'no overlay command; none needed while overlay is off');
-    section.grove = { profile: row('ready', null, { file: grove.file, slug: profile.project.slug }), overlay: row('ready', overlayMode, { mode: overlayMode, create_on: profile.overlay?.createOn ?? null }), backend, hostnames };
+    section.ground = { profile: row('ready', null, { file: ground.file, slug: profile.project.slug }), overlay: row('ready', overlayMode, { mode: overlayMode, create_on: profile.overlay?.createOn ?? null }), backend, hostnames };
   } else {
-    section.grove = { profile: grove };
+    section.ground = { profile: ground };
   }
 
-  // Dryad: the profile and the registry, read only.
-  if (dryad.state === 'ready') {
+  // Seat: the profile and the registry, read only.
+  if (seat.state === 'ready') {
     let registry = row('unknown');
-    const slug = dryad.values.project?.slug ?? grove.values?.project?.slug ?? null;
-    if (slug == null) registry = row('invalid', `no slug: ${RUNTIME_PROFILE} is absent and the Dryad profile declares none`);
+    const slug = seat.values.project?.slug ?? ground.values?.project?.slug ?? null;
+    if (slug == null) registry = row('invalid', `no slug: ${RUNTIME_PROFILE} is absent and the Seat profile declares none`);
     else {
       try {
-        const { state, file } = readDryadState(slug, environment);
+        const { state, file } = readSeatState(slug, environment);
         const seats = Object.keys(state.seats).length;
         registry = row('ready', `${seats} live seat${seats === 1 ? '' : 's'}`, { file, seats, repository: state.repository ?? null });
       } catch (error) {
         registry = row('invalid', error.message);
       }
     }
-    section.dryad = { profile: row('ready', dryad.values.worktrees == null ? 'seats adopt worktrees (no worktrees section)' : `worktrees under ${dryad.values.worktrees.root}`, { file: dryad.file }), registry };
+    section.seat = { profile: row('ready', seat.values.worktrees == null ? 'seats adopt worktrees (no worktrees section)' : `worktrees under ${seat.values.worktrees.root}`, { file: seat.file }), registry };
   } else {
-    section.dryad = { profile: dryad };
+    section.seat = { profile: seat };
   }
 
-  // Forester: the plan, the local file, the budget.
+  // Plan: the plan, the local file, the budget.
   if (plan.state === 'ready') {
     let budget = row('unknown');
     if (local.state === 'invalid') budget = row('invalid', local.detail);
@@ -199,19 +199,19 @@ function projectSection(root, environment) {
         const resolved = resolveBudget({ plan: plan.values, local: local.state === 'ready' ? local.values : null, planFile: plan.file, localFile: local.file });
         budget = row('ready', `parallel ${resolved.parallel} from ${resolved.source}`, resolved);
       } catch (error) {
-        budget = row('missing', error.message.replace(/^forester: /, ''));
+        budget = row('missing', error.message.replace(/^plan: /, ''));
       }
     }
     const tools = local.state === 'ready' ? Object.keys(local.values.tools) : [];
-    section.forester = { plan: row('ready', `${plan.values.tasks.length} item${plan.values.tasks.length === 1 ? '' : 's'}`, { file: plan.file }), local: local.state === 'ready' ? row('ready', tools.length === 0 ? 'no tool templates; serve cannot launch' : `tools ${tools.join(', ')}`, { file: local.file, tools }) : local, budget };
+    section.plan = { plan: row('ready', `${plan.values.tasks.length} item${plan.values.tasks.length === 1 ? '' : 's'}`, { file: plan.file }), local: local.state === 'ready' ? row('ready', tools.length === 0 ? 'no tool templates; serve cannot launch' : `tools ${tools.join(', ')}`, { file: local.file, tools }) : local, budget };
   } else {
-    section.forester = { plan, local: local.state === 'invalid' ? local : undefined };
-    if (section.forester.local === undefined) delete section.forester.local;
+    section.plan = { plan, local: local.state === 'invalid' ? local : undefined };
+    if (section.plan.local === undefined) delete section.plan.local;
   }
 
-  section.mycelium = mycelium.state === 'ready'
-    ? { values: row('ready', describeMode(mycelium.values), { file: mycelium.file, judges: mycelium.values.judges ?? null, mode: mycelium.values.mode }) }
-    : { values: mycelium };
+  section.facts = facts.state === 'ready'
+    ? { values: row('ready', describeMode(facts.values), { file: facts.file, judges: facts.values.judges ?? null, mode: facts.values.mode }) }
+    : { values: facts };
   section.herbarium = herbarium.state === 'ready'
     ? { values: row('ready', `${herbarium.values.public.length} public glob${herbarium.values.public.length === 1 ? '' : 's'}`, { file: herbarium.file }) }
     : { values: herbarium };
@@ -222,14 +222,14 @@ function projectSection(root, environment) {
 // one and not for a blanket. Only those the project's shape makes relevant.
 function gates(project, catalog) {
   const out = [];
-  if (project?.grove?.profile?.state === 'ready') {
+  if (project?.ground?.profile?.state === 'ready') {
     out.push({ gate: 'shared engines', why: 'setup and infra up start machine-shared engines several projects live on', how: 'a person runs de-novo skills setup or infra up' });
   }
-  if (project?.forester?.local?.state === 'ready' && (project.forester.local.tools ?? []).length > 0) {
-    out.push({ gate: 'trust dialogs', why: 'serve grants no trust; a tool parked on its trust dialog shows as needs-input', how: 'forester attach <id> to answer it, or tools.<name>.pretrust_worktrees: true in the local file' });
+  if (project?.plan?.local?.state === 'ready' && (project.plan.local.tools ?? []).length > 0) {
+    out.push({ gate: 'trust dialogs', why: 'serve grants no trust; a tool parked on its trust dialog shows as needs-input', how: 'plan attach <id> to answer it, or tools.<name>.pretrust_worktrees: true in the local file' });
   }
-  if (project?.mycelium?.values?.state === 'ready' && project.mycelium.values.mode === 'permissive') {
-    out.push({ gate: 'fact commits', why: 'no judges are declared, so any named writer may commit a fact', how: 'declare judges in .agents/mycelium.yml for unattended runs' });
+  if (project?.facts?.values?.state === 'ready' && project.facts.values.mode === 'permissive') {
+    out.push({ gate: 'fact commits', why: 'no judges are declared, so any named writer may commit a fact', how: 'declare judges in .agents/facts.yml for unattended runs' });
   }
   if (catalog.executables.docker.state === 'missing') {
     out.push({ gate: 'engine backend', why: 'docker is not on PATH; compose engines and k3d links cannot start here', how: 'install docker, or choose a backend the profile names' });
@@ -242,17 +242,17 @@ function nextSteps(project, catalog, root) {
   if (catalog.node.state === 'unsupported') out.push(`use Node ${NODE_SUPPORTED} or newer (${process.version} found)`);
   if (catalog.dependencies.state === 'missing') out.push(`npm install in ${CATALOG_ROOT}`);
   if (root == null) {
-    out.push('run inside a project, or pass --project ROOT; de-novo skills init plants a Grove profile');
+    out.push('run inside a project, or pass --project ROOT; de-novo skills init plants a Ground profile');
     return out;
   }
-  if (project.grove.profile.state === 'missing') out.push(`no ${RUNTIME_PROFILE}: de-novo skills init ${root} plants one`);
-  if (project.grove.profile.state === 'invalid') out.push(`fix ${RUNTIME_PROFILE}: ${project.grove.profile.detail}`);
-  if (project.dryad.profile.state === 'missing') out.push(`no ${DRYAD_PROFILE_RELPATH}: add one to seat workers (see the Dryad reference)`);
-  if (project.dryad.profile.state === 'invalid') out.push(`fix ${DRYAD_PROFILE_RELPATH}: ${project.dryad.profile.detail}`);
-  if (project.forester.plan.state === 'invalid') out.push(`fix ${FORESTER_PLAN}: ${project.forester.plan.detail}`);
-  if (project.forester.budget?.state === 'missing') out.push(`set parallel in ${FORESTER_PLAN} or ${FORESTER_LOCAL}`);
-  if (project.forester.local?.state === 'invalid') out.push(`fix ${FORESTER_LOCAL}: ${project.forester.local.detail}`);
-  if (project.mycelium.values.state === 'invalid') out.push(`fix ${MYCELIUM_VALUES}: ${project.mycelium.values.detail}`);
+  if (project.ground.profile.state === 'missing') out.push(`no ${RUNTIME_PROFILE}: de-novo skills init ${root} plants one`);
+  if (project.ground.profile.state === 'invalid') out.push(`fix ${RUNTIME_PROFILE}: ${project.ground.profile.detail}`);
+  if (project.seat.profile.state === 'missing') out.push(`no ${SEAT_PROFILE_RELPATH}: add one to seat workers (see the Seat reference)`);
+  if (project.seat.profile.state === 'invalid') out.push(`fix ${SEAT_PROFILE_RELPATH}: ${project.seat.profile.detail}`);
+  if (project.plan.plan.state === 'invalid') out.push(`fix ${PLAN_RELPATH}: ${project.plan.plan.detail}`);
+  if (project.plan.budget?.state === 'missing') out.push(`set parallel in ${PLAN_RELPATH} or ${PLAN_LOCAL}`);
+  if (project.plan.local?.state === 'invalid') out.push(`fix ${PLAN_LOCAL}: ${project.plan.local.detail}`);
+  if (project.facts.values.state === 'invalid') out.push(`fix ${FACTS_VALUES}: ${project.facts.values.detail}`);
   if (project.herbarium.values.state === 'invalid') out.push(`fix ${HERBARIUM_VALUES}: ${project.herbarium.values.detail}`);
   const stale = Object.entries(project.skills).flatMap(([name, copies]) => copies.filter((copy) => copy.same_as_catalog === false).map((copy) => `${name} (${copy.path})`));
   if (stale.length > 0) out.push(`skill copies differ from this catalog's text: ${stale.join(', ')}; npx skills update refreshes them`);
@@ -310,7 +310,7 @@ export async function doctorReport({ project = null, environment = process.env, 
     next: nextSteps(projectSectionValue, catalog, root),
   };
   if (probe) {
-    const hosts = projectSectionValue?.grove?.hostnames?.shared ?? [];
+    const hosts = projectSectionValue?.ground?.hostnames?.shared ?? [];
     report.probe = { dns: await probeAddressing(hosts), note: 'each row is its own observation: a resolved name is not a listener, a route, a matching certificate, or the expected revision' };
   }
   report.ok = !JSON.stringify(report).includes('"state":"invalid"') && catalog.node.state !== 'unsupported';
@@ -324,7 +324,7 @@ export function capabilitiesReport({ environment = process.env } = {}) {
   return {
     schemaVersion: DOCTOR_SCHEMA,
     catalog: { root: CATALOG_ROOT, package: pkg.name, version: pkg.version, node: catalog.node.version, node_supported: catalog.node.supported },
-    verbs: ['doctor', 'capabilities', 'init', 'validate', 'urls', 'setup', 'infra', 'overlay', 'dryad', 'forester', 'understory', 'mycelium', 'herbarium', 'canopy', 'playground'],
+    verbs: ['doctor', 'capabilities', 'init', 'validate', 'urls', 'setup', 'infra', 'overlay', 'seat', 'plan', 'understory', 'facts', 'herbarium', 'canopy', 'playground'],
     skills: publishedSkills().map(({ name, invocation }) => ({ name, invocation })),
     optional: { pty: catalog.pty.state === 'ready' },
     executables: Object.fromEntries(Object.entries(catalog.executables).map(([name, value]) => [name, value.state === 'ready'])),
@@ -417,7 +417,7 @@ export function doctorHelp(cli = 'de-novo skills') {
 
 usage:
   ${cli} doctor [--project ROOT] [--probe] [--json]   catalog version, Node, optional deps, executables, the project's values files
-                                            (grove, dryad, forester, mycelium, herbarium), skill copies, the gates a
+                                            (Ground, Seat, Plan, Facts, herbarium), skill copies, the gates a
                                             person owns, and the next step for each thing missing or invalid
   ${cli} capabilities [--json]               the verbs, the skills with their invocation, optional deps, executables
 

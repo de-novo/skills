@@ -26,12 +26,12 @@
     "pairs": 5,
     "worktrees_per_run": 2,
     "common_base": true,
-    "common_grove_project_and_registry": true,
+    "common_ground_project_and_registry": true,
     "timing": "simultaneous edit request through independent readiness of both builds",
     "build": "per-worktree feature edit, executable assembly and real node --check; not a container build",
     "artifact_registration": "coordinator merges manifests after both parallel builds; not timed as developer labor",
-    "contention": "evaluation-only bounded caller retries for a live registry lock or a competing pending operation with a live same-machine owner; not automatic Grove behavior",
-    "baseline": "same isolated process backend and HTTP identity checks, without Grove lifecycle journal",
+    "contention": "evaluation-only bounded caller retries for a live registry lock or a competing pending operation with a live same-machine owner; not automatic Ground behavior",
+    "baseline": "same isolated process backend and HTTP identity checks, without Ground lifecycle journal",
     "unmeasured": [
       "human or AI coding productivity",
       "Git merge conflict resolution",
@@ -112,7 +112,7 @@
     },
     {
       "pair": 1,
-      "method": "grove",
+      "method": "ground",
       "setup_ms": 202.72162500000013,
       "initial_edit_build_ready_ms": 697.4183750000002,
       "redeploy_ms": 240.43033300000025,
@@ -180,7 +180,7 @@
     },
     {
       "pair": 2,
-      "method": "grove",
+      "method": "ground",
       "setup_ms": 251.09529199999997,
       "initial_edit_build_ready_ms": 653.2912079999996,
       "redeploy_ms": 254.68137500000012,
@@ -384,7 +384,7 @@
     },
     {
       "pair": 3,
-      "method": "grove",
+      "method": "ground",
       "setup_ms": 206.35262499999953,
       "initial_edit_build_ready_ms": 630.5753340000001,
       "redeploy_ms": 238.31725000000006,
@@ -452,7 +452,7 @@
     },
     {
       "pair": 4,
-      "method": "grove",
+      "method": "ground",
       "setup_ms": 241.47299999999996,
       "initial_edit_build_ready_ms": 654.970875,
       "redeploy_ms": 249.4095410000009,
@@ -656,7 +656,7 @@
     },
     {
       "pair": 5,
-      "method": "grove",
+      "method": "ground",
       "setup_ms": 388.41341699999975,
       "initial_edit_build_ready_ms": 558.4550419999996,
       "redeploy_ms": 225.63837499999863,

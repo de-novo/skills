@@ -55,7 +55,7 @@ test('stale lease boundary is exact and duration units are counted', () => {
 });
 
 function projectFixture(t, { planFirst = true, staleAfter = '1h', createOn = null } = {}) {
-  const root = mkdtempSync(path.join(tmpdir(), 'grove-overlay-'));
+  const root = mkdtempSync(path.join(tmpdir(), 'ground-overlay-'));
   const stateDir = path.join(root, 'state');
   const log = path.join(root, 'overlay-calls.jsonl');
   const runtimeState = path.join(root, 'overlay-runtime.json');
@@ -117,10 +117,10 @@ function run(fixture, args, extraEnv = {}) {
       encoding: 'utf8',
       env: {
         ...process.env,
-        GROVE_STATE_DIR: fixture.stateDir,
-        GROVE_OVERLAY_STUB_LOG: fixture.log,
-        GROVE_OVERLAY_STUB_RUNTIME_STATE: fixture.runtimeState,
-        GROVE_OVERLAY_STUB_PLAN_FIRST: String(fixture.planFirst),
+        GROUND_STATE_DIR: fixture.stateDir,
+        GROUND_OVERLAY_STUB_LOG: fixture.log,
+        GROUND_OVERLAY_STUB_RUNTIME_STATE: fixture.runtimeState,
+        GROUND_OVERLAY_STUB_PLAN_FIRST: String(fixture.planFirst),
         ...extraEnv,
       },
     }
@@ -144,7 +144,7 @@ function runtimeState(fixture) {
 test('an apply intent exists on disk before the project mutation starts', (t) => {
   const fixture = projectFixture(t);
   const result = run(fixture, ['create', 'w1', '--apply'], {
-    GROVE_OVERLAY_STUB_REQUIRE_PENDING: 'true',
+    GROUND_OVERLAY_STUB_REQUIRE_PENDING: 'true',
   });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(readState(fixture).pending_by_env.w1, undefined);
@@ -153,8 +153,8 @@ test('an apply intent exists on disk before the project mutation starts', (t) =>
 test('a successful receipt cannot finalize state before the runtime postcondition exists', (t) => {
   const fixture = projectFixture(t);
   const result = run(fixture, ['create', 'w1', '--apply'], {
-    GROVE_OVERLAY_STUB_SKIP_RUNTIME_MUTATION: 'true',
-    GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '20',
+    GROUND_OVERLAY_STUB_SKIP_RUNTIME_MUTATION: 'true',
+    GROUND_OVERLAY_VERIFY_TIMEOUT_MS: '20',
   });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /postcondition.*pending.*retained/i);
@@ -167,8 +167,8 @@ test('a successful receipt cannot finalize state before the runtime postconditio
 test('postcondition verification retries asynchronous status before finalizing', (t) => {
   const fixture = projectFixture(t);
   const result = run(fixture, ['create', 'w1', '--apply'], {
-    GROVE_OVERLAY_STUB_STATUS_LAG: '2',
-    GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '2000',
+    GROUND_OVERLAY_STUB_STATUS_LAG: '2',
+    GROUND_OVERLAY_VERIFY_TIMEOUT_MS: '2000',
   });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /postcondition 1\/1.*attempts 3/);
@@ -181,8 +181,8 @@ test('destroy finalizes only after status observes actual absence', (t) => {
   assert.equal(run(fixture, ['create', 'w1', '--apply']).status, 0);
 
   const result = run(fixture, ['destroy', 'w1', '--apply'], {
-    GROVE_OVERLAY_STUB_DESTROY_STATUS_LAG: '2',
-    GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '2000',
+    GROUND_OVERLAY_STUB_DESTROY_STATUS_LAG: '2',
+    GROUND_OVERLAY_VERIFY_TIMEOUT_MS: '2000',
   });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /postcondition 1\/1: destroy w1 observed \(attempts 3\)/);
@@ -195,8 +195,8 @@ test('destroy keeps its lease and pending intent when successful receipt leaves 
   assert.equal(run(fixture, ['create', 'w1', '--apply']).status, 0);
 
   const unverified = run(fixture, ['destroy', 'w1', '--apply'], {
-    GROVE_OVERLAY_STUB_SKIP_RUNTIME_MUTATION: 'destroy',
-    GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '20',
+    GROUND_OVERLAY_STUB_SKIP_RUNTIME_MUTATION: 'destroy',
+    GROUND_OVERLAY_VERIFY_TIMEOUT_MS: '20',
   });
   assert.notEqual(unverified.status, 0);
   assert.match(unverified.stderr, /postcondition.*pending operation retained/i);
@@ -219,8 +219,8 @@ test('missing status inventory cannot finalize an applied mutation', (t) => {
   // would hang a real adapter for the whole default deadline.
   const started = Date.now();
   const result = run(fixture, ['create', 'w1', '--apply'], {
-    GROVE_OVERLAY_STUB_OMIT_INVENTORY: 'true',
-    GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '30000',
+    GROUND_OVERLAY_STUB_OMIT_INVENTORY: 'true',
+    GROUND_OVERLAY_VERIFY_TIMEOUT_MS: '30000',
   });
   const elapsed = Date.now() - started;
   assert.notEqual(result.status, 0);
@@ -234,7 +234,7 @@ test('missing status inventory cannot finalize an applied mutation', (t) => {
 test('an invalid verification deadline fails before journaling or project dispatch', (t) => {
   const fixture = projectFixture(t);
   const result = run(fixture, ['create', 'w1', '--apply'], {
-    GROVE_OVERLAY_VERIFY_TIMEOUT_MS: 'never',
+    GROUND_OVERLAY_VERIFY_TIMEOUT_MS: 'never',
   });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /VERIFY_TIMEOUT_MS must be a positive integer/);
@@ -246,7 +246,7 @@ test('an invalid verification deadline fails before journaling or project dispat
 test('rerunning the same apply recovers an interruption after the runtime side effect', (t) => {
   const fixture = projectFixture(t);
   const interrupted = run(fixture, ['create', 'w1', '--apply'], {
-    GROVE_OVERLAY_STUB_FAIL_AFTER_MUTATION: 'true',
+    GROUND_OVERLAY_STUB_FAIL_AFTER_MUTATION: 'true',
   });
   assert.notEqual(interrupted.status, 0);
   assert.deepEqual(runtimeState(fixture).environments, { w1: [] });
@@ -262,7 +262,7 @@ test('rerunning the same apply recovers an interruption after the runtime side e
 test('status exposes a pending operation without completing it', (t) => {
   const fixture = projectFixture(t);
   const interrupted = run(fixture, ['create', 'w1', '--apply'], {
-    GROVE_OVERLAY_STUB_FAIL_AFTER_MUTATION: 'true',
+    GROUND_OVERLAY_STUB_FAIL_AFTER_MUTATION: 'true',
   });
   assert.notEqual(interrupted.status, 0);
 
@@ -276,7 +276,7 @@ test('status exposes a pending operation without completing it', (t) => {
 test('a pending operation blocks only its environment mutations and lease renewal', (t) => {
   const fixture = projectFixture(t);
   const interrupted = run(fixture, ['create', 'w1', '--apply'], {
-    GROVE_OVERLAY_STUB_FAIL_AFTER_MUTATION: 'true',
+    GROUND_OVERLAY_STUB_FAIL_AFTER_MUTATION: 'true',
   });
   assert.notEqual(interrupted.status, 0);
   const before = calls(fixture).length;
@@ -299,7 +299,7 @@ test('recovery requires matching passthrough context and reuses it for status', 
   const interrupted = run(
     fixture,
     ['create', 'w1', '--apply', '--', '--context=a'],
-    { GROVE_OVERLAY_STUB_FAIL_AFTER_MUTATION: 'true' }
+    { GROUND_OVERLAY_STUB_FAIL_AFTER_MUTATION: 'true' }
   );
   assert.notEqual(interrupted.status, 0);
   const journal = readFileSync(fixture.stateFile, 'utf8');
@@ -363,7 +363,7 @@ test('project passthrough cannot smuggle the central --apply gate', (t) => {
   const fixture = projectFixture(t);
   const result = run(fixture, ['create', 'w1', '--', '--apply=true']);
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /must be a Grove option/);
+  assert.match(result.stderr, /must be a Ground option/);
   assert.equal(calls(fixture).length, 0);
   assert.equal(existsSync(fixture.stateFile), false);
 });
@@ -404,7 +404,7 @@ test('status exposes stale leases and prune destroys only stale environments on 
     { env: 'fresh', services: [] },
   ]);
 
-  const status = run(fixture, ['status'], { GROVE_OVERLAY_STUB_INVENTORY: inventory });
+  const status = run(fixture, ['status'], { GROUND_OVERLAY_STUB_INVENTORY: inventory });
   assert.notEqual(status.status, 0);
   assert.match(status.stdout, /environments {2}2/);
   assert.match(status.stdout, /stale {9}1/);
@@ -471,7 +471,7 @@ test('plan_first false refuses implicit execution and strips central --apply on 
 test('an apply request rejects a project receipt that is still only a plan', (t) => {
   const fixture = projectFixture(t, { planFirst: false });
   const result = run(fixture, ['create', 'w1', '--apply'], {
-    GROVE_OVERLAY_STUB_PLAN_FIRST: 'true',
+    GROUND_OVERLAY_STUB_PLAN_FIRST: 'true',
   });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /returned a plan during --apply/);
@@ -489,7 +489,7 @@ test('prune keeps failed environments tracked and counts partial cleanup', (t) =
   writeFileSync(fixture.stateFile, stringify(state), 'utf8');
 
   const result = run(fixture, ['prune', '--apply'], {
-    GROVE_OVERLAY_STUB_FAIL_ENV: 'z-keep',
+    GROUND_OVERLAY_STUB_FAIL_ENV: 'z-keep',
   });
   assert.notEqual(result.status, 0);
   assert.match(result.stdout, /overlay prune 1\/2/);
@@ -511,7 +511,7 @@ test('prune keeps failed environments tracked and counts partial cleanup', (t) =
 test('overlay status reports untracked runtime environments as drift', (t) => {
   const fixture = projectFixture(t);
   const inventory = JSON.stringify([{ env: 'orphan', services: ['api'] }]);
-  const result = run(fixture, ['status'], { GROVE_OVERLAY_STUB_INVENTORY: inventory });
+  const result = run(fixture, ['status'], { GROUND_OVERLAY_STUB_INVENTORY: inventory });
   assert.notEqual(result.status, 0);
   assert.match(result.stdout, /drift {9}1/);
   assert.match(result.stdout, /orphan.*untracked/);
@@ -532,7 +532,7 @@ test('status treats malformed runtime inventory as not measured without hiding l
   const fixture = projectFixture(t);
   assert.equal(run(fixture, ['create', 'w1', '--apply']).status, 0);
   const result = run(fixture, ['status'], {
-    GROVE_OVERLAY_STUB_INVENTORY: JSON.stringify('not-a-list'),
+    GROUND_OVERLAY_STUB_INVENTORY: JSON.stringify('not-a-list'),
   });
   assert.notEqual(result.status, 0);
   assert.match(result.stdout, /environments {2}1/);
@@ -582,8 +582,8 @@ for (const [label, services] of [
     const fixture = projectFixture(t);
     assert.equal(run(fixture, ['create', 'w1', '--apply']).status, 0);
     const result = run(fixture, ['attach', 'w1', 'api', '--image', FULL_IMAGE, '--apply'], {
-      GROVE_OVERLAY_STUB_INVENTORY: JSON.stringify([{ env: 'w1', services }]),
-      GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '300',
+      GROUND_OVERLAY_STUB_INVENTORY: JSON.stringify([{ env: 'w1', services }]),
+      GROUND_OVERLAY_VERIFY_TIMEOUT_MS: '300',
     });
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /postcondition.*pending operation retained/i);
@@ -599,7 +599,7 @@ for (const [label, services] of [
     assert.equal(run(fixture, ['create', 'w1', '--apply']).status, 0);
     assert.equal(run(fixture, ['attach', 'w1', 'api', '--image', FULL_IMAGE, '--apply']).status, 0);
     const result = run(fixture, ['status'], {
-      GROVE_OVERLAY_STUB_INVENTORY: JSON.stringify([{ env: 'w1', services }]),
+      GROUND_OVERLAY_STUB_INVENTORY: JSON.stringify([{ env: 'w1', services }]),
     });
     assert.notEqual(result.status, 0);
     assert.match(result.stdout, /drift {9}1/);
@@ -608,7 +608,7 @@ for (const [label, services] of [
 
 test('status without runtime inventory is non-zero', (t) => {
   const fixture = projectFixture(t);
-  const result = run(fixture, ['status'], { GROVE_OVERLAY_STUB_OMIT_INVENTORY: 'true' });
+  const result = run(fixture, ['status'], { GROUND_OVERLAY_STUB_OMIT_INVENTORY: 'true' });
   assert.notEqual(result.status, 0);
   assert.match(result.stdout, /drift {9}notMeasured/);
 });
@@ -630,7 +630,7 @@ test('status --json reports environments, pending liveness and drift as data wit
   assert.equal(report.project_status.ok, true);
   assert.equal(report.counts.environments, 1);
 
-  const interrupted = run(fixture, ['create', 'w2', '--apply'], { GROVE_OVERLAY_STUB_FAIL_AFTER_MUTATION: 'true' });
+  const interrupted = run(fixture, ['create', 'w2', '--apply'], { GROUND_OVERLAY_STUB_FAIL_AFTER_MUTATION: 'true' });
   assert.notEqual(interrupted.status, 0);
   const pending = run(fixture, ['status', '--json']);
   assert.notEqual(pending.status, 0);
@@ -643,14 +643,14 @@ test('status --json reports environments, pending liveness and drift as data wit
   t.diagnostic('json reports 2/2; verdict parity 1/1; --json rejected off status 1/1');
 });
 
-test('the project command receives the caller directory as GROVE_CALLER_CWD', (t) => {
+test('the project command receives the caller directory as GROUND_CALLER_CWD', (t) => {
   const fixture = projectFixture(t);
   const elsewhere = mkdtempSync(path.join(tmpdir(), 'caller-cwd-'));
   t.after(() => rmSync(elsewhere, { recursive: true, force: true }));
   const result = spawnSync(process.execPath, [CLI, 'overlay', 'create', 'w1', '--apply', '--project', fixture.root], {
     cwd: elsewhere,
     encoding: 'utf8',
-    env: { ...process.env, GROVE_STATE_DIR: fixture.stateDir, GROVE_OVERLAY_STUB_LOG: fixture.log, GROVE_OVERLAY_STUB_RUNTIME_STATE: fixture.runtimeState, GROVE_OVERLAY_STUB_PLAN_FIRST: 'true' },
+    env: { ...process.env, GROUND_STATE_DIR: fixture.stateDir, GROUND_OVERLAY_STUB_LOG: fixture.log, GROUND_OVERLAY_STUB_RUNTIME_STATE: fixture.runtimeState, GROUND_OVERLAY_STUB_PLAN_FIRST: 'true' },
   });
   assert.equal(result.status, 0, result.stderr);
   const dispatched = calls(fixture);
@@ -659,13 +659,13 @@ test('the project command receives the caller directory as GROVE_CALLER_CWD', (t
     assert.equal(call.callerCwd, realpathSync(elsewhere));
     assert.equal(call.cwd, realpathSync(fixture.root), 'the command still runs from the project root');
   }
-  t.diagnostic(`GROVE_CALLER_CWD present on ${dispatched.length}/${dispatched.length} dispatches`);
+  t.diagnostic(`GROUND_CALLER_CWD present on ${dispatched.length}/${dispatched.length} dispatches`);
 });
 
 test('a refusal receipt before mutation withdraws the pending journal; a refused retry keeps an older one', (t) => {
   const fixture = projectFixture(t);
   assert.equal(run(fixture, ['create', 'w1', '--apply']).status, 0);
-  const refused = run(fixture, ['attach', 'w1', 'api', '--image', FULL_IMAGE, '--apply'], { GROVE_OVERLAY_STUB_REFUSE: 'true' });
+  const refused = run(fixture, ['attach', 'w1', 'api', '--image', FULL_IMAGE, '--apply'], { GROUND_OVERLAY_STUB_REFUSE: 'true' });
   assert.notEqual(refused.status, 0);
   assert.match(refused.stderr, /project refused attach: refused by fixture/);
   assert.match(refused.stderr, /Nothing pending/);
@@ -674,10 +674,10 @@ test('a refusal receipt before mutation withdraws the pending journal; a refused
   assert.equal(run(fixture, ['destroy', 'w1', '--apply']).status, 0, 'the environment is not locked afterwards');
 
   assert.equal(run(fixture, ['create', 'w2', '--apply']).status, 0);
-  const interrupted = run(fixture, ['attach', 'w2', 'api', '--image', FULL_IMAGE, '--apply'], { GROVE_OVERLAY_STUB_FAIL_AFTER_MUTATION: 'true' });
+  const interrupted = run(fixture, ['attach', 'w2', 'api', '--image', FULL_IMAGE, '--apply'], { GROUND_OVERLAY_STUB_FAIL_AFTER_MUTATION: 'true' });
   assert.notEqual(interrupted.status, 0);
   assert.equal(readState(fixture).pending_by_env.w2.verb, 'attach');
-  const refusedRetry = run(fixture, ['attach', 'w2', 'api', '--image', FULL_IMAGE, '--apply'], { GROVE_OVERLAY_STUB_REFUSE: 'true' });
+  const refusedRetry = run(fixture, ['attach', 'w2', 'api', '--image', FULL_IMAGE, '--apply'], { GROUND_OVERLAY_STUB_REFUSE: 'true' });
   assert.notEqual(refusedRetry.status, 0);
   assert.equal(readState(fixture).pending_by_env.w2.verb, 'attach', 'an older journal survives a refused retry');
   t.diagnostic('clean refusal withdrew 1/1 journals; refused retry kept 1/1');
@@ -694,7 +694,7 @@ test('create_on: attach lets the first applied attach create the environment fro
   t.after(() => rmSync(elsewhere, { recursive: true, force: true }));
   const attached = spawnSync(process.execPath, [CLI, 'overlay', 'attach', 'w1', 'api', '--image', FULL_IMAGE, '--apply', '--project', byAttach.root], {
     cwd: elsewhere, encoding: 'utf8',
-    env: { ...process.env, GROVE_STATE_DIR: byAttach.stateDir, GROVE_OVERLAY_STUB_LOG: byAttach.log, GROVE_OVERLAY_STUB_RUNTIME_STATE: byAttach.runtimeState, GROVE_OVERLAY_STUB_PLAN_FIRST: 'true' },
+    env: { ...process.env, GROUND_STATE_DIR: byAttach.stateDir, GROUND_OVERLAY_STUB_LOG: byAttach.log, GROUND_OVERLAY_STUB_RUNTIME_STATE: byAttach.runtimeState, GROUND_OVERLAY_STUB_PLAN_FIRST: 'true' },
   });
   assert.equal(attached.status, 0, attached.stderr);
   assert.match(attached.stdout, /overlay create 1\/1: w1 \(create_on: attach\)/);
@@ -713,8 +713,8 @@ test('create_on: attach lets the first applied attach create the environment fro
 // The stub is a conforming adapter; each switch below breaks exactly one
 // contract obligation so verify has to name the case that caught it.
 const VERIFY_ENV = {
-  GROVE_OVERLAY_STUB_ATTACHABLE: 'api',
-  GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '2000',
+  GROUND_OVERLAY_STUB_ATTACHABLE: 'api',
+  GROUND_OVERLAY_VERIFY_TIMEOUT_MS: '2000',
 };
 
 function runVerify(fixture, args = [], extraEnv = {}) {
@@ -776,15 +776,15 @@ test('overlay verify rejects options that do not belong to it', () => {
 });
 
 for (const [label, broken, expected, evidence] of [
-  ['a name-only status inventory', { GROVE_OVERLAY_STUB_NAME_ONLY: 'true' }, 'status-inventory-shape', /name-only/],
-  ['an adapter that accepts a mutable tag', { GROVE_OVERLAY_STUB_ACCEPT_ANY_IMAGE: 'true' }, 'attach-refuses-mutable-tag', /the adapter accepted/],
-  ['a create that is not idempotent', { GROVE_OVERLAY_STUB_DUPLICATE_ENVS: 'true' }, 'create-idempotent', /create left environments/],
+  ['a name-only status inventory', { GROUND_OVERLAY_STUB_NAME_ONLY: 'true' }, 'status-inventory-shape', /name-only/],
+  ['an adapter that accepts a mutable tag', { GROUND_OVERLAY_STUB_ACCEPT_ANY_IMAGE: 'true' }, 'attach-refuses-mutable-tag', /the adapter accepted/],
+  ['a create that is not idempotent', { GROUND_OVERLAY_STUB_DUPLICATE_ENVS: 'true' }, 'create-idempotent', /create left environments/],
 ]) {
   test(`overlay verify fails and names the case for ${label}`, (t) => {
     const fixture = projectFixture(t);
     const result = runVerify(fixture, ['--env', 'vfy', '--image', FULL_IMAGE, '--json'], {
       ...broken,
-      GROVE_OVERLAY_VERIFY_TIMEOUT_MS: '400',
+      GROUND_OVERLAY_VERIFY_TIMEOUT_MS: '400',
     });
     assert.notEqual(result.status, 0);
     const report = JSON.parse(result.stdout);

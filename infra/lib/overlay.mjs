@@ -1,5 +1,5 @@
 // Overlay lifecycle control plane. Projects still own workload deployment;
-// Grove validates and dispatches that command, then keeps a lease registry.
+// Ground validates and dispatches that command, then keeps a lease registry.
 import { spawnSync } from 'node:child_process';
 import {
   closeSync,
@@ -224,7 +224,7 @@ export function parseOverlayCliArgs(args) {
     fail(`${verb} requires ${minimum === 1 ? 'an environment' : 'an environment and service'}.`);
   }
   if (passthrough.some((arg) => arg === '--apply' || arg.startsWith('--apply='))) {
-    fail('--apply must be a Grove option before --, not a project passthrough flag.');
+    fail('--apply must be a Ground option before --, not a project passthrough flag.');
   }
   if (verb === 'attach' && image == null) fail('attach requires --image.');
   if (!['attach', 'verify'].includes(verb) && image != null) {
@@ -269,7 +269,7 @@ export function assertOverlayActive(profile) {
     fail(`lifecycle is inactive (${reason}).`);
   }
   if (!profile.overlay.command) {
-    fail('runtime.commands.overlay is missing; Grove will not invent a workload command.');
+    fail('runtime.commands.overlay is missing; Ground will not invent a workload command.');
   }
 }
 
@@ -283,9 +283,9 @@ export function projectRootFromProfile(profilePath) {
 }
 
 export function overlayStateDirectory(environment = process.env) {
-  const override = environment.GROVE_STATE_DIR;
+  const override = environment.GROUND_STATE_DIR;
   if (override != null) {
-    if (override.length === 0) fail('GROVE_STATE_DIR must not be empty.');
+    if (override.length === 0) fail('GROUND_STATE_DIR must not be empty.');
     return path.resolve(override);
   }
   return path.join(homedir(), '.dev-infra', 'overlays');
@@ -520,19 +520,19 @@ function pendingFor(state, env) {
 }
 
 function timeoutFromEnvironment(environment) {
-  const raw = environment.GROVE_OVERLAY_TIMEOUT_MS ?? environment.DEVINFRA_OVERLAY_TIMEOUT_MS;
+  const raw = environment.GROUND_OVERLAY_TIMEOUT_MS ?? environment.DEVINFRA_OVERLAY_TIMEOUT_MS;
   if (raw == null) return DEFAULT_TIMEOUT_MS;
   if (!/^[1-9][0-9]*$/.test(raw) || !Number.isSafeInteger(Number(raw))) {
-    fail('GROVE_OVERLAY_TIMEOUT_MS must be a positive integer in milliseconds.');
+    fail('GROUND_OVERLAY_TIMEOUT_MS must be a positive integer in milliseconds.');
   }
   return Number(raw);
 }
 
 function verifyTimeoutFromEnvironment(environment) {
-  const raw = environment.GROVE_OVERLAY_VERIFY_TIMEOUT_MS;
+  const raw = environment.GROUND_OVERLAY_VERIFY_TIMEOUT_MS;
   if (raw == null) return DEFAULT_VERIFY_TIMEOUT_MS;
   if (!/^[1-9][0-9]*$/.test(raw) || !Number.isSafeInteger(Number(raw))) {
-    fail('GROVE_OVERLAY_VERIFY_TIMEOUT_MS must be a positive integer in milliseconds.');
+    fail('GROUND_OVERLAY_VERIFY_TIMEOUT_MS must be a positive integer in milliseconds.');
   }
   return Number(raw);
 }
@@ -1320,10 +1320,10 @@ function runPrune({ options, profile, projectRoot, environment, cwd }) {
 
 // ------------------------------------------------------------------ verify
 // `overlay verify` drives the project's own adapter through the contract in a
-// throwaway environment and counts what it observed. Grove's front door runs
+// throwaway environment and counts what it observed. Ground's front door runs
 // as a subprocess so the report owns stdout; observations dispatch the
 // adapter's own status directly, because a case is only true when the runtime
-// says so. Writing an adapter: skills/grove/references/adapter.md.
+// says so. Writing an adapter: skills/ground/references/adapter.md.
 const VERIFY_CLI = fileURLToPath(new URL('../bin/cli.mjs', import.meta.url));
 const VERIFY_MUTABLE_TAG = 'overlay-verify-mutable-tag';
 
@@ -1359,10 +1359,10 @@ function verifyFrontDoor(context, args) {
       encoding: 'utf8',
       // A verify run is a conformance probe, not seat work: it must not land
       // in a seat journal.
-      env: { ...context.environment, DRYAD_ID: '' },
+      env: { ...context.environment, SEAT_ID: '' },
     }
   );
-  if (result.error) fail(`cannot run the Grove front door: ${result.error.message}`);
+  if (result.error) fail(`cannot run the Ground front door: ${result.error.message}`);
   return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
 }
 
@@ -1752,9 +1752,9 @@ export function runOverlayLifecycle({
   assertOverlayActive(profile);
   const projectRoot = projectRootFromProfile(profilePath);
   // The project command runs with cwd = project root; the caller's own
-  // directory (a seat worktree, usually) reaches it as GROVE_CALLER_CWD so an
+  // directory (a seat worktree, usually) reaches it as GROUND_CALLER_CWD so an
   // adapter can default its worktree argument without a passthrough flag.
-  environment = { ...environment, GROVE_CALLER_CWD: safeRealpath(cwd) };
+  environment = { ...environment, GROUND_CALLER_CWD: safeRealpath(cwd) };
   switch (options.verb) {
     case 'status':
       return runStatus({ options, profile, projectRoot, environment });
@@ -1775,7 +1775,7 @@ export function runOverlayLifecycle({
 }
 
 export function overlayHelp(cli = 'de-novo skills') {
-  return `project overlay lifecycle (project workload command + Grove lease registry)
+  return `project overlay lifecycle (project workload command + Ground lease registry)
 
 usage:
   ${cli} overlay status [ENV] [--project ROOT] [--stale-after 12h] [--json]

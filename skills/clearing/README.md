@@ -6,7 +6,7 @@ Stop, look around, say where the work is. The `/wait-what` of this forest.
 
 Re-pitches the state of the work from the graph and the facts, in plain
 words and the project's own vocabulary. The defining constraint: it reads
-`understory reading` and `mycelium query --brief` first and says nothing
+`understory reading` and `facts query --brief` first and says nothing
 they do not hold.
 
 ## When to reach for it
@@ -23,7 +23,7 @@ mid-work. For the written record instead, use
 
 ## Where it fits
 
-A standalone over Understory and Mycelium; it changes nothing. Root map:
+A standalone over Understory and Facts; it changes nothing. Root map:
 [How the skills fit](../../README.md#how-the-skills-fit).
 
 ## What it does to your machine
@@ -32,5 +32,5 @@ Reads two screens. Writes nothing, runs nothing else.
 
 ## Apply to a project
 
-Nothing to plant. It uses whichever of Forester and Mycelium the project
+Nothing to plant. It uses whichever of Plan and Facts the project
 already has.

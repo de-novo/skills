@@ -64,5 +64,5 @@
     }
   ],
   "finished_at": "2026-09-05T13:14:26.175Z",
-  "interpretation": "Harness startup failure before comparisons: fork inherited --input-type=module; corrected with explicit empty execArgv. Not a Grove result."
+  "interpretation": "Harness startup failure before comparisons: fork inherited --input-type=module; corrected with explicit empty execArgv. Not a Ground result."
 }

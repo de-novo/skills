@@ -1,5 +1,5 @@
 // Resolve hostnames from in-repo yaml. No home-directory config.
-// Precedence for tld: project .local.yml → profile → grove .local.yml → grove addressing.yml → localhost.
+// Precedence for tld: project .local.yml → profile → ground .local.yml → ground addressing.yml → localhost.
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,15 +7,15 @@ import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
 
 export const INFRA_DIR = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-export const GROVE_ADDRESSING_FILE = path.join(INFRA_DIR, 'addressing.yml');
-export const GROVE_ADDRESSING_LOCAL_FILE = path.join(INFRA_DIR, 'addressing.local.yml');
+export const GROUND_ADDRESSING_FILE = path.join(INFRA_DIR, 'addressing.yml');
+export const GROUND_ADDRESSING_LOCAL_FILE = path.join(INFRA_DIR, 'addressing.local.yml');
 
 export const DEFAULT_SCHEME = Object.freeze({
   shared: '{service}.{project}.{tld}',
   overlay: '{service}--{env}.{project}.{tld}',
 });
 
-const GROVE_KEYS = new Set(['tld', 'scheme']);
+const GROUND_KEYS = new Set(['tld', 'scheme']);
 const SCHEME_KEYS = new Set(['shared', 'overlay']);
 const SCHEME_TOKENS = new Set(['service', 'env', 'project', 'tld', 'namespace']);
 function schemeToken() {
@@ -103,7 +103,7 @@ export function projectLocalProfilePath(profilePath) {
   return profilePath.replace(/(\.ya?ml)$/i, '.local$1');
 }
 
-export function loadGroveAddressing(infraDir = INFRA_DIR) {
+export function loadGroundAddressing(infraDir = INFRA_DIR) {
   const committedPath = path.join(infraDir, 'addressing.yml');
   const localPath = path.join(infraDir, 'addressing.local.yml');
   const committed = readYamlFile(committedPath) ?? {};
@@ -115,7 +115,7 @@ export function loadGroveAddressing(infraDir = INFRA_DIR) {
     const [body, file] = doc;
     if (!existsSync(file) && Object.keys(body).length === 0) continue;
     for (const key of Object.keys(body)) {
-      if (!GROVE_KEYS.has(key)) fail(file, `unknown key "${key}"`);
+      if (!GROUND_KEYS.has(key)) fail(file, `unknown key "${key}"`);
     }
   }
   const committedScheme = validateSchemeMap(committed.scheme, committedPath);
@@ -174,7 +174,7 @@ function firstDefined(pairs) {
 
 export function resolveAddressing(profile, options = {}) {
   const infraDir = options.infraDir ?? INFRA_DIR;
-  const grove = loadGroveAddressing(infraDir);
+  const ground = loadGroundAddressing(infraDir);
   const projectLocal = options.profilePath
     ? loadProjectLocalAddressing(options.profilePath)
     : { tld: null, scheme: null };
@@ -182,19 +182,19 @@ export function resolveAddressing(profile, options = {}) {
   const tldPick = firstDefined([
     [projectLocal.tld, 'project.local'],
     [profile.addressing?.tld, 'profile'],
-    [grove.localTld, 'grove.local'],
-    [grove.tld, 'grove'],
+    [ground.localTld, 'ground.local'],
+    [ground.tld, 'ground'],
   ]);
   assertTld(tldPick.value, tldPick.source);
 
   const shared =
     projectLocal.scheme?.shared ??
     profile.addressing?.scheme?.shared ??
-    grove.scheme.shared;
+    ground.scheme.shared;
   const overlayScheme =
     projectLocal.scheme?.overlay ??
     profile.addressing?.scheme?.overlay ??
-    grove.scheme.overlay;
+    ground.scheme.overlay;
   assertScheme(shared, 'shared', tldPick.source, ['service', 'tld']);
   if (overlayScheme) {
     assertScheme(overlayScheme, 'overlay', tldPick.source, ['service', 'env', 'tld']);

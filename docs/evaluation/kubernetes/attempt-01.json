@@ -15,7 +15,7 @@
       "name": "private-cluster-and-baseline",
       "pass": false,
       "durationMs": 90972,
-      "error": "kubectl --kubeconfig <lab>/kubeconfig --context k3d-grove-test-lq9y6y-63285 --request-timeout=10s: error: error validating \"<lab>/apply-1788636490534-eenbmg10ioq.json\": error validating data: Get \"https://127.0.0.1:0/openapi/v2?timeout=10s\": dial tcp 127.0.0.1:0: connect: can't assign requested address; if you choose to ignore these errors, turn validation off with --validate=false\n\n\n1 !== 0\n"
+      "error": "kubectl --kubeconfig <lab>/kubeconfig --context k3d-ground-test-lq9y6y-63285 --request-timeout=10s: error: error validating \"<lab>/apply-1788636490534-eenbmg10ioq.json\": error validating data: Get \"https://127.0.0.1:0/openapi/v2?timeout=10s\": dial tcp 127.0.0.1:0: connect: can't assign requested address; if you choose to ignore these errors, turn validation off with --validate=false\n\n\n1 !== 0\n"
     }
   ],
   "commands": [
@@ -70,7 +70,7 @@
         "-c",
         "commit.gpgSign=false",
         "-c",
-        "user.name=Grove Lab",
+        "user.name=Ground Lab",
         "-c",
         "user.email=lab@example.invalid",
         "commit",
@@ -141,7 +141,7 @@
       "args": [
         "cluster",
         "create",
-        "grove-test-lq9y6y-63285",
+        "ground-test-lq9y6y-63285",
         "--image",
         "rancher/k3s:v1.35.5-k3s1",
         "--servers",
@@ -158,7 +158,7 @@
         "--k3s-arg",
         "--disable=traefik,servicelb,metrics-server@server:0",
         "--runtime-label",
-        "grove.test/run=grove-test-lq9y6y-63285@all",
+        "ground.test/run=ground-test-lq9y6y-63285@all",
         "--timeout",
         "120s"
       ],
@@ -175,9 +175,9 @@
         "--pull=false",
         "--provenance=false",
         "--label",
-        "grove.test/run=grove-test-lq9y6y-63285",
+        "ground.test/run=ground-test-lq9y6y-63285",
         "-t",
-        "grove-lab/grove-test-lq9y6y-63285:base-base",
+        "ground-lab/ground-test-lq9y6y-63285:base-base",
         "."
       ],
       "started": 1788636410302,
@@ -190,7 +190,7 @@
       "args": [
         "image",
         "inspect",
-        "grove-lab/grove-test-lq9y6y-63285:base-base",
+        "ground-lab/ground-test-lq9y6y-63285:base-base",
         "--format",
         "{{.Id}}"
       ],
@@ -204,9 +204,9 @@
       "args": [
         "image",
         "import",
-        "grove-lab/grove-test-lq9y6y-63285:base-base",
+        "ground-lab/ground-test-lq9y6y-63285:base-base",
         "--cluster",
-        "grove-test-lq9y6y-63285"
+        "ground-test-lq9y6y-63285"
       ],
       "started": 1788636457242,
       "finished": 1788636487818,
@@ -217,7 +217,7 @@
       "command": "docker",
       "args": [
         "exec",
-        "k3d-grove-test-lq9y6y-63285-server-0",
+        "k3d-ground-test-lq9y6y-63285-server-0",
         "ctr",
         "-n",
         "k8s.io",
@@ -233,14 +233,14 @@
       "command": "docker",
       "args": [
         "exec",
-        "k3d-grove-test-lq9y6y-63285-server-0",
+        "k3d-ground-test-lq9y6y-63285-server-0",
         "ctr",
         "-n",
         "k8s.io",
         "images",
         "tag",
-        "docker.io/grove-lab/grove-test-lq9y6y-63285:base-base",
-        "docker.io/grove-lab/grove-test-lq9y6y-63285@sha256:f5f01292d0ca11704e79181d499bf4e1050d87b9a371c6a8e2816fd4edacebd1"
+        "docker.io/ground-lab/ground-test-lq9y6y-63285:base-base",
+        "docker.io/ground-lab/ground-test-lq9y6y-63285@sha256:f5f01292d0ca11704e79181d499bf4e1050d87b9a371c6a8e2816fd4edacebd1"
       ],
       "started": 1788636489300,
       "finished": 1788636490534,
@@ -253,7 +253,7 @@
         "--kubeconfig",
         "<lab>/kubeconfig",
         "--context",
-        "k3d-grove-test-lq9y6y-63285",
+        "k3d-ground-test-lq9y6y-63285",
         "--request-timeout=10s",
         "apply",
         "-f",
@@ -268,9 +268,9 @@
       "command": "docker",
       "args": [
         "inspect",
-        "k3d-grove-test-lq9y6y-63285-server-0",
+        "k3d-ground-test-lq9y6y-63285-server-0",
         "--format",
-        "{{index .Config.Labels \"grove.test/run\"}}"
+        "{{index .Config.Labels \"ground.test/run\"}}"
       ],
       "started": 1788636490669,
       "finished": 1788636490706,
@@ -282,7 +282,7 @@
       "args": [
         "cluster",
         "delete",
-        "grove-test-lq9y6y-63285"
+        "ground-test-lq9y6y-63285"
       ],
       "started": 1788636490706,
       "finished": 1788636495271,
@@ -294,7 +294,7 @@
       "args": [
         "image",
         "rm",
-        "grove-lab/grove-test-lq9y6y-63285:base-base"
+        "ground-lab/ground-test-lq9y6y-63285:base-base"
       ],
       "started": 1788636495271,
       "finished": 1788636495587,
@@ -316,7 +316,7 @@
   ],
   "observations": [],
   "failures": [
-    "kubectl --kubeconfig <lab>/kubeconfig --context k3d-grove-test-lq9y6y-63285 --request-timeout=10s: error: error validating \"<lab>/apply-1788636490534-eenbmg10ioq.json\": error validating data: Get \"https://127.0.0.1:0/openapi/v2?timeout=10s\": dial tcp 127.0.0.1:0: connect: can't assign requested address; if you choose to ignore these errors, turn validation off with --validate=false\n\n\n1 !== 0\n"
+    "kubectl --kubeconfig <lab>/kubeconfig --context k3d-ground-test-lq9y6y-63285 --request-timeout=10s: error: error validating \"<lab>/apply-1788636490534-eenbmg10ioq.json\": error validating data: Get \"https://127.0.0.1:0/openapi/v2?timeout=10s\": dial tcp 127.0.0.1:0: connect: can't assign requested address; if you choose to ignore these errors, turn validation off with --validate=false\n\n\n1 !== 0\n"
   ],
   "cleanup": {
     "clusterRemoved": true,
@@ -335,12 +335,12 @@
     "tree": "base",
     "version": "base",
     "multiplier": 1,
-    "tag": "grove-lab/grove-test-lq9y6y-63285:base-base",
+    "tag": "ground-lab/ground-test-lq9y6y-63285:base-base",
     "imageId": "sha256:f5f01292d0ca11704e79181d499bf4e1050d87b9a371c6a8e2816fd4edacebd1",
     "sourceHash": "d0040469fd22d80162aac11e0ef820cb9db15f67b76478fbfb1241625c104fd7",
     "started": 1788636410302,
     "finished": 1788636457241,
-    "image": "docker.io/grove-lab/grove-test-lq9y6y-63285@sha256:f5f01292d0ca11704e79181d499bf4e1050d87b9a371c6a8e2816fd4edacebd1"
+    "image": "docker.io/ground-lab/ground-test-lq9y6y-63285@sha256:f5f01292d0ca11704e79181d499bf4e1050d87b9a371c6a8e2816fd4edacebd1"
   },
   "finishedAt": "2026-09-05T19:28:16.367Z",
   "pathRedaction": "Catalog and temporary roots are placeholders; local Node executable paths are normalized to node. Measurements and source hashes are unchanged."

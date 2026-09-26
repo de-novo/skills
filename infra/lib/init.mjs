@@ -95,7 +95,7 @@ export function renderInitYaml({ slug, engines = [], services = [] }) {
     `  slug: ${slug}`,
     '',
     'addressing:',
-    '  # tld omitted — this Grove checkout\'s infra/addressing.yml',
+    '  # tld omitted — this Ground checkout\'s infra/addressing.yml',
     '  # (addressing.local.yml in that directory overrides, gitignored).',
     '  # Pin a domain in this project: tld: local.example.com',
     '  scheme:',

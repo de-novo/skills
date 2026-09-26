@@ -8,7 +8,7 @@
   "plugins": [
     {
       "name": "de-novo-skills",
-      "description": "Grove, Dryad, Forester, Understory, Mycelium.",
+      "description": "Ground, Seat, Plan, Understory, Facts.",
       "source": "./",
       "category": "engineering"
     }

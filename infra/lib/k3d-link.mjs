@@ -1,4 +1,4 @@
-// Link a k3d cluster to Grove engines on the compose docker network.
+// Link a k3d cluster to Ground engines on the compose docker network.
 // Does not create clusters and does not default to an existing "local" cluster.
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -6,7 +6,7 @@ import path from 'node:path';
 
 import { stringify } from 'yaml';
 
-export const K3D_NAMESPACE = 'grove-infra';
+export const K3D_NAMESPACE = 'ground-infra';
 
 const DNS_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
@@ -76,7 +76,7 @@ export function renderK3dLinkManifests({ namespace, links }) {
     kind: 'Namespace',
     metadata: {
       name: namespace,
-      labels: { 'app.kubernetes.io/managed-by': 'grove' },
+      labels: { 'app.kubernetes.io/managed-by': 'ground' },
     },
   }];
   for (const link of links) {
@@ -94,8 +94,8 @@ export function renderK3dLinkManifests({ namespace, links }) {
         name: link.name,
         namespace,
         labels: {
-          'app.kubernetes.io/managed-by': 'grove',
-          'grove.engine': link.name,
+          'app.kubernetes.io/managed-by': 'ground',
+          'ground.engine': link.name,
         },
       },
       spec: {
@@ -109,9 +109,9 @@ export function renderK3dLinkManifests({ namespace, links }) {
         name: link.name,
         namespace,
         labels: {
-          'app.kubernetes.io/managed-by': 'grove',
+          'app.kubernetes.io/managed-by': 'ground',
           'kubernetes.io/service-name': link.name,
-          'grove.engine': link.name,
+          'ground.engine': link.name,
         },
       },
       addressType: 'IPv4',
@@ -178,7 +178,7 @@ export function writeTemporaryKubeconfig(cluster, contents) {
   if (typeof contents !== 'string' || contents.length === 0) {
     throw new Error('k3d kubeconfig output is empty.');
   }
-  const directory = mkdtempSync(path.join(tmpdir(), 'grove-k3d-'));
+  const directory = mkdtempSync(path.join(tmpdir(), 'ground-k3d-'));
   chmodSync(directory, 0o700);
   const file = path.join(directory, 'kubeconfig');
   try {
@@ -209,7 +209,7 @@ export function formatK3dLinkReport({
   const linked = links.length;
   const known = linked + skipped.length;
   const lines = [
-    `■ grove — k3d ${cluster}`,
+    `■ cluster seat (k3d) — ${cluster}`,
     `  node     ${node}${nodeOnNetwork ? ` on ${network}` : ` not on ${network}`}`,
     `  engines  ${linked}/${known}${dryRun ? '  dry-run' : ''}`,
   ];

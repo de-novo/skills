@@ -1,6 +1,6 @@
 # Synthetic Kubernetes lifecycle evidence — 2026-09-06
 
-Grove was exercised against a disposable web/API application using actual Git
+Ground was exercised against a disposable web/API application using actual Git
 worktrees, Docker builds, Kubernetes workloads, and HTTP requests. All application
 and adapter source used by the lab is available in this repository.
 
@@ -61,7 +61,7 @@ Failed runs remain available alongside the accepted receipt:
 The accepted runner sequences image imports per cluster while retaining parallel
 Docker builds and independent overlay operations. Separate backend processes
 need their own import coordination; the runner's queue does not provide it.
-Backend locks also need their own interruption and recovery checks. Grove's
+Backend locks also need their own interruption and recovery checks. Ground's
 registry recovery does not establish recovery of every adapter-owned resource.
 
 ## Scope

@@ -4,7 +4,7 @@
 //   <service>--<env>.<project>.<tld>     the overlay instance, baseline as
 //                                        fallthrough when nothing is attached
 //
-// The names come from the Grove profile, so this file holds no domain of its
+// The names come from the Ground profile, so this file holds no domain of its
 // own. Records are read per request, so an attach or a detach is visible to
 // the next request without restarting anything.
 import { existsSync, readdirSync } from 'node:fs';

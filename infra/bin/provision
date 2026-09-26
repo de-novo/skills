@@ -4,7 +4,7 @@
 #   provision mysql <name>     # database <name> + user <name>
 #   provision pg    <name>     # role <name> + database <name>
 #
-# GROVE_PROVISION_PASSWORD overrides the local-development default without
+# GROUND_PROVISION_PASSWORD overrides the local-development default without
 # putting a credential in argv. Re-running sets existing account passwords and
 # grants too; coordinate credential changes with the owner. Output omits secrets.
 set -euo pipefail
@@ -17,13 +17,13 @@ usage() {
 engine=${1-}
 name=${2-}
 [[ $# -eq 2 && -n ${engine} && -n ${name} ]] || usage
-pass=${GROVE_PROVISION_PASSWORD-${name}}
+pass=${GROUND_PROVISION_PASSWORD-${name}}
 [[ ${name} =~ ^[a-z][a-z0-9_]*$ ]] || {
   echo "provision: name must match [a-z][a-z0-9_]* — got '${name}'" >&2
   exit 1
 }
 [[ ${pass} =~ ^[A-Za-z0-9_.~-]{1,128}$ ]] || {
-  echo "provision: GROVE_PROVISION_PASSWORD must use 1-128 safe URL characters" >&2
+  echo "provision: GROUND_PROVISION_PASSWORD must use 1-128 safe URL characters" >&2
   exit 1
 }
 

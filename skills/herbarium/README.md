@@ -23,7 +23,7 @@ An agent reaches for it whenever it is about to write, move, or review a
 document someone else will read, when a fact seems to live in two files,
 when a page is getting long, or when a link may have gone stale. A person
 types `/herbarium` for the same reasons. For what is *true*, use
-[mycelium](../mycelium/README.md); for the record of a sprint, use
+[facts](../facts/README.md); for the record of a sprint, use
 [understory](../understory/README.md).
 
 ## It's working if

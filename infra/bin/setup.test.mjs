@@ -174,7 +174,7 @@ test('provision updates credentials when an account already exists', () => {
   assert.match(text, /ALTER ROLE/);
 });
 
-test('provision remediation uses the profiled Grove command', () => {
+test('provision remediation uses the profiled Ground command', () => {
   const text = readFileSync(PROVISION, 'utf8');
   assert.match(text, /de-novo skills infra up/);
   assert.doesNotMatch(text, /docker compose .* up -d --wait/);

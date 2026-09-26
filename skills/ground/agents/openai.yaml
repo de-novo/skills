@@ -1,0 +1,3 @@
+interface:
+  display_name: "Ground"
+  short_description: "Shared local base: engines, names not ports, thin overlays"

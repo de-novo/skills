@@ -13,7 +13,7 @@ cleanup of the other targets continues. The lease is checked again immediately
 before cleanup.
 
 The authority for the operating contract and for the status format is
-[overlay-contract.md](../../skills/grove/references/overlay-contract.md). If an
+[overlay-contract.md](../../skills/ground/references/overlay-contract.md). If an
 existing adapter updated a shared file on the assumption that a project runs
 serially, that file's concurrent update must be protected in the adapter before
 the parallel CLI is used. Update the shared registry's CLI users together,

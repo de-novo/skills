@@ -17,7 +17,7 @@ catalog's CI runs Node 24 on Linux; that matrix was not run here.
 | `node infra/bin/cli.mjs --help` | exit 0 |
 | `node infra/bin/cli.mjs herbarium check` | links 229/229, anchors 19/19, pages 7/7 |
 | `bash -n infra/bin/provision` | exit 0 |
-| `validate` on both `skills/grove/examples/*.runtime-profile.yml` | 2/2 |
+| `validate` on both `skills/ground/examples/*.runtime-profile.yml` | 2/2 |
 
 The four audit reproductions were moved from the brief's copied functions
 into `infra/bin/integrity.test.mjs`, which runs the real CLI in a
@@ -29,17 +29,17 @@ identity export does not exist), so every case was red before the change.
 - **Identity (F02).** Each item has a revision: a digest of its title,
   brief digest, claims, `read_only`, dependencies with their kinds, the
   result heads it starts from, `verify`, and the repository's root commit.
-  Dryad stores the planner's `--revision` on the seat. An archived done
+  Seat stores the planner's `--revision` on the seat. An archived done
   counts only for the same revision; a record without one is shown and
   never reused. A slug is bound to one repository; another repository
-  with the same slug is refused until `dryad rebind`.
+  with the same slug is refused until `seat rebind`.
 - **Results and the integration gate (F01).** `report --status done`
   records the seat's own head, cleanliness, touched paths, and the
   `--evidence` file. A bare `depends_on` needs that result in the
   dependent's base: ancestry of the reported head, or of a commit a
-  person recorded with `dryad integrate`. Until then the item is
+  person recorded with `seat integrate`. Until then the item is
   `waiting` and says what to do. `{ item, needs: order }` needs only the
-  report. Forester merges nothing.
+  report. Plan merges nothing.
 - **Attempts (F04).** Attempt n takes `<branch>-n`; earlier branches are
   kept; an existing branch is refused by name; `--resume` continues the
   previous attempt's branch.
@@ -62,7 +62,7 @@ measurement.
 npm test                                  295/295 (286 before; 9 new in infra/bin/integrity.test.mjs)
 node --test infra/bin/integrity.test.mjs  9/9
 node infra/bin/cli.mjs herbarium check    links 229/229 · anchors 19/19 · pages 7/7
-validate skills/grove/examples/*          2/2
+validate skills/ground/examples/*          2/2
 bash -n infra/bin/provision               exit 0
 git diff --check                          clean
 ```
@@ -97,11 +97,11 @@ pointed at a throwaway state file, and hashes that file before and after.
 
 ## WP-05: a launch that can fail names its failure and waits for a person
 
-`infra/lib/forester-serve.mjs`: readiness is checked before anything is
+`infra/lib/plan-serve.mjs`: readiness is checked before anything is
 spawned (tool declared, executable on PATH, worktree present, env not
 pending) and a failed check is a `failed` session with `failure.kind`; a
 pending overlay env is planned again with a doubling wait, capped, five
-times, then marked failed; `forester restart <id>` drops a failed or
+times, then marked failed; `plan restart <id>` drops a failed or
 exited session so the next poll launches it, and refuses a live one; the
 daemon holds a lock for its lifetime, linked into place with its pid
 already written and reclaimed only from a dead pid; a socket that answers
@@ -109,7 +109,7 @@ is never unlinked; a daemon started after a crash names the sessions the
 previous one held and launches them again as fresh contexts.
 
 ```text
-node --test infra/bin/forester-serve.test.mjs   6/6 (real pseudo-terminals; the pending case drives the process overlay backend)
+node --test infra/bin/plan-serve.test.mjs   6/6 (real pseudo-terminals; the pending case drives the process overlay backend)
 npm test                                        301/301
 ```
 
@@ -130,13 +130,13 @@ its own mid-task; the lock across two machines sharing a state directory
 
 ## WP-06: one machine cap over every project
 
-`infra/lib/forester.mjs`: the cap, the reservations taken under one lock
+`infra/lib/plan.mjs`: the cap, the reservations taken under one lock
 before seating, what holds a reservation and what makes it stale, and the
-unmanaged seats are specified in the Forester reference's machine-cap
+unmanaged seats are specified in the Plan reference's machine-cap
 section; the plan's own `parallel` still bounds the plan.
 
 ```text
-node --test infra/bin/forester-machine.test.mjs   3/3 (two projects on one state directory; three rounds of two assigns at the same instant)
+node --test infra/bin/plan-machine.test.mjs   3/3 (two projects on one state directory; three rounds of two assigns at the same instant)
 npm test                                          304/304
 ```
 
@@ -158,15 +158,15 @@ trusts its hostname); a cap on anything other than seats.
 ## WP-07: one statement of each boundary
 
 Root README: seven skills, Clearing and Herbarium in the flow diagram;
-launching named as one explicit boundary (`forester serve` is the one
-launcher here; Dryad never launches); merging and integration named as a
-person's; the no-Skill-tool fallback stated once. Forester: the allocator
+launching named as one explicit boundary (`plan serve` is the one
+launcher here; Seat never launches); merging and integration named as a
+person's; the no-Skill-tool fallback stated once. Plan: the allocator
 is pure, the runner stateful; "Specify first" replaces "Grill first": a
 brief that settles goal, scope, verification, and permissions is used as
 written, and only destructive, costly, irreversible, or ambiguous choices
 are questions; the split is confirmed, not re-interviewed, when the person
-gave the items. Dryad: rule 1 separates source writes from writes through
-an owner's own verb. Mycelium: the seam takes done or blocked; the lock
+gave the items. Seat: rule 1 separates source writes from writes through
+an owner's own verb. Facts: the seam takes done or blocked; the lock
 wait reads fifteen seconds, as the code has since 2026-09-09. The catalog
 test now requires exactly the seven skills the README names.
 
@@ -175,7 +175,7 @@ node --test infra/bin/catalog.test.mjs infra/bin/herbarium.test.mjs   14/14
 node infra/bin/cli.mjs herbarium check                                  links 230/230 · anchors 19/19 · copies 0 near
 ```
 
-Not measured: whether an agent reading the new Forester text asks fewer
+Not measured: whether an agent reading the new Plan text asks fewer
 questions on a complete brief; that is the evaluation package's to
 measure with a cold session.
 
@@ -200,7 +200,7 @@ publishing, which stays a separate choice.
 
 ## WP-09: the commit policy is stated, and a fact names its commit
 
-`infra/lib/mycelium.mjs`: the commit mode is `restricted` when judges are
+`infra/lib/facts.mjs`: the commit mode is `restricted` when judges are
 named and `permissive` when none are; a project may declare `mode`, and a
 declaration that contradicts the judges is refused at parse; `status`
 and doctor print the mode in words. A fact may carry `ref` (a full commit
@@ -211,7 +211,7 @@ brief forms mark a fact the baseline does not hold. The log stays
 append-only; nothing is projected or cached.
 
 ```text
-node --test infra/bin/mycelium.test.mjs infra/bin/mycelium-policy.test.mjs infra/bin/mycelium-arc.test.mjs   18/18
+node --test infra/bin/facts.test.mjs infra/bin/facts-policy.test.mjs infra/bin/facts-arc.test.mjs   18/18
 ```
 
 | Guard reverted | Red |
@@ -257,16 +257,16 @@ so); Markdown escapes such as `\[` (the link regexes do not model them).
 
 ## WP-11: what a Canopy view costs, counted before and after
 
-`infra/lib/canopy.mjs`, `infra/lib/dryad.mjs`: Dryad's `status --json`
-carries the Grove report it already read (`overlay_report`), so Canopy
-asks Grove again only when an older Dryad answered; the archive is read
+`infra/lib/canopy.mjs`, `infra/lib/seat.mjs`: Seat's `status --json`
+carries the Ground report it already read (`overlay_report`), so Canopy
+asks Ground again only when an older Seat answered; the archive is read
 with `--finished --tail 20` and the card says `finished 20 of n
 (newest)`; the chat and diff pages read one seat of one project. Tests
 count the processes through a `trace` option on the CLI call.
 
 ```text
 node --test infra/bin/canopy-cost.test.mjs   2/2
-node --test infra/bin/canopy.test.mjs infra/bin/dryad.test.mjs   29/29
+node --test infra/bin/canopy.test.mjs infra/bin/seat.test.mjs   29/29
 ```
 
 Processes per full view, two projects (one with overlays): base 6
@@ -285,13 +285,13 @@ the same fixture (two projects, one with the process overlay backend, a
 | 50 | 1138 → 1154 ms | 1134 → 367 ms |
 
 The full view is unchanged within noise: its cost is the per-seat git
-reads inside `dryad status`, which this package did not touch. The
+reads inside `seat status`, which this package did not touch. The
 detail pages no longer pay for every project. The benchmark script lives
 in the session scratchpad and is described here, not committed.
 
 | Guard reverted | Red |
 | --- | --- |
-| Grove's report reused from Dryad's status | 1 |
+| Ground's report reused from Seat's status | 1 |
 | a detail page reads one seat | 1 |
 | the archive is read with --tail | 1 |
 
@@ -300,7 +300,7 @@ four stays as it was); a browser's refresh cadence.
 
 ## WP-12: a name is a name; each boundary after it is its own observation
 
-`skills/grove/references/runtime-profile.md` now states the DNS wildcard
+`skills/ground/references/runtime-profile.md` now states the DNS wildcard
 rule (RFC 4592: any depth below an empty parent, stopping where a name
 exists) apart from the TLS rule (RFC 9525: one label), and lists the
 boundaries between a rendered name and a working environment. Both rules
@@ -341,7 +341,7 @@ shared engine touched, no trust file changed on this machine.
 ```text
 npm test                                  320/320 (286 on the base; 34 new across 8 new test files)
 node infra/bin/cli.mjs herbarium check    links 232/232 · anchors 19/19 · copies 0 · pages 7/7 · snapshots 0/0
-validate skills/grove/examples/*          2/2
+validate skills/ground/examples/*          2/2
 bash -n infra/bin/provision               exit 0
 ```
 

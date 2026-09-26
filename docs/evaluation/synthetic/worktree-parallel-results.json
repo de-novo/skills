@@ -30,12 +30,12 @@
     "pairs": 5,
     "worktrees_per_run": 2,
     "common_base": true,
-    "common_grove_project_and_registry": true,
+    "common_ground_project_and_registry": true,
     "timing": "simultaneous edit request through independent readiness of both builds",
     "build": "per-worktree feature edit, executable assembly and real node --check; not a container build",
     "artifact_registration": "coordinator merges manifests after both parallel builds; not timed as developer labor",
     "contention": "one attempt per lifecycle command; no evaluation-only waiting or retries",
-    "baseline": "same isolated process backend and HTTP identity checks, without Grove lifecycle journal",
+    "baseline": "same isolated process backend and HTTP identity checks, without Ground lifecycle journal",
     "unmeasured": [
       "human or AI coding productivity",
       "Git merge conflict resolution",
@@ -116,7 +116,7 @@
     },
     {
       "pair": 1,
-      "method": "grove",
+      "method": "ground",
       "setup_ms": 224.30054200000018,
       "initial_edit_build_ready_ms": 632.095583,
       "redeploy_ms": 385.5279169999999,
@@ -184,7 +184,7 @@
     },
     {
       "pair": 2,
-      "method": "grove",
+      "method": "ground",
       "setup_ms": 417.717541,
       "initial_edit_build_ready_ms": 634.3119999999999,
       "redeploy_ms": 483.82479200000034,
@@ -388,7 +388,7 @@
     },
     {
       "pair": 3,
-      "method": "grove",
+      "method": "ground",
       "setup_ms": 316.07108400000016,
       "initial_edit_build_ready_ms": 531.8156659999995,
       "redeploy_ms": 281.3087919999998,
@@ -456,7 +456,7 @@
     },
     {
       "pair": 4,
-      "method": "grove",
+      "method": "ground",
       "setup_ms": 303.91420800000014,
       "initial_edit_build_ready_ms": 725.6234590000004,
       "redeploy_ms": 375.36254200000076,
@@ -660,7 +660,7 @@
     },
     {
       "pair": 5,
-      "method": "grove",
+      "method": "ground",
       "setup_ms": 300.8519580000011,
       "initial_edit_build_ready_ms": 463.9311669999988,
       "redeploy_ms": 316.94879199999923,

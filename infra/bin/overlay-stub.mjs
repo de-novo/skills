@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Contract fixture for Grove overlay lifecycle tests. It starts no workload.
+// Contract fixture for Ground overlay lifecycle tests. It starts no workload.
 import {
   appendFileSync,
   existsSync,
@@ -16,7 +16,7 @@ const valueAfter = (flag) => {
   return index === -1 ? null : args[index + 1] ?? null;
 };
 const apply = args.includes('--apply');
-const planFirst = process.env.GROVE_OVERLAY_STUB_PLAN_FIRST !== 'false';
+const planFirst = process.env.GROUND_OVERLAY_STUB_PLAN_FIRST !== 'false';
 const effectiveApply = apply || !planFirst;
 const positional = [];
 for (let index = 0; index < args.length; index += 1) {
@@ -29,10 +29,10 @@ for (let index = 0; index < args.length; index += 1) {
   if (!arg.startsWith('--')) positional.push(arg);
 }
 
-if (process.env.GROVE_OVERLAY_STUB_LOG) {
+if (process.env.GROUND_OVERLAY_STUB_LOG) {
   appendFileSync(
-    process.env.GROVE_OVERLAY_STUB_LOG,
-    `${JSON.stringify({ verb, args, apply, cwd: process.cwd(), callerCwd: process.env.GROVE_CALLER_CWD ?? null })}\n`,
+    process.env.GROUND_OVERLAY_STUB_LOG,
+    `${JSON.stringify({ verb, args, apply, cwd: process.cwd(), callerCwd: process.env.GROUND_CALLER_CWD ?? null })}\n`,
     'utf8'
   );
 }
@@ -43,7 +43,7 @@ if (args.includes('--malformed')) {
 }
 
 // Refuse before any mutation: the receipt says so and the exit is non-zero.
-if (process.env.GROVE_OVERLAY_STUB_REFUSE === 'true' && verb !== 'status') {
+if (process.env.GROUND_OVERLAY_STUB_REFUSE === 'true' && verb !== 'status') {
   console.log(JSON.stringify({ ok: false, verb, env: positional[0], service: positional[1], image: valueAfter('--image'), mutated: false, error: 'refused by fixture' }));
   process.exit(1);
 }
@@ -59,18 +59,18 @@ const refuse = (error) => {
 };
 if (verb === 'attach') {
   const image = valueAfter('--image') ?? '';
-  const attachable = (process.env.GROVE_OVERLAY_STUB_ATTACHABLE ?? '').split(',').filter(Boolean);
+  const attachable = (process.env.GROUND_OVERLAY_STUB_ATTACHABLE ?? '').split(',').filter(Boolean);
   if (
     attachable.length > 0 &&
     !attachable.includes(positional[1]) &&
-    process.env.GROVE_OVERLAY_STUB_ACCEPT_ANY_SERVICE !== 'true'
+    process.env.GROUND_OVERLAY_STUB_ACCEPT_ANY_SERVICE !== 'true'
   ) {
     refuse(`service ${positional[1]} is not overlaid here`);
   }
   if (
     !/:[0-9a-f]{40}$/.test(image) &&
     !/@sha256:[0-9a-f]{64}$/.test(image) &&
-    process.env.GROVE_OVERLAY_STUB_ACCEPT_ANY_IMAGE !== 'true'
+    process.env.GROUND_OVERLAY_STUB_ACCEPT_ANY_IMAGE !== 'true'
   ) {
     refuse(`image ${image} is not a full sha or digest`);
   }
@@ -79,8 +79,8 @@ if (verb === 'attach') {
 const result = {
   ok:
     !args.includes('--fail') &&
-    (!process.env.GROVE_OVERLAY_STUB_FAIL_ENV ||
-      process.env.GROVE_OVERLAY_STUB_FAIL_ENV !== positional[0]),
+    (!process.env.GROUND_OVERLAY_STUB_FAIL_ENV ||
+      process.env.GROUND_OVERLAY_STUB_FAIL_ENV !== positional[0]),
   verb,
   plan: verb === 'status' ? false : planFirst && !apply,
 };
@@ -88,7 +88,7 @@ if (positional[0]) result.env = positional[0];
 if (positional[1]) result.service = positional[1];
 if (verb === 'attach') result.image = valueAfter('--image');
 
-const runtimeFile = process.env.GROVE_OVERLAY_STUB_RUNTIME_STATE;
+const runtimeFile = process.env.GROUND_OVERLAY_STUB_RUNTIME_STATE;
 const readRuntime = () => {
   if (!runtimeFile || !existsSync(runtimeFile)) return { environments: {} };
   return JSON.parse(readFileSync(runtimeFile, 'utf8'));
@@ -98,7 +98,7 @@ const writeRuntime = (runtime) => {
 };
 const observe = (services) => {
   const sorted = [...services].sort((a, b) => a.service.localeCompare(b.service));
-  return process.env.GROVE_OVERLAY_STUB_NAME_ONLY === 'true'
+  return process.env.GROUND_OVERLAY_STUB_NAME_ONLY === 'true'
     ? sorted.map((item) => item.service)
     : sorted;
 };
@@ -107,7 +107,7 @@ const runtimeInventory = (runtime) => Object.entries(runtime.environments)
     const entry = { env, services: observe(services) };
     // A non-idempotent backend: every applied create leaves another environment
     // next to the one that was asked for.
-    const copies = process.env.GROVE_OVERLAY_STUB_DUPLICATE_ENVS === 'true'
+    const copies = process.env.GROUND_OVERLAY_STUB_DUPLICATE_ENVS === 'true'
       ? runtime.creates?.[env] ?? 1
       : 1;
     return Array.from({ length: copies }, (unused, index) => (
@@ -117,8 +117,8 @@ const runtimeInventory = (runtime) => Object.entries(runtime.environments)
   .sort((left, right) => left.env.localeCompare(right.env));
 
 function assertPendingIntent() {
-  if (process.env.GROVE_OVERLAY_STUB_REQUIRE_PENDING !== 'true') return;
-  const stateFile = join(process.env.GROVE_STATE_DIR, 'lifecycle-test.yml');
+  if (process.env.GROUND_OVERLAY_STUB_REQUIRE_PENDING !== 'true') return;
+  const stateFile = join(process.env.GROUND_STATE_DIR, 'lifecycle-test.yml');
   if (!existsSync(stateFile)) throw new Error('pending intent is missing before dispatch');
   const pending = parse(readFileSync(stateFile, 'utf8')).pending_by_env?.[positional[0]];
   if (
@@ -150,7 +150,7 @@ function mutateRuntime() {
     runtime.environments[environment] = (runtime.environments[environment] ?? [])
       .filter((item) => item.service !== service);
   } else if (verb === 'destroy') {
-    const lag = Number(process.env.GROVE_OVERLAY_STUB_DESTROY_STATUS_LAG ?? 0);
+    const lag = Number(process.env.GROUND_OVERLAY_STUB_DESTROY_STATUS_LAG ?? 0);
     if (lag > 0 && runtimeFile) {
       writeFileSync(
         `${runtimeFile}.destroy-lag`,
@@ -166,7 +166,7 @@ function mutateRuntime() {
 
 try {
   if (verb !== 'status' && effectiveApply) assertPendingIntent();
-  const skipMutation = process.env.GROVE_OVERLAY_STUB_SKIP_RUNTIME_MUTATION;
+  const skipMutation = process.env.GROUND_OVERLAY_STUB_SKIP_RUNTIME_MUTATION;
   if (
     result.ok &&
     verb !== 'status' &&
@@ -176,7 +176,7 @@ try {
   ) {
     mutateRuntime();
   }
-  if (result.ok && effectiveApply && process.env.GROVE_OVERLAY_STUB_FAIL_AFTER_MUTATION === 'true') {
+  if (result.ok && effectiveApply && process.env.GROUND_OVERLAY_STUB_FAIL_AFTER_MUTATION === 'true') {
     console.error('stub interrupted after runtime mutation');
     process.exit(9);
   }
@@ -200,12 +200,12 @@ if (verb === 'status') {
     }
   }
   let inventory;
-  if (process.env.GROVE_OVERLAY_STUB_OMIT_INVENTORY === 'true') {
+  if (process.env.GROUND_OVERLAY_STUB_OMIT_INVENTORY === 'true') {
     inventory = null;
-  } else if (process.env.GROVE_OVERLAY_STUB_INVENTORY) {
-    inventory = JSON.parse(process.env.GROVE_OVERLAY_STUB_INVENTORY);
+  } else if (process.env.GROUND_OVERLAY_STUB_INVENTORY) {
+    inventory = JSON.parse(process.env.GROUND_OVERLAY_STUB_INVENTORY);
   } else {
-    const lag = Number(process.env.GROVE_OVERLAY_STUB_STATUS_LAG ?? 0);
+    const lag = Number(process.env.GROUND_OVERLAY_STUB_STATUS_LAG ?? 0);
     const lagFile = runtimeFile ? `${runtimeFile}.status-lag` : null;
     let remaining = lagFile && existsSync(lagFile)
       ? Number(readFileSync(lagFile, 'utf8'))

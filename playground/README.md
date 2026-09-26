@@ -19,21 +19,21 @@ listener requests port zero and receives its port from the kernel.
 `up` copies the sample and profiles, creates the initial Git commit, starts
 the baseline through `runtime.commands.up`, and prints the commands to run
 next. Planting is already done. Copy the printed `validate`, `urls`,
-`overlay verify`, and `dryad plan` lines: each includes the exact sandbox
+`overlay verify`, and `seat plan` lines: each includes the exact sandbox
 state directory and project path. They use the CLI from this checkout, so an
 installed CLI pointing to another checkout cannot silently select older code.
 
 For later inspection and cleanup, use the state path from that output:
 
 ```sh
-GROVE_STATE_DIR="$PWD/.playground/sandbox/state" node infra/bin/cli.mjs playground status --json
-GROVE_STATE_DIR="$PWD/.playground/sandbox/state" node infra/bin/cli.mjs playground down
+GROUND_STATE_DIR="$PWD/.playground/sandbox/state" node infra/bin/cli.mjs playground status --json
+GROUND_STATE_DIR="$PWD/.playground/sandbox/state" node infra/bin/cli.mjs playground down
 ```
 
-For a custom sandbox, set `GROVE_STATE_DIR` to its `state` directory. `status`
+For a custom sandbox, set `GROUND_STATE_DIR` to its `state` directory. `status`
 and `down` infer the sandbox from that value; both also accept `--dir PATH`.
 After bootstrapping with `up`, sandbox CLI calls without the matching
-`GROVE_STATE_DIR` are refused. Calls from a seated catalog worker do not carry
+`GROUND_STATE_DIR` are refused. Calls from a seated catalog worker do not carry
 that worker's project or seat into the sandbox.
 
 `status` reports process liveness, kernel-assigned ports, names from the
@@ -55,8 +55,8 @@ listener port, or follow a sandbox symlink are refused.
 
 The layout contract is in the [design](../docs/playground-design.md#sandbox-layout-the-contract-between-the-two-seats).
 The lifecycle copies `app/` and `tools/` recursively without interpreting their
-contents. The sample’s `.agents/runtime-profile.yml` and `.agents/dryad-profile.yml` are copied
-into the project's `.agents/` directory. The Dryad worktree root must resolve
+contents. The sample’s `.agents/runtime-profile.yml` and `.agents/seat-profile.yml` are copied
+into the project's `.agents/` directory. The Seat worktree root must resolve
 to the sandbox's `seats/` directory. The runtime profile's `commands.up` must
 be a Node command that exits once the baseline is ready.
 
@@ -94,7 +94,7 @@ listening now rather than every port the sandbox has ever held. Its exit code
 answers one question, whether isolation held; the counts carry health.
 
 The `playground` verbs take the sandbox as an argument, so `status` and `down`
-derive their own `GROVE_STATE_DIR` instead of asking for it again. A variable
+derive their own `GROUND_STATE_DIR` instead of asking for it again. A variable
 naming a different sandbox is refused. Every other catalog verb still requires
 it, which is what keeps a sandbox call away from the machine registry.
 

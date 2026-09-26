@@ -28,16 +28,16 @@ services:
     profiles: [mysql]
     healthcheck: { test: [CMD, "true"] }
     labels:
-      grove.provision: mysql
-      grove.port: "3306"
+      ground.provision: mysql
+      ground.port: "3306"
   pg16:
     container_name: dev-pg16
     profiles: [pg]
     healthcheck: { test: [CMD, "true"] }
     labels:
-      grove.provision: pg
-      grove.aliases: postgres,postgresql
-      grove.port: "5432"
+      ground.provision: pg
+      ground.aliases: postgres,postgresql
+      ground.port: "5432"
 `);
   const { engines, aliases } = parseComposeEngines(doc, 't.yml');
   assert.deepEqual(Object.keys(engines), ['mysql', 'pg']);
@@ -56,7 +56,7 @@ services:
     profiles: [mysql]
     healthcheck: { test: [CMD, "true"] }
     labels:
-      grove.port: "3306"
+      ground.port: "3306"
 `);
   const { engines } = parseComposeEngines(doc, 't.yml');
   assert.deepEqual(Object.keys(engines), ['mysql']);
@@ -84,7 +84,7 @@ services:
   db:
     container_name: dev-db
     profiles: [mysql]
-    labels: { grove.port: "3306" }
+    labels: { ground.port: "3306" }
 `);
   assert.throws(() => parseComposeEngines(doc, 't.yml'), /healthcheck/);
 });
@@ -96,7 +96,7 @@ services:
     container_name: dev-db
     profiles: [mysql]
     healthcheck: { test: [CMD, "true"] }
-    labels: { grove.port: "70000" }
+    labels: { ground.port: "70000" }
 `);
   assert.throws(() => parseComposeEngines(doc, 't.yml'), /port/);
 });
@@ -108,12 +108,12 @@ services:
     container_name: dev-mysql8
     profiles: [mysql]
     healthcheck: { test: [CMD, "true"] }
-    labels: { grove.port: "3306" }
+    labels: { ground.port: "3306" }
   pg16:
     container_name: dev-pg16
     profiles: [pg]
     healthcheck: { test: [CMD, "true"] }
-    labels: { grove.port: "5432", grove.aliases: mysql }
+    labels: { ground.port: "5432", ground.aliases: mysql }
 `);
   assert.throws(() => parseComposeEngines(doc, 't.yml'), /alias/);
 });

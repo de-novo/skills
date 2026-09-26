@@ -15,7 +15,7 @@ const POLL_INTERVAL_MS = 50;
 const PROBE_TIMEOUT_MS = 2_000;
 
 // <sandbox>/project/tools/lib/sandbox.mjs is the layout the design fixes,
-// but a Dryad seat runs this same file from <sandbox>/seats/<id>/tools/lib,
+// but a Seat seat runs this same file from <sandbox>/seats/<id>/tools/lib,
 // and there the parent directory is `seats`, not the sandbox. The marker
 // `up` writes into the project's .agents names the sandbox itself, and a
 // seat's worktree carries that marker, so it is the authority; the parent
@@ -43,16 +43,16 @@ function within(root, target) {
   return resolved === root || resolved.startsWith(root + path.sep);
 }
 
-// Isolation rule 2: every call carries GROVE_STATE_DIR, and it points inside
+// Isolation rule 2: every call carries GROUND_STATE_DIR, and it points inside
 // this sandbox. A call without it would write the machine's own registry, so
 // it is refused before anything is touched.
 export function assertSandbox(environment = process.env) {
-  const stateDir = environment.GROVE_STATE_DIR;
+  const stateDir = environment.GROUND_STATE_DIR;
   if (stateDir == null || stateDir === '') {
-    throw new Refusal('GROVE_STATE_DIR is not set; the playground runs only inside its own sandbox');
+    throw new Refusal('GROUND_STATE_DIR is not set; the playground runs only inside its own sandbox');
   }
   if (!within(SANDBOX_ROOT, stateDir)) {
-    throw new Refusal(`GROVE_STATE_DIR ${path.resolve(stateDir)} is outside the sandbox ${SANDBOX_ROOT}`);
+    throw new Refusal(`GROUND_STATE_DIR ${path.resolve(stateDir)} is outside the sandbox ${SANDBOX_ROOT}`);
   }
   return SANDBOX_ROOT;
 }

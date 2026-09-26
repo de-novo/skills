@@ -3,7 +3,7 @@ import { fork } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-const root = process.env.GROVE_PROCESS_TEST_ROOT;
+const root = process.env.GROUND_PROCESS_TEST_ROOT;
 if (!root || !existsSync(join(root, 'process-test-marker'))) throw new Error('isolated test root required');
 const [verb, env, service, ...args] = process.argv.slice(2);
 if (env && !/^w[1-3]$/.test(env)) throw new Error('unknown test environment');
@@ -58,7 +58,7 @@ if (verb === 'status') {
 } else if (apply) {
   if (verb === 'create') writeFileSync(marker, env);
   else if (verb === 'attach') {
-    if (process.env.GROVE_PROCESS_TEST_SKIP_REPLACE !== 'true') {
+    if (process.env.GROUND_PROCESS_TEST_SKIP_REPLACE !== 'true') {
       const artifacts = JSON.parse(readFileSync(join(root, 'artifacts.json'), 'utf8'));
       if (!Object.hasOwn(artifacts, image)) throw new Error('unknown test artifact');
       await stop();

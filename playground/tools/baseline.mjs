@@ -1,4 +1,4 @@
-// baseline — the project's own runtime commands, the ones the Grove profile
+// baseline — the project's own runtime commands, the ones the Ground profile
 // names as runtime.commands.up and runtime.commands.status.
 //
 //   node tools/baseline.mjs up [--apply]

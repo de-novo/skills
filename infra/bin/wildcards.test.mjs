@@ -38,7 +38,7 @@ test('DNS: a wildcard synthesizes at any depth below an empty parent and stops w
   assert.equal(dnsWildcardSynthesizes({ wildcard, qname: 'acme.local.example.com', existing: ['acme.local.example.com'] }).synthesizes, false, 'an existing name is answered by its own records');
   assert.equal(dnsWildcardSynthesizes({ wildcard, qname: 'other.example.com' }).synthesizes, false);
   assert.equal(dnsWildcardSynthesizes({ wildcard: 'local.example.com', qname: 'x.local.example.com' }).synthesizes, false);
-  // The two rules disagree on the very name Grove renders.
+  // The two rules disagree on the very name Ground renders.
   assert.deepEqual(wildcardExplanation('web.acme.local.example.com'), [
     { pattern: '*.acme.local.example.com', tls: true, dns: true },
     { pattern: '*.local.example.com', tls: false, dns: true },
@@ -62,8 +62,8 @@ test('doctor --probe reports dns per rendered name and names listener, route, tl
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(path.join(root, '.agents'), { recursive: true });
   writeFileSync(path.join(root, '.agents/runtime-profile.yml'), stringify({ project: { slug: 'probed' }, services: { api: {} }, data: { infra: 'project' }, overlay: 'none', addressing: { tld: 'localhost' } }));
-  const environment = { ...process.env, GROVE_STATE_DIR: path.join(root, 'state') };
-  delete environment.DRYAD_PROJECT;
+  const environment = { ...process.env, GROUND_STATE_DIR: path.join(root, 'state') };
+  delete environment.SEAT_PROJECT;
   const result = spawnSync(process.execPath, [CLI, 'doctor', '--project', root, '--probe', '--json'], { env: environment, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
   const report = JSON.parse(result.stdout);

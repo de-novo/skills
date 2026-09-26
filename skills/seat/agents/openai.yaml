@@ -1,0 +1,3 @@
+interface:
+  display_name: "Seat"
+  short_description: "One agent seat: worktree, overlay env, task, journal. No launch"
