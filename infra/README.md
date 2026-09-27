@@ -111,6 +111,8 @@ de-novo skills infra k3d connect --cluster ground-qa
 # apps: mysql.ground-infra:3306  pg.ground-infra:5432
 de-novo skills infra k3d status --cluster ground-qa
 # resources n/n; stale or missing Service/EndpointSlice makes status non-zero
+de-novo skills infra k3d join --cluster ground-qa
+# nodes n/n, member <host> n/n, engines n/n. Does not create the cluster.
 ```
 
 `addressing.proxy: project`. Do not publish engine ports on `0.0.0.0`.

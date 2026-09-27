@@ -5,6 +5,7 @@
 // machine infra, so a human decides when to stop it.
 import { spawnSync } from 'node:child_process';
 import { readFileSync, realpathSync } from 'node:fs';
+import { hostname } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -20,9 +21,13 @@ import { runInit } from '../lib/init.mjs';
 import { formatValidateReport, parseProfile } from '../lib/profile.mjs';
 import { COMPOSE_NETWORK, ENGINES, canonicalizeEngine } from '../lib/engines.mjs';
 import {
+  JOIN_LABEL,
+  compareK3dJoin,
   compareK3dLinks,
+  formatK3dJoinReport,
   formatK3dLinkReport,
   k3dServerContainer,
+  memberLabel,
   parseK3dArgs,
   renderK3dLinkManifests,
   writeTemporaryKubeconfig,
@@ -202,7 +207,9 @@ usage:
   ${CLI} infra provision (mysql|pg) <name>
                                       one database + dedicated account
   ${CLI} infra k3d connect --cluster NAME
-                                      Cluster seat: join a k3d/k3s cluster to the compose network
+                                      Cluster seat: link a k3d/k3s cluster to the compose network
+  ${CLI} infra k3d join --cluster NAME
+                                      mark this computer on that cluster and count nodes and engines
   ${CLI} infra k3d status --cluster NAME
 
 there is no down command.`);
@@ -341,6 +348,65 @@ function readKubernetesResources(kubeconfig, namespace) {
   };
 }
 
+function kubectlJson(kubeconfig, args, { emptyOnNotFound = false } = {}) {
+  const result = run('kubectl', ['--kubeconfig', kubeconfig, ...args, '-o', 'json']);
+  if (result.status !== 0) {
+    const detail = `${result.stderr || ''}\n${result.stdout || ''}`;
+    if (emptyOnNotFound && /NotFound/.test(detail)) return { items: [] };
+    throw new Error(`kubectl ${args.join(' ')} failed: ${detail.trim()}`);
+  }
+  try {
+    return JSON.parse(result.stdout);
+  } catch {
+    throw new Error(`kubectl ${args.join(' ')} returned malformed JSON.`);
+  }
+}
+
+function runningEngineNames() {
+  const names = [];
+  for (const [name, spec] of Object.entries(ENGINES)) {
+    if (containerState(spec.container).ready) names.push(name);
+  }
+  return names;
+}
+
+// This computer joins a cluster a person already created. It labels the
+// server node and counts. It does not create a cluster or another node.
+function joinK3dMember({ opts, node }) {
+  const host = memberLabel(hostname());
+  const temporary = opts.kubeconfig == null ? writeK3dKubeconfig(opts.cluster) : null;
+  const kubeconfig = opts.kubeconfig ?? temporary.file;
+  try {
+    const before = kubectlJson(kubeconfig, ['get', 'nodes']);
+    const server = (before.items ?? []).find((item) => item?.metadata?.name === node);
+    if (server == null) throw new Error(`node ${node} is not in cluster ${opts.cluster}.`);
+    const marked = server.metadata?.labels?.[JOIN_LABEL];
+    if (marked != null && marked !== host) {
+      throw new Error(`node ${node} is already joined by ${marked}.`);
+    }
+    if (marked !== host) {
+      const label = run('kubectl', ['--kubeconfig', kubeconfig, 'label', 'node', node, `${JOIN_LABEL}=${host}`]);
+      if (label.status !== 0) {
+        throw new Error(`kubectl label node ${node} failed: ${(label.stderr || '').trim()}`);
+      }
+    }
+    const nodes = kubectlJson(kubeconfig, ['get', 'nodes']);
+    const services = kubectlJson(kubeconfig, ['get', 'services', '-n', opts.namespace, '-l', 'app.kubernetes.io/managed-by=ground'], { emptyOnNotFound: true });
+    const compared = compareK3dJoin({
+      nodes: nodes.items,
+      services: services.items,
+      engines: runningEngineNames(),
+      host,
+    });
+    console.log(formatK3dJoinReport({ cluster: opts.cluster, host, compared }));
+    const nodesOk = compared.nodesTotal > 0 && compared.nodesReady === compared.nodesTotal && compared.member > 0;
+    const enginesOk = compared.enginesReady === compared.enginesTotal && compared.missing.length === 0;
+    return nodesOk && enginesOk ? 0 : 1;
+  } finally {
+    temporary?.cleanup();
+  }
+}
+
 function cmdInfraK3d(args) {
   const opts = parseK3dArgs(args);
   const node = k3dServerContainer(opts.cluster);
@@ -356,6 +422,7 @@ function cmdInfraK3d(args) {
       `k3d node ${node} not found — create a separate cluster on ${network} (do not reuse local).`
     );
   }
+  if (opts.verb === 'join') return joinK3dMember({ opts, node });
   let nodeOnNetwork = nets.includes(network);
   if (opts.verb === 'connect' && !opts.dryRun && !nodeOnNetwork) {
     const connect = run('docker', ['network', 'connect', network, node]);
@@ -447,7 +514,8 @@ machine (Ground — compose + addressing.yml):
   ${CLI} infra up [engine …]           start those compose engines
   ${CLI} infra provision (mysql|pg) <name>
   ${CLI} infra k3d connect --cluster NAME
-                                       Cluster seat: join a k3d/k3s cluster
+                                       Cluster seat: link a k3d/k3s cluster to compose engines
+  ${CLI} infra k3d join --cluster NAME  mark this computer on that cluster; count nodes and engines
 
 first:
   ${CLI} doctor [--project ROOT] [--probe] [--json]   what this machine and project have; read-only, exit 1 on an invalid values file

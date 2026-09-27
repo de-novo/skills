@@ -5,8 +5,11 @@ import { existsSync, statSync } from 'node:fs';
 import * as k3d from '../lib/k3d-link.mjs';
 
 import {
+  compareK3dJoin,
+  formatK3dJoinReport,
   formatK3dLinkReport,
   k3dServerContainer,
+  memberLabel,
   parseK3dArgs,
   renderK3dLinkManifests,
 } from '../lib/k3d-link.mjs';
@@ -45,6 +48,48 @@ test('k3d --dry-run is only valid for connect', () => {
     () => parseK3dArgs(['status', '--cluster', 'ground-qa', '--dry-run']),
     /dry-run.*connect/
   );
+  assert.throws(
+    () => parseK3dArgs(['join', '--cluster', 'ground-qa', '--dry-run']),
+    /dry-run.*connect/
+  );
+});
+
+test('join requires --cluster and does not default to local', () => {
+  assert.throws(() => parseK3dArgs(['join']), /--cluster/);
+  assert.equal(parseK3dArgs(['join', '--cluster', 'ground-qa']).verb, 'join');
+  assert.equal(memberLabel('Host.Local'), 'host.local');
+  assert.throws(() => memberLabel('...'), /hostname/);
+});
+
+test('join counts ready nodes, this computer, and linked engines', () => {
+  const host = 'host.local';
+  const nodes = [
+    {
+      metadata: { name: 'k3d-ground-qa-server-0', labels: { 'ground.seat/host': host } },
+      status: { conditions: [{ type: 'Ready', status: 'True' }] },
+    },
+    {
+      metadata: { name: 'k3d-ground-qa-agent-0', labels: {} },
+      status: { conditions: [{ type: 'Ready', status: 'False' }] },
+    },
+  ];
+  const services = [{ metadata: { name: 'mysql' } }];
+  const compared = compareK3dJoin({ nodes, services, engines: ['mysql', 'pg'], host });
+  assert.deepEqual(compared, {
+    nodesReady: 1,
+    nodesTotal: 2,
+    member: 1,
+    enginesReady: 1,
+    enginesTotal: 2,
+    missing: ['pg'],
+  });
+  const text = formatK3dJoinReport({ cluster: 'ground-qa', host, compared });
+  assert.match(text, /nodes {4}1\/2/);
+  assert.match(text, /member {3}host\.local 1\/2/);
+  assert.match(text, /engines {2}1\/2/);
+  assert.match(text, /pg not linked/);
+  assert.match(text, /next {5}de-novo skills infra k3d connect --cluster ground-qa/);
+  assert.equal(compareK3dJoin({ nodes: [], services: [], engines: [], host }).nodesTotal, 0);
 });
 
 test('renderK3dLinkManifests writes Service + EndpointSlice per engine', () => {

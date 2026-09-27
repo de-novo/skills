@@ -55,8 +55,8 @@ export function parseK3dArgs(args) {
     verb = arg;
   }
   if (verb == null) verb = 'status';
-  if (verb !== 'connect' && verb !== 'status') {
-    throw new Error(`infra k3d: unknown command "${verb}" — connect | status`);
+  if (verb !== 'connect' && verb !== 'status' && verb !== 'join') {
+    throw new Error(`infra k3d: unknown command "${verb}" — connect | status | join`);
   }
   if (opts.cluster == null) {
     throw new Error('infra k3d requires --cluster <name> (will not pick the existing local cluster).');
@@ -171,6 +171,63 @@ export function compareK3dLinks({ links, services = [], endpointSlices = [] }) {
   }
 
   return { ready, total: links.length, drift };
+}
+
+export const JOIN_LABEL = 'ground.seat/host';
+
+// A hostname becomes a label value. Dots stay, so a name like host.local is kept.
+export function memberLabel(hostname) {
+  const cleaned = String(hostname)
+    .toLowerCase()
+    .replace(/[^a-z0-9.-]/g, '-')
+    .replace(/^[^a-z0-9]+/, '')
+    .replace(/[^a-z0-9]+$/, '')
+    .slice(0, 63);
+  if (!/^[a-z0-9](?:[a-z0-9.-]{0,61}[a-z0-9])?$/.test(cleaned) && !/^[a-z0-9]$/.test(cleaned)) {
+    throw new Error(`hostname is not a Kubernetes label value — ${JSON.stringify(hostname)}`);
+  }
+  return cleaned;
+}
+
+export function nodeIsReady(node) {
+  return (node?.status?.conditions ?? []).some((condition) => condition.type === 'Ready' && condition.status === 'True');
+}
+
+// nodes are capacity. member is this computer's mark on them. engines are
+// running compose engines that have a ground-infra Service of the same name.
+export function compareK3dJoin({ nodes, services, engines, host }) {
+  const list = Array.isArray(nodes) ? nodes : [];
+  const ready = list.filter(nodeIsReady).length;
+  const member = list.filter((node) => node?.metadata?.labels?.[JOIN_LABEL] === host).length;
+  const names = new Set((services ?? []).map((service) => service?.metadata?.name).filter(Boolean));
+  const missing = [];
+  let linked = 0;
+  for (const name of engines ?? []) {
+    if (names.has(name)) linked += 1;
+    else missing.push(name);
+  }
+  return {
+    nodesReady: ready,
+    nodesTotal: list.length,
+    member,
+    enginesReady: linked,
+    enginesTotal: (engines ?? []).length,
+    missing,
+  };
+}
+
+export function formatK3dJoinReport({ cluster, host, compared }) {
+  const lines = [
+    `■ cluster seat (k3d) — ${cluster}`,
+    `  nodes    ${compared.nodesReady}/${compared.nodesTotal}`,
+    `  member   ${host} ${compared.member}/${compared.nodesTotal}`,
+    `  engines  ${compared.enginesReady}/${compared.enginesTotal}`,
+  ];
+  for (const name of compared.missing) lines.push(`           ${name} not linked`);
+  if (compared.missing.length > 0) {
+    lines.push(`  next     de-novo skills infra k3d connect --cluster ${cluster}`);
+  }
+  return lines.join('\n');
 }
 
 export function writeTemporaryKubeconfig(cluster, contents) {
