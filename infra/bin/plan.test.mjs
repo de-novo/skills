@@ -18,6 +18,7 @@ import {
   parsePlanLocal,
   parsePlan,
   resolveBudget,
+  seatsFromResources,
 } from '../lib/plan.mjs';
 import { claudeSettings, doingFromEvents, launchCommand, screenAsksForInput, seedClaudeTrust, stateFromEvents } from '../lib/plan-serve.mjs';
 import { HOOK_MARKER, TRUST_MARKER, applyHooks, codexHookHash, hookStores, renderCodexTrust, renderStore } from '../lib/plan-hooks.mjs';
@@ -99,6 +100,7 @@ test('plan parser accepts the documented shape and names the offending item on e
   assert.deepEqual(plan.tasks[2].retry, { maxAttempts: 2 });
   assert.deepEqual(plan.tasks[3].retry, { maxAttempts: 1 });
   assert.equal(parsePlan('version: 1\nparallel: 2\ntasks:\n  a: { task: x }\n').parallel, 2);
+  assert.equal(parsePlan('version: 1\nparallel: 0\ntasks:\n  a: { task: x }\n').parallel, 0);
 
   const rejected = [
     ['version: 2\ntasks:\n  a: { task: x }\n', /version must be 1/],
@@ -114,15 +116,15 @@ test('plan parser accepts the documented shape and names the offending item on e
     ['version: 1\ntasks:\n  a: { task: x }\n  a: { task: y }\n', /a/],
     ['version: 1\ntasks:\n  a: { task: x, retry: { max_attempts: 0 } }\n', /retry\.max_attempts must be an integer of at least 1/],
     ['version: 1\ntasks:\n  a: { task: x, retry: { until: ok } }\n', /tasks\.a\.retry has unknown key "until"/],
-    ['version: 1\nparallel: 0\ntasks:\n  a: { task: x }\n', /parallel must be an integer of at least 1/],
+    ['version: 1\nparallel: -1\ntasks:\n  a: { task: x }\n', /parallel must be a non-negative integer/],
   ];
   for (const [text, pattern] of rejected) assert.throws(() => parsePlan(text), pattern, text);
 });
 
 test('the budget is the plan first, the local file second, and an error third', () => {
-  assert.deepEqual(parsePlanLocal('version: 1\nparallel: 5\n'), { version: 1, parallel: 5, tool: null, tools: {} });
+  assert.deepEqual(parsePlanLocal('version: 1\nparallel: 5\n'), { version: 1, parallel: 5, resources: null, tool: null, tools: {} });
   const withTools = parsePlanLocal('version: 1\nparallel: 1\ntool: claude\ntools:\n  claude: { command: [claude, "{task}"] }\n  codex: { command: [codex, "{task}"] }\n');
-  assert.deepEqual(withTools, { version: 1, parallel: 1, tool: 'claude', tools: { claude: { command: ['claude', '{task}'], pretrustWorktrees: false }, codex: { command: ['codex', '{task}'], pretrustWorktrees: false } } });
+  assert.deepEqual(withTools, { version: 1, parallel: 1, resources: null, tool: 'claude', tools: { claude: { command: ['claude', '{task}'], pretrustWorktrees: false }, codex: { command: ['codex', '{task}'], pretrustWorktrees: false } } });
   assert.equal(parsePlanLocal('version: 1\ntools:\n  claude: { command: [claude], pretrust_worktrees: true }\n').tools.claude.pretrustWorktrees, true);
   assert.throws(() => parsePlanLocal('version: 1\ntools:\n  claude: { command: [claude], pretrust_worktrees: yes }\n'), /pretrust_worktrees must be true or false/);
   assert.throws(() => parsePlanLocal('version: 1\nengines: {}\n'), /unknown key "engines"/);
@@ -132,7 +134,39 @@ test('the budget is the plan first, the local file second, and an error third', 
   const files = { planFile: '/p/.agents/plan.yml', localFile: '/p/.agents/plan.local.yml' };
   assert.deepEqual(resolveBudget({ plan: { parallel: 2 }, local: { parallel: 5 }, ...files }), { parallel: 2, source: 'plan' });
   assert.deepEqual(resolveBudget({ plan: { parallel: null }, local: { parallel: 5 }, ...files }), { parallel: 5, source: 'local' });
+  assert.deepEqual(resolveBudget({ plan: { parallel: null }, local: { parallel: 0 }, ...files }), { parallel: 0, source: 'local' });
   assert.throws(() => resolveBudget({ plan: { parallel: null }, local: null, ...files }), /no budget: set parallel in \/p\/.agents\/plan.yml or in \/p\/.agents\/plan.local.yml/);
+});
+
+test('a user\'s resources set parallel, with no product maximum, and zero when one seat does not fit', () => {
+  const resources = { cpu: '2', memory: '1Gi', seat: { cpu: '500m', memory: '512Mi' } };
+  assert.equal(seatsFromResources(resources), 2);
+  assert.equal(seatsFromResources({ cpu: '100000', memory: '100000Mi', seat: { cpu: '1', memory: '1Mi' } }), 100000);
+  assert.equal(seatsFromResources({ cpu: '100m', memory: '64Mi', seat: { cpu: '500m', memory: '32Mi' } }), 0);
+  const files = { planFile: '/p/.agents/plan.yml', localFile: '/p/.agents/plan.local.yml' };
+  assert.deepEqual(
+    resolveBudget({ plan: { parallel: null }, local: { parallel: null, resources }, ...files }),
+    { parallel: 2, source: 'resources' },
+  );
+  assert.deepEqual(
+    resolveBudget({ plan: { parallel: 1 }, local: { parallel: null, resources }, ...files }),
+    { parallel: 1, source: 'plan' },
+  );
+  assert.deepEqual(
+    resolveBudget({ plan: { parallel: 8 }, local: { parallel: null, resources }, ...files }),
+    { parallel: 2, source: 'resources' },
+  );
+  const parsed = parsePlanLocal('version: 1\nresources:\n  cpu: "2"\n  memory: 1Gi\n  seat: { cpu: 500m, memory: 512Mi }\n');
+  assert.equal(parsed.parallel, null);
+  assert.equal(seatsFromResources(parsed.resources), 2);
+  assert.throws(() => parsePlanLocal('version: 1\nparallel: 2\nresources:\n  cpu: "2"\n  memory: 1Gi\n  seat: { cpu: 500m, memory: 512Mi }\n'), /not both/);
+  assert.throws(() => seatsFromResources({ cpu: '1', memory: '1Gi', seat: { cpu: '0', memory: '1Mi' } }), /must cost cpu and memory/);
+  const held = allocate({
+    items: [{ id: 'a', state: 'ready', owns: [] }],
+    budget: { parallel: 0 },
+  });
+  assert.deepEqual(held.chosen, []);
+  assert.deepEqual(held.held, [{ id: 'a', reason: 'budget full (0)' }]);
 });
 
 test('claims intersect by literal path segments, conservatively past the first wildcard', () => {

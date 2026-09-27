@@ -1,8 +1,9 @@
 // de-novo Plan — analyse the work into a plan, keep this machine's slots
-// full. The plan is a tracked file; the budget is the plan's own `parallel`
-// or, when the plan sets none, the untracked local file's. Allocation is a
-// pure function of the plan, the Seat seats, and the budget: no model call,
-// no daemon, the same inputs give the same assignment.
+// full. The budget is how many seats fit in this user's resources, which a
+// project parallel can only lower; otherwise the plan's own `parallel`, or
+// the untracked local file's. Zero seats nothing. There is no maximum.
+// Allocation is a pure function of the plan, the Seat seats, and the budget:
+// no model call, no daemon, the same inputs give the same assignment.
 //
 // Values live in the consuming project:
 //   .agents/plan.yml    the items (tracked)
@@ -41,7 +42,7 @@ const TASK_KEYS = Object.freeze(['task', 'brief', 'owns', 'read_only', 'depends_
 const RETRY_KEYS = Object.freeze(['max_attempts']);
 const DEPENDENCY_KEYS = Object.freeze(['item', 'needs']);
 const DEPENDENCY_NEEDS = Object.freeze(['result', 'order']);
-const LOCAL_KEYS = Object.freeze(['version', 'parallel', 'tool', 'tools']);
+const LOCAL_KEYS = Object.freeze(['version', 'parallel', 'resources', 'tool', 'tools']);
 const TOOL_KEYS = Object.freeze(['command', 'pretrust_worktrees']);
 export const ITEM_STATES = Object.freeze(['done', 'active', 'waiting', 'failed', 'blocked', 'ready']);
 
@@ -72,8 +73,41 @@ function stringList(value, field, source) {
 
 function parallelValue(value, source) {
   if (value == null) return null;
-  if (!Number.isInteger(value) || value < 1) fail(`${source}: parallel must be an integer of at least 1.`);
+  if (!Number.isInteger(value) || value < 0) fail(`${source}: parallel must be a non-negative integer.`);
   return value;
+}
+
+// A bare CPU integer is cores. Memory requires a unit so a bare 4 is not
+// four bytes. A seat must cost something; the user's amount may be zero.
+function cpuMillicores(value, field, source) {
+  const match = /^([0-9]+)(m)?$/.exec(value ?? '');
+  if (match == null) fail(`${source}: ${field} must be an integer or millicores (500m).`);
+  const amount = Number(match[1]);
+  return match[2] == null ? amount * 1000 : amount;
+}
+
+function memoryBytes(value, field, source) {
+  const match = /^([0-9]+)(Ki|Mi|Gi|Ti)$/.exec(value ?? '');
+  if (match == null) fail(`${source}: ${field} must be an integer with a Ki, Mi, Gi, or Ti suffix.`);
+  const scale = { Ki: 1024, Mi: 1024 ** 2, Gi: 1024 ** 3, Ti: 1024 ** 4 };
+  return Number(match[1]) * scale[match[2]];
+}
+
+function quantityText(value, field, source) {
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) return String(value);
+  if (typeof value === 'string' && value.length > 0) return value;
+  fail(`${source}: ${field} must be a quantity.`);
+}
+
+// How many seats of `seat` fit in this user's cpu and memory. No product
+// maximum: the smaller of the two floors, which is 0 when one seat does not fit.
+export function seatsFromResources(resources, source = 'resources') {
+  const seatCpu = cpuMillicores(resources.seat.cpu, 'resources.seat.cpu', source);
+  const seatMemory = memoryBytes(resources.seat.memory, 'resources.seat.memory', source);
+  if (seatCpu < 1 || seatMemory < 1) fail(`${source}: a seat must cost cpu and memory.`);
+  const cpu = cpuMillicores(resources.cpu, 'resources.cpu', source);
+  const memory = memoryBytes(resources.memory, 'resources.memory', source);
+  return Math.min(Math.floor(cpu / seatCpu), Math.floor(memory / seatMemory));
 }
 
 // ------------------------------------------------------------------- plan
@@ -230,12 +264,41 @@ export function parsePlanLocal(yamlText, source = 'plan.local.yml') {
   }
   const tool = doc.tool == null ? null : nonEmptyString(doc.tool, 'tool', source);
   if (tool != null && tools[tool] == null) fail(`${source}: tool ${JSON.stringify(tool)} is not declared under tools.`);
-  return { version: PLAN_VERSION, parallel: parallelValue(doc.parallel, source), tool, tools };
+  const parallel = parallelValue(doc.parallel, source);
+  const resources = parseResources(doc.resources, source);
+  if (parallel != null && resources != null) {
+    fail(`${source}: set resources or parallel, not both. Resources are this user's budget.`);
+  }
+  return { version: PLAN_VERSION, parallel, resources, tool, tools };
 }
 
-// The project's budget wins; the local one is the fallback; no budget at all
-// is an error, never a silent default.
+function parseResources(raw, source) {
+  if (raw == null) return null;
+  if (!isMap(raw)) fail(`${source}: resources must be a map.`);
+  assertOnlyKeys(raw, ['cpu', 'memory', 'seat'], 'resources', source);
+  if (!isMap(raw.seat)) fail(`${source}: resources.seat must be a map of cpu and memory.`);
+  assertOnlyKeys(raw.seat, ['cpu', 'memory'], 'resources.seat', source);
+  const resources = {
+    cpu: quantityText(raw.cpu, 'resources.cpu', source),
+    memory: quantityText(raw.memory, 'resources.memory', source),
+    seat: {
+      cpu: quantityText(raw.seat.cpu, 'resources.seat.cpu', source),
+      memory: quantityText(raw.seat.memory, 'resources.seat.memory', source),
+    },
+  };
+  seatsFromResources(resources, source);
+  return resources;
+}
+
+// Resources this user can spend, when declared, are the budget. A project
+// parallel only lowers that number. Otherwise the plan's parallel wins, else
+// the local file's. No budget at all is an error. Zero is a budget: no seats.
 export function resolveBudget({ plan, local, planFile, localFile }) {
+  if (local?.resources != null) {
+    const fit = seatsFromResources(local.resources, localFile);
+    if (plan.parallel != null && plan.parallel < fit) return { parallel: plan.parallel, source: 'plan' };
+    return { parallel: fit, source: 'resources' };
+  }
   if (plan.parallel != null) return { parallel: plan.parallel, source: 'plan' };
   if (local?.parallel != null) return { parallel: local.parallel, source: 'local' };
   fail(`no budget: set parallel in ${planFile} or in ${localFile}.`);
@@ -983,7 +1046,7 @@ function runMachineVerb(options, environment) {
   if (options.parallel != null) {
     if (!options.apply) fail('--parallel changes the machine cap; rerun with --apply.');
     const value = options.parallel === 'none' ? null : Number(options.parallel);
-    if (value != null && (!Number.isInteger(value) || value < 1)) fail('--parallel must be an integer of at least 1, or none.');
+    if (value != null && (!Number.isInteger(value) || value < 0)) fail('--parallel must be a non-negative integer, or none.');
     const file = writeMachine({ parallel: value, environment });
     console.log(`■ plan machine\n  cap       ${value == null ? 'none (file removed)' : `${value} written`} · ${file}`);
     return 0;
@@ -1132,9 +1195,11 @@ usage:
   ${cli} plan machine [--json | --parallel N|none --apply]   this machine's cap on managed seats across projects, what holds them, what runs unmanaged
 
 The plan is ${PLAN_RELPATH}: items with a task line, the paths each expects
-to own, what it depends on, and how many attempts it gets. The budget is the
-plan's own parallel when it sets one, else parallel in ${LOCAL_RELPATH}
-(machine-local, never committed); no budget anywhere is an error. assign
+to own, what it depends on, and how many attempts it gets. The budget is how
+many seats fit in this user's resources in ${LOCAL_RELPATH} when that block
+is set; a plan parallel only lowers it. Otherwise the plan's own parallel
+when it sets one, else parallel in the local file. Zero seats nothing. No
+budget anywhere is an error. assign
 walks the ready items in declared order, skips one whose claims intersect an
 active item's, stops at the budget and at the machine cap (plan machine
 --parallel N --apply; absent means none), and with --apply takes a machine

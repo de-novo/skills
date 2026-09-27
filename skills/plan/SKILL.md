@@ -99,15 +99,18 @@ person can read that output and know what is happening.
 
 ## Set the budget
 
-`parallel` is how many items may be active at once. It is a property of the
-machine more than the project: a laptop running three shared engines seats
-fewer workers than a workstation. So it lives in `.agents/plan.local.yml`,
-which is gitignored. A project may set `parallel` in the plan itself, and
-then the project's value is followed and the local file is ignored. No
-budget anywhere is an error, never a silent default. Above every project
-sits one machine cap, `plan machine --parallel N --apply`: the sum of
-what Plan seats on this machine, taken as reservations under one
-lock. Seats planned by hand are shown as unmanaged and not counted.
+`parallel` is how many items may be active at once. It is a non-negative
+integer with no product maximum: zero seats nothing, and the count grows
+only when the resources this user can spend grow. Declare that pool in
+`.agents/plan.local.yml` as `resources` (cpu, memory, and what one seat
+costs). The budget is how many seats fit. A project may set `parallel` in
+the plan itself, and that number only lowers the resource count. With no
+resources declared, the plan's `parallel` is the budget and the local
+file's `parallel` is the fallback. No budget anywhere is an error, never a
+silent default. Above every project sits one machine cap, `plan machine
+--parallel N --apply`: the sum of what Plan seats on this machine, taken
+as reservations under one lock. Zero is a closed machine. `none` removes
+the cap. Seats planned by hand are shown as unmanaged and not counted.
 
 ## Keep the slots full
 
@@ -155,7 +158,7 @@ takes it back.
   which asks Ground.
 - **A claim is not a lock.** `owns` constrains allocation, not the filesystem.
 - **Order is declared, not inferred.** No estimate-based scheduling.
-- **The project's budget wins; the local one is the fallback; none is an error.**
+- **The user's resources set the budget; a project parallel only lowers it; none is an error.** Zero is a budget. There is no maximum.
 - **A done report is not an integration.** A result reaches a dependent item
   only through the baseline, by a person's merge or recorded integration.
   Plan never merges.

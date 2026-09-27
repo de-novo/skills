@@ -50,7 +50,7 @@ tasks:
 | `verify` | Commands the worker runs and records in its evidence. Named in the handoff, not run by Plan |
 | `tool` | The name of a template under `tools` in the local file, used by `serve` to start the item's session; other verbs pass it through. Omitted, the local file's `tool` applies |
 | `retry.max_attempts` | How many seats for this revision of the item may be finished without a done report before the item is `failed`. Default 1 |
-| `parallel` | The project's budget. Optional |
+| `parallel` | How many seats this project will run, a non-negative integer. Optional. It only lowers a resource budget; it never raises one. With no resources declared, it is the budget |
 
 Unknown keys anywhere are rejected. Items are kept in declared order.
 
@@ -88,7 +88,11 @@ seat.
 
 ```yaml
 version: 1
-parallel: 3
+resources:                        # this user's pool, and what one seat costs
+  cpu: "2"                        # cores, or millicores such as 500m
+  memory: 4Gi
+  seat: { cpu: 500m, memory: 512Mi }
+# parallel: 0                     # instead of resources: a non-negative count. Not both
 tool: claude                      # default tool for items that name none
 tools:
   claude:
@@ -98,12 +102,16 @@ tools:
     command: [codex, "{task}"]
 ```
 
-Budget resolution: the plan's `parallel` if set, else the local file's, else
-an error that names both files.
+Budget resolution: how many seats fit in `resources` when that block is
+set. A plan `parallel` lower than that fit is followed. Otherwise the
+plan's `parallel` if set, else the local file's `parallel`, else an error
+that names both files. Zero is a budget and seats nothing. There is no
+maximum.
 
 | Field | Meaning |
 | --- | --- |
-| `parallel` | This machine's budget |
+| `resources` | This user's cpu and memory, and `seat`'s cpu and memory. The budget is how many seats fit, the smaller of the two floors. A seat that costs nothing is rejected. Not together with local `parallel` |
+| `parallel` | This user's seat count when resources are not declared. A non-negative integer. Zero seats nothing |
 | `tool` | The tool an item runs when it names none |
 | `tools.<name>.command` | The tool's argv; `{task}` is replaced by the seat's handoff text. Only `serve` reads it. Which tools a machine has is a machine fact, so the templates live here and never in the plan. The machine's approval policy goes here too (`--permission-mode`, an allow list); a compound command still reaches a person, which is why the Seat skill has a worker run one command per line |
 | `tools.<name>.pretrust_worktrees` | `true` lets `serve` mark each seat's worktree as trusted in Claude Code's own state file before launch (see Sessions). Default `false`: nothing outside the state directory is written, and a trust dialog shows as `needs-input` |
@@ -147,7 +155,8 @@ not at 0), or `accepted` (an integration is recorded).
 `parallel` bounds one plan. The machine cap bounds the sum across every
 project on this machine: `plan machine --parallel N --apply` writes
 `<state>/plans/machine.yml` (`GROUND_STATE_DIR/plans/` under the
-override); `--parallel none --apply` removes it; absent means no cap.
+override). N is a non-negative integer, and 0 seats nothing.
+`--parallel none --apply` removes the cap; absent means no cap.
 `assign --apply` and `serve` take one reservation per chosen item in
 `<state>/plans/slots.yml` under one lock, so two projects allocating
 at the same instant never share a slot, then seat the granted items; a

@@ -51,8 +51,9 @@ Facts keeps the decisions the grilling locked. Root map:
 1. The project has `.agents/seat-profile.yml` (and usually Ground's
    `runtime-profile.yml`).
 2. An agent reading [SKILL.md](SKILL.md) writes `.agents/plan.yml`.
-3. Set `parallel` in `.agents/plan.local.yml`, or in the plan when the
-   project owns that decision.
+3. Set `resources` in `.agents/plan.local.yml` (this user's cpu and memory,
+   and what one seat costs). `parallel` there is the count when resources
+   are not declared. A `parallel` in the plan only lowers that number.
 4. `plan plan`, read it, then either `plan assign --apply` and seat
    the workers with any launcher, rerunning `assign --apply` as done reports
    and merges arrive, or `plan serve` in a terminal of its own and
