@@ -698,7 +698,7 @@ const VERBS = Object.freeze({
     positionals: [1, 1],
     options: ['volume', 'image', 'cpu', 'memory', 'quota-pods', 'quota-cpu', 'quota-memory', 'storage-class', 'engines-namespace', 'cluster', 'kubeconfig'],
     multi: ['egress'],
-    flags: ['apply', 'delete'],
+    flags: ['apply', 'delete', 'suspend'],
   },
 });
 
@@ -1745,7 +1745,7 @@ usage:
                       --quota-pods N --quota-cpu Q --quota-memory Q
                       [--storage-class NAME] [--engines-namespace NAME]
                       [--egress namespace=NAME | --egress cidr=CIDR,port=N[,protocol=TCP|UDP]]
-                      [--cluster NAME --apply | --delete [--cluster NAME --apply]]
+                      [--cluster NAME --apply | --suspend [--cluster NAME --apply] | --delete [--cluster NAME --apply]]
 
 plan creates a worktree (or adopts --worktree) and, when the runtime profile
 has overlays, calls \`overlay create\`. Every attempt at an id gets its own
@@ -1772,7 +1772,8 @@ no token, an empty Role, one Pod (restartPolicy Never, the image holds the
 place), a ResourceQuota, and a NetworkPolicy. A pvc volume adds a
 PersistentVolumeClaim. --apply --cluster NAME creates them; the cluster is
 never implied. --cluster local is warned about because it is the machine's
-existing cluster. --delete removes that namespace only when it carries this
+existing cluster. --suspend drops the Pod and keeps the namespace.
+--delete removes that namespace only when it carries this
 seat's labels, and it does not delete the cluster. Seat still does not
 launch an agent. status --json
 carries each seat's overlay hostnames (read from \`urls --json\`, marked

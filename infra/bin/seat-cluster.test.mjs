@@ -182,6 +182,44 @@ test('delete refuses a namespace that is not this seat and counts a labeled one'
   assert.match(lines.join('\n'), /deleted namespace w1/);
 });
 
+test('suspend drops the pod and keeps the namespace', () => {
+  assert.throws(() => parseSeatCliArgs(['cluster', 'w1', '--suspend', '--delete']), /exclude each other/);
+  const dry = spawnSync(process.execPath, [CLI, 'seat', 'cluster', 'w1', '--suspend'], { encoding: 'utf8' });
+  assert.equal(dry.status, 0, dry.stderr);
+  assert.match(dry.stdout, /suspend pod seat/);
+  assert.match(dry.stdout, /dry-run/);
+  const labeled = {
+    kind: 'Namespace',
+    metadata: { name: 'w1', labels: { 'app.kubernetes.io/managed-by': 'ground', 'ground/seat': 'w1' } },
+  };
+  const claim = { kind: 'PersistentVolumeClaim', metadata: { name: 'workspace', labels: labeled.metadata.labels } };
+  let dropped = false;
+  const run = (command, args) => {
+    const joined = args.join(' ');
+    if (joined.includes('delete pod seat')) {
+      dropped = true;
+      return { status: 0, stdout: '', stderr: '' };
+    }
+    if (joined.includes('get namespace')) return { status: 0, stdout: JSON.stringify(labeled), stderr: '' };
+    const items = dropped ? [claim] : [claim, { kind: 'Pod', metadata: { name: 'seat', labels: labeled.metadata.labels } }];
+    return { status: 0, stdout: JSON.stringify({ items }), stderr: '' };
+  };
+  const options = parseSeatCliArgs(['cluster', 'w1', '--suspend', '--cluster', 'ground-qa', '--apply']);
+  const lines = [];
+  const original = console.log;
+  console.log = (line) => lines.push(line);
+  let code = 1;
+  try {
+    code = runSeatCluster({ options: { ...options, spec: { ...options.spec, kubeconfig: '/tmp/kubeconfig' } }, run });
+  } finally {
+    console.log = original;
+  }
+  assert.equal(code, 0);
+  assert.equal(dropped, true);
+  assert.match(lines.join('\n'), /pod 0\/1/);
+  assert.match(lines.join('\n'), /kept 2/);
+});
+
 test('compareSeatCluster counts only the objects this seat rendered', () => {
   const expected = seatClusterDocuments(spec());
   const actual = expected.map((doc) => ({ ...doc }));

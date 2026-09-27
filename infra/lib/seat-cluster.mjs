@@ -121,15 +121,18 @@ function requireCreate(options) {
 // Turns parsed CLI flags into the spec the renderer accepts.
 export function seatClusterSpecFromOptions(options) {
   assertSeatNamespace(options.id);
-  if (options.delete && options.volume != null) fail('--delete removes the namespace; it does not take --volume.');
-  if (options.delete && (options.image != null || options.cpu != null || options.memory != null || options.quotaPods != null || options.quotaCpu != null || options.quotaMemory != null || options.storageClass != null || options.enginesNamespace != null || (options.egress ?? []).length > 0)) {
-    fail('--delete removes the namespace; it does not take resource flags.');
+  if (options.delete && options.suspend) fail('--suspend and --delete exclude each other.');
+  const retiring = options.delete || options.suspend;
+  if (retiring && options.volume != null) fail(`--${options.suspend ? 'suspend' : 'delete'} does not take --volume.`);
+  if (retiring && (options.image != null || options.cpu != null || options.memory != null || options.quotaPods != null || options.quotaCpu != null || options.quotaMemory != null || options.storageClass != null || options.enginesNamespace != null || (options.egress ?? []).length > 0)) {
+    fail(`--${options.suspend ? 'suspend' : 'delete'} does not take resource flags.`);
   }
   if (options.cluster != null && !options.apply) fail('--cluster is only valid with --apply.');
   if (options.kubeconfig != null && !options.apply) fail('--kubeconfig is only valid with --apply.');
   if (options.apply && options.cluster == null) fail('--apply requires --cluster NAME.');
   if (options.cluster != null) assertDnsLabel(options.cluster, '--cluster');
-  if (options.delete) return { id: options.id, delete: true, cluster: options.cluster, kubeconfig: options.kubeconfig };
+  if (options.delete) return { id: options.id, delete: true, suspend: false, cluster: options.cluster, kubeconfig: options.kubeconfig };
+  if (options.suspend) return { id: options.id, delete: false, suspend: true, cluster: options.cluster, kubeconfig: options.kubeconfig };
 
   requireCreate(options);
   if (options.storageClass != null && !options.volume.startsWith('pvc=')) {
@@ -158,6 +161,7 @@ export function seatClusterSpecFromOptions(options) {
   return {
     id: options.id,
     delete: false,
+    suspend: false,
     image: options.image,
     resources,
     quota,
@@ -314,9 +318,15 @@ export function renderSeatClusterManifests(spec) {
   return `${documents.map((document) => stringify(document).trimEnd()).join('\n---\n')}\n`;
 }
 
-export function formatSeatClusterReport({ id, cluster, ready, total, dryRun = false, deleted = false }) {
+export function formatSeatClusterReport({ id, cluster, ready, total, dryRun = false, deleted = false, suspended = false, kept = null }) {
   const where = cluster == null ? '' : ` — ${cluster}`;
-  const lines = [`cluster seat ${id}${where}`, `objects ${ready}/${total}`];
+  const lines = [`cluster seat ${id}${where}`];
+  if (suspended) {
+    lines.push('pod 0/1');
+    lines.push(`kept ${kept}`);
+  } else {
+    lines.push(`objects ${ready}/${total}`);
+  }
   if (deleted) lines.push(`deleted namespace ${id}`);
   if (dryRun) lines.push('dry-run');
   return lines.join('\n');
@@ -393,7 +403,12 @@ export function runSeatCluster({ options, run }) {
     return 0;
   }
 
-  if (!spec.delete && !options.apply) {
+  if (spec.suspend && !options.apply) {
+    console.log(`cluster seat ${spec.id}\nsuspend pod seat\ndry-run`);
+    return 0;
+  }
+
+  if (!spec.delete && !spec.suspend && !options.apply) {
     const documents = seatClusterDocuments(spec);
     console.log(renderSeatClusterManifests(spec));
     console.error(formatSeatClusterReport({ id: spec.id, cluster: null, ready: documents.length, total: documents.length, dryRun: true }));
@@ -427,6 +442,35 @@ export function runSeatCluster({ options, run }) {
       ready: 0,
       total: present.length,
       deleted: true,
+    }));
+    return 0;
+  }
+
+  if (spec.suspend) {
+    let namespace;
+    try {
+      namespace = kubectlJson(run, spec.kubeconfig, ['get', 'namespace', spec.id]);
+    } catch (error) {
+      if (error.notFound) fail(`seat: namespace ${spec.id} is not on the cluster.`);
+      throw error;
+    }
+    if (!owned(namespace, spec.id)) fail(`seat: namespace ${spec.id} is not this seat's; refusing to suspend it.`);
+    try {
+      kubectl(run, spec.kubeconfig, ['delete', 'pod', 'seat', '-n', spec.id, '--wait=true']);
+    } catch (error) {
+      if (!error.notFound) throw error;
+    }
+    const after = readSeatClusterObjects({ run, kubeconfig: spec.kubeconfig, id: spec.id }).filter((object) => owned(object, spec.id));
+    const pod = after.find((object) => object.kind === 'Pod' && object.metadata?.name === 'seat');
+    if (pod != null) fail(`seat: pod seat is still in namespace ${spec.id}.`);
+    const kept = after.filter((object) => object.kind !== 'Pod').length;
+    console.log(formatSeatClusterReport({
+      id: spec.id,
+      cluster: spec.cluster,
+      ready: 0,
+      total: 1,
+      suspended: true,
+      kept,
     }));
     return 0;
   }

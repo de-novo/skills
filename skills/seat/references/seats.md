@@ -201,8 +201,12 @@ of the objects; this list is what it emits, in apply order:
 reads the kubeconfig with `k3d kubeconfig get NAME` into a temporary file
 and deletes it afterwards. `--cluster local` is accepted only because it
 was typed, and the command says it is the machine's existing cluster.
-`--delete` refuses a namespace that lacks `app.kubernetes.io/managed-by: ground`
-and `ground/seat: <id>`.
+`--suspend` deletes the Pod `seat` and keeps the namespace, the claim, and
+the other objects. `--apply` with the same volume and image creates the
+Pod again. `--delete` refuses a namespace that lacks
+`app.kubernetes.io/managed-by: ground` and `ground/seat: <id>`.
+`--suspend` refuses the same way. `--suspend` and `--delete` exclude
+each other.
 
 A hostPath volume is the node path, not a promise that the laptop directory
 is visible inside k3d. NetworkPolicy is the Egress object. Whether the
