@@ -77,11 +77,12 @@ From a container in a project compose, use `host.docker.internal:<port>`, or
 join the external network `dev-infra` and the container name (kafka:
 `dev-kafka:19092`).
 
-User-facing name for this k3s/k3d backend: **Cluster seat** (a seat at
-larger scale than a local worktree). The command stays `infra k3d`. It is
-not a new object. What may leave a seat, when a project constrains that, is
-called Egress; this catalog has no network allowlist to configure. Names:
-[glossary](../docs/glossary.md).
+User-facing name for this k3s/k3d backend: **Cluster seat**. `infra k3d`
+links compose engines into a cluster as `ground-infra` Services. The seat's
+own Namespace is `de-novo skills seat cluster`, not this command. Neither
+command creates a cluster, and neither defaults to `local`. What may leave
+a seat, when a project constrains that, is called Egress; this catalog has
+no network allowlist to configure. Names: [glossary](../docs/glossary.md).
 
 k3d / Kubernetes on the same Docker engine: engines bind `127.0.0.1`, so
 `host.k3d.internal:<port>` does **not** connect (measured: MySQL 2003/111).

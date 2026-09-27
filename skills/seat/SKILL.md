@@ -121,6 +121,15 @@ For the human or an orchestrator, in order:
 A failed `overlay create` leaves the seat with `env: pending`; rerun the same
 `plan --apply` to retry. Seat never repairs runtime state silently.
 
+## Cluster seat
+
+On a cluster the same seat id is a Namespace of stock Kubernetes objects.
+`seat cluster` prints them. `--apply --cluster NAME` creates them on that
+cluster and never picks one for you. The Pod runs the image you name and
+holds the workspace; Seat still does not launch an agent, and completion
+is still the worker's report. The engine-link stays Ground's `infra k3d`.
+Fields, objects, and the refusals: [references/seats.md](references/seats.md#cluster-seat).
+
 ## Not this skill
 
 Launching or steering agents, PTYs, hooks, mailboxes, task DAGs, supervision

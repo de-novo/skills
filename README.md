@@ -52,7 +52,7 @@ and one file; none restates another's.
                  .agents/plan.yml (tracked) · plan.local.yml (this machine)
                           │ assign: one item → one seat
                           ▼
-   Seat          one seat per worker: a worktree, an overlay env, a task, a journal
+   Seat          one seat per worker: a worktree, an overlay env, a task, a journal; on a cluster, a Namespace
                  .agents/seat-profile.yml · <state>/seats/<slug>.yml
                           │ stands on                         ▲ report done / blocked
                           ▼                                   │
@@ -158,7 +158,7 @@ Model-invoked: a seat or a person reaches for these.
 | Name | One line |
 | --- | --- |
 | [Ground](skills/ground/) | Shared local base: n projects, m apps each, one infra set |
-| [Seat](skills/seat/) | One seat per worker on that base: worktree, overlay env, task. No agent launch |
+| [Seat](skills/seat/) | One seat per worker on that base: worktree, overlay env, task; on a cluster, a Namespace. No agent launch |
 | [understory](skills/understory/) | The story under the canopy: Plan's graph drawn and written up for people, a map that points rather than copies |
 | [Facts](skills/facts/) | Assertions, separate from Plan: one append-only log per project, with time, confidence, domain, and provenance; workers propose, a person or the judge commits |
 | [herbarium](skills/herbarium/) | Every document has one house and the rest point at it; `check` counts broken links, copied prose, wrong script, and pages over the cap |

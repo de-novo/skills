@@ -22,6 +22,7 @@ import { parse, stringify } from 'yaml';
 
 import { normalizeClaim, pathsOutsideScope } from './claims.mjs';
 import { parseProfile } from './profile.mjs';
+import { runSeatCluster, seatClusterSpecFromOptions } from './seat-cluster.mjs';
 import { claudeSettings, seatActivity, seatEventsDirectory, seatEventsPath, seatEvidencePath, seatSettingsPath } from './seat-events.mjs';
 
 export const SEAT_PROFILE_RELPATH = '.agents/seat-profile.yml';
@@ -693,6 +694,12 @@ const VERBS = Object.freeze({
   finish: { positionals: [1, 1], options: ['project'], flags: ['apply'] },
   rebind: { positionals: [0, 0], options: ['project'], flags: ['apply'] },
   projects: { positionals: [0, 0], options: [], flags: ['json'] },
+  cluster: {
+    positionals: [1, 1],
+    options: ['volume', 'image', 'cpu', 'memory', 'quota-pods', 'quota-cpu', 'quota-memory', 'storage-class', 'engines-namespace', 'cluster', 'kubeconfig'],
+    multi: ['egress'],
+    flags: ['apply', 'delete'],
+  },
 });
 
 function takeOption(args, index, name) {
@@ -771,6 +778,13 @@ export function parseSeatCliArgs(args) {
   if (verb === 'report') {
     if (options.status == null) fail('report requires --status.');
     if (!REPORT_VALUES.includes(options.status)) fail(`--status must be one of ${REPORT_VALUES.join('|')}.`);
+  }
+  if (verb === 'cluster') {
+    try {
+      options.spec = seatClusterSpecFromOptions(options);
+    } catch (error) {
+      fail(error.message);
+    }
   }
   return options;
 }
@@ -1683,9 +1697,11 @@ function runProjects({ options, environment }) {
   return 0;
 }
 
-export function runSeat({ options, environment = process.env, cwd = process.cwd() }) {
+export function runSeat({ options, environment = process.env, cwd = process.cwd(), run }) {
   // projects is machine-wide: it reads the index, not a project.
   if (options.verb === 'projects') return runProjects({ options, environment });
+  // cluster renders Kubernetes objects for one seat id. It does not read a project.
+  if (options.verb === 'cluster') return runSeatCluster({ options, run });
   const location = resolveSeatProject({ project: options.project, environment, cwd });
   const project = loadSeatProject(location);
   switch (options.verb) {
@@ -1725,6 +1741,11 @@ usage:
   ${cli} seat finish ID [--project ROOT] [--apply]
   ${cli} seat rebind [--project ROOT] [--apply]    bind the slug to this checkout's repository
   ${cli} seat projects [--json]
+  ${cli} seat cluster ID --volume hostPath=PATH|pvc=SIZE --image REF --cpu Q --memory Q
+                      --quota-pods N --quota-cpu Q --quota-memory Q
+                      [--storage-class NAME] [--engines-namespace NAME]
+                      [--egress namespace=NAME | --egress cidr=CIDR,port=N[,protocol=TCP|UDP]]
+                      [--cluster NAME --apply | --delete [--cluster NAME --apply]]
 
 plan creates a worktree (or adopts --worktree) and, when the runtime profile
 has overlays, calls \`overlay create\`. Every attempt at an id gets its own
@@ -1745,7 +1766,15 @@ any launcher. ROOT defaults to SEAT_PROJECT, then the nearest
 .agents/seat-profile.yml above the cwd. A slug is bound to one repository
 on this machine (its root commit); another repository with the same slug is
 refused until rebind. projects lists every project that has planned a seat
-on this machine with live seat, finished, and overlay counts. status --json
+on this machine with live seat, finished, and overlay counts. cluster prints
+the Kubernetes objects for that seat id: a Namespace, a ServiceAccount with
+no token, an empty Role, one Pod (restartPolicy Never, the image holds the
+place), a ResourceQuota, and a NetworkPolicy. A pvc volume adds a
+PersistentVolumeClaim. --apply --cluster NAME creates them; the cluster is
+never implied. --cluster local is warned about because it is the machine's
+existing cluster. --delete removes that namespace only when it carries this
+seat's labels, and it does not delete the cluster. Seat still does not
+launch an agent. status --json
 carries each seat's overlay hostnames (read from \`urls --json\`, marked
 attached or not), the files it changed, every worktree of the baseline
 repository whether seated or not, and the paths two seats both hold. A seat

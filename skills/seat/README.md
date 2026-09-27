@@ -47,7 +47,7 @@ over its JSON. Root map: [How the skills fit](../../README.md#how-the-skills-fit
 
 | Writes | Downloads | Runs | Undo |
 | --- | --- | --- | --- |
-| A git worktree and branch per seat at `worktrees.root`; the registry and journal under `~/.dev-infra/seats/`; one journal line per state-changing catalog verb a seat runs; per seat, an events file the agent tools' hooks append to and a Claude Code settings file, under `~/.dev-infra/seats/events/` | Nothing | `git worktree add`, and Ground's overlay verbs when the project has overlays; Canopy reads, never copies, the session transcript a seat's tool names (Claude Code's `~/.claude/projects/…`) for its chat page | `finish --apply` removes a clean Seat-made worktree, the two seat files, and archives the journal; branches are kept |
+| A git worktree and branch per seat at `worktrees.root`; the registry and journal under `~/.dev-infra/seats/`; one journal line per state-changing catalog verb a seat runs; per seat, an events file the agent tools' hooks append to and a Claude Code settings file, under `~/.dev-infra/seats/events/`; `seat cluster --apply` adds that seat's Namespace on the named cluster | Nothing | `git worktree add`, and Ground's overlay verbs when the project has overlays; `kubectl apply` against the named cluster when `seat cluster --apply` is used; Canopy reads, never copies, the session transcript a seat's tool names (Claude Code's `~/.claude/projects/…`) for its chat page | `finish --apply` removes a clean Seat-made worktree, the two seat files, and archives the journal; branches are kept. `seat cluster --delete --apply` removes that Namespace when it carries this seat's labels, and does not delete the cluster |
 
 ## Apply to a project
 

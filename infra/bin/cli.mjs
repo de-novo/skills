@@ -219,7 +219,14 @@ function cmdSeat(args) {
     console.log(seatHelp(CLI));
     return 0;
   }
-  return runSeat({ options });
+  if (options.verb !== 'cluster' || !options.apply) return runSeat({ options });
+  const temporary = options.kubeconfig == null ? writeK3dKubeconfig(options.cluster) : null;
+  const kubeconfig = options.kubeconfig ?? temporary.file;
+  try {
+    return runSeat({ options: { ...options, kubeconfig, spec: { ...options.spec, kubeconfig } }, run });
+  } finally {
+    temporary?.cleanup();
+  }
 }
 
 function cmdPlan(args) {

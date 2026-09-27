@@ -109,6 +109,11 @@ de-novo skills seat diff   ID [--json]
 de-novo skills seat finish ID [--apply]
 de-novo skills seat rebind [--apply]
 de-novo skills seat projects [--json]
+de-novo skills seat cluster ID --volume hostPath=PATH|pvc=SIZE --image REF
+                            --cpu Q --memory Q --quota-pods N --quota-cpu Q --quota-memory Q
+                            [--storage-class NAME] [--engines-namespace NAME]
+                            [--egress namespace=NAME | --egress cidr=CIDR,port=N[,protocol=TCP|UDP]]
+                            [--cluster NAME --apply | --delete [--cluster NAME --apply]]
 ```
 
 | Verb | Without `--apply` | With `--apply` |
@@ -122,6 +127,7 @@ de-novo skills seat projects [--json]
 | finish | prints what would be destroyed or removed | `overlay destroy`, remove a clean Seat-created worktree, move the seat and its journal to `<slug>.finished.yml`; branches kept |
 | rebind | prints which repository the slug is bound to and which this checkout is | binds the slug to this checkout's repository. Refused while live seats from the other repository exist; the finished archive is kept as it was |
 | projects | always read-only, machine-wide (no project needed): one counted line per indexed project — root, present or missing, `seats n`, `finished n`, `overlay on|off`; `--json` prints `{ projects: [ { slug, root, root_present, seats, finished, overlay, updated_at } ] }`; a missing index prints `projects 0` | — |
+| cluster | prints the Namespace and the objects under it (below). Creates nothing | `--apply --cluster NAME` creates them through that cluster's kubeconfig. `--delete` prints the namespace it would remove; `--delete --apply --cluster NAME` removes it only when the namespace carries this seat's labels. The cluster is never implied, and the cluster itself is not deleted |
 
 A slug is bound to one repository on this machine, identified by the root
 commit of its history: `plan --apply` records it in the registry and the
@@ -173,6 +179,35 @@ launcher that starts a tool with this environment, and `plan hooks
 --apply` once per machine for tools other than Claude Code, gets the
 seat's activity read back by `status`. The task text is not an environment variable; launchers read it
 from `seat --json` or `seat --task`.
+
+## Cluster seat
+
+`seat cluster` does not read a project or a registry. The seat id is the
+Namespace name. The renderer in `infra/lib/seat-cluster.mjs` is the judge
+of the objects; this list is what it emits, in apply order:
+
+| Kind | Name | What it is |
+| --- | --- | --- |
+| Namespace | the seat id | the boundary. Reserved names (`default`, `kube-system`, `kube-public`, `kube-node-lease`, `ground-infra`) are refused |
+| ServiceAccount | `seat` | no API token is mounted |
+| Role | `seat` | empty rules |
+| RoleBinding | `seat` | binds that account to that role, in this namespace only |
+| PersistentVolumeClaim | `workspace` | only for `--volume pvc=SIZE` |
+| Pod | `seat` | `restartPolicy: Never`, no command. The image holds `/workspace`. A `hostPath` must already be a normalized absolute directory on the node (a k3d cluster has to mount that path into the node). A claim uses the PersistentVolumeClaim |
+| ResourceQuota | `seat` | `--quota-*` must cover the Pod's `--cpu` and `--memory` |
+| NetworkPolicy | `seat` | selects every Pod in the namespace. Ingress from the same namespace. Egress to the same namespace, DNS in `kube-system` on port 53, the engine namespace (`ground-infra` unless `--engines-namespace` says otherwise), and each `--egress` peer |
+
+`--cluster` is valid only with `--apply`. Without `--kubeconfig`, apply
+reads the kubeconfig with `k3d kubeconfig get NAME` into a temporary file
+and deletes it afterwards. `--cluster local` is accepted only because it
+was typed, and the command says it is the machine's existing cluster.
+`--delete` refuses a namespace that lacks `app.kubernetes.io/managed-by: ground`
+and `ground/seat: <id>`.
+
+A hostPath volume is the node path, not a promise that the laptop directory
+is visible inside k3d. NetworkPolicy is the Egress object. Whether the
+cluster's CNI enforces it is a property of that cluster; k3s with the
+default Flannel stores the object and does not enforce it.
 
 ## Canopy
 
